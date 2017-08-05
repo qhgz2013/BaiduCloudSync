@@ -311,6 +311,9 @@ namespace BaiduCloudSync
         {
             var str = (util.ToUnixTimestamp(DateTime.Now) * 10000).ToString();
             if (!str.Contains(".")) str += ".0";
+            var rnd = new Random();
+            str = str.Substring(0, str.IndexOf('.'));
+            str += "." + rnd.Next().ToString();
             return Convert.ToBase64String(Encoding.UTF8.GetBytes(str));
         }
         /// <summary>
@@ -373,7 +376,7 @@ namespace BaiduCloudSync
             var ret = new Parameters();
 
             ret.Add("X-Requested-With", "XMLHttpRequest");
-            ret.Add("Origin", "http://pan.baidu.com/");
+            ret.Add("Origin", "http://pan.baidu.com");
             ret.Add("Referer", BAIDU_NETDISK_URL);
 
             return ret;
@@ -441,13 +444,13 @@ namespace BaiduCloudSync
 
             var querystr = new Parameters();
             querystr.Add("opera", "delete");
+            //querystr.Add("async", 2);
+            querystr.Add("channel", "chunlei");
+            querystr.Add("web", 1);
             querystr.Add("app_id", APPID);
             querystr.Add("bdstoken", _bdstoken);
             querystr.Add("logid", _get_logid());
-            querystr.Add("web", 1);
-            querystr.Add("channel", "chunlei");
             querystr.Add("clienttype", 0);
-            //querystr.Add("async", 2);
 
             var postParam = new Parameters();
             var postJson = new JArray();
