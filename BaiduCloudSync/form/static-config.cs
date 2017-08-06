@@ -53,10 +53,10 @@ namespace BaiduCloudSync
 
                     //validation
                     MAX_DEBUG_OUTPUT_COUNT = Math.Min(MAX_DEBUG_OUTPUT_COUNT, 1000);
-                    MAX_DOWNLOAD_PARALLEL_TASK_COUNT = Math.Min(MAX_DOWNLOAD_PARALLEL_TASK_COUNT, 10);
+                    MAX_DOWNLOAD_PARALLEL_TASK_COUNT = Math.Min(MAX_DOWNLOAD_PARALLEL_TASK_COUNT, 50);
                     MAX_DOWNLOAD_THREAD = Math.Min(MAX_DOWNLOAD_THREAD, 200);
                     MAX_LIST_SIZE = Math.Min(MAX_LIST_SIZE, 200);
-                    MAX_UPLOAD_PARALLEL_TASK_COUNT = Math.Min(MAX_UPLOAD_PARALLEL_TASK_COUNT, 10);
+                    MAX_UPLOAD_PARALLEL_TASK_COUNT = Math.Min(MAX_UPLOAD_PARALLEL_TASK_COUNT, 50);
                 }
                 catch (Exception ex)
                 {
@@ -68,10 +68,10 @@ namespace BaiduCloudSync
         {
             //validation
             MAX_DEBUG_OUTPUT_COUNT = Math.Min(MAX_DEBUG_OUTPUT_COUNT, 1000);
-            MAX_DOWNLOAD_PARALLEL_TASK_COUNT = Math.Min(MAX_DOWNLOAD_PARALLEL_TASK_COUNT, 10);
+            MAX_DOWNLOAD_PARALLEL_TASK_COUNT = Math.Min(MAX_DOWNLOAD_PARALLEL_TASK_COUNT, 50);
             MAX_DOWNLOAD_THREAD = Math.Min(MAX_DOWNLOAD_THREAD, 200);
             MAX_LIST_SIZE = Math.Min(MAX_LIST_SIZE, 200);
-            MAX_UPLOAD_PARALLEL_TASK_COUNT = Math.Min(MAX_UPLOAD_PARALLEL_TASK_COUNT, 10);
+            MAX_UPLOAD_PARALLEL_TASK_COUNT = Math.Min(MAX_UPLOAD_PARALLEL_TASK_COUNT, 50);
 
             if (!Directory.Exists(".cache")) Directory.CreateDirectory(".cache");
             var json = new JObject();

@@ -104,14 +104,14 @@ namespace BaiduCloudSync
         }
         private void startThdCallback()
         {
-            Tracer.GlobalTracer.TraceInfo("(debug message): startThdCallback...");
+            //Tracer.GlobalTracer.TraceInfo("(debug message): startThdCallback...");
 
             if ((_status & 1) != 0) return;
 
             try
             {
 
-                Tracer.GlobalTracer.TraceInfo("(debug message): opening local filestream...");
+                //Tracer.GlobalTracer.TraceInfo("(debug message): opening local filestream...");
                 lock (_stream_lck)
                 {
                     if (_save_stream != null)
@@ -151,10 +151,20 @@ namespace BaiduCloudSync
                 _start_time = DateTime.Now;
 
                 Tracer.GlobalTracer.TraceInfo("(debug message): fetching download urls");
-                var urls = _pcsAPI.GetLocateDownloadLink(_path);
-                if (urls.Length == 0) { Tracer.GlobalTracer.TraceWarning("GetLocateDownloadLink failed"); }
-                var url0 = _pcsAPI.GetDownloadLink(_fs_id);
-                if (string.IsNullOrEmpty(url0)) { Tracer.GlobalTracer.TraceWarning("GetDownloadLink failed"); }
+                string[] urls = null;
+                try { urls = _pcsAPI.GetLocateDownloadLink(_path); }
+                catch (ErrnoException ex)
+                {
+                    Tracer.GlobalTracer.TraceError("GetLocateDownloadLink failed: unknown code " + ex.Errno);
+                }
+                if (urls.Length == 0) { Tracer.GlobalTracer.TraceWarning("GetLocateDownloadLink failed, ignored"); }
+                string url0 = null;
+                try { url0 = _pcsAPI.GetDownloadLink(_fs_id); }
+                catch (ErrnoException ex)
+                {
+                    Tracer.GlobalTracer.TraceError("GetDownloadLink failed: unknown code " + ex.Errno);
+                }
+                if (string.IsNullOrEmpty(url0)) { Tracer.GlobalTracer.TraceWarning("GetDownloadLink failed, ignored"); }
                 var url1 = _pcsAPI.GetDownloadLink_API(_path);
 
                 int external_count = urls.Length + 2;
@@ -176,7 +186,7 @@ namespace BaiduCloudSync
                     return;
                 }
 
-                Tracer.GlobalTracer.TraceInfo("(debug message): initializing variables array (_max_thread=" + _max_thread + ")");
+                //Tracer.GlobalTracer.TraceInfo("(debug message): initializing variables array (_max_thread=" + _max_thread + ")");
 
                 lock (_data_lck)
                 {
@@ -202,14 +212,14 @@ namespace BaiduCloudSync
                     _background_thread.IsBackground = true;
                     _background_thread.Priority = ThreadPriority.AboveNormal;
 
-                    Tracer.GlobalTracer.TraceInfo("(debug message): calling data update thread");
+                    //Tracer.GlobalTracer.TraceInfo("(debug message): calling data update thread");
                     _background_thread.Start();
                 }
             }
             catch (Exception) { }
             finally
             {
-                Tracer.GlobalTracer.TraceInfo("(debug message): startThd exited");
+                //Tracer.GlobalTracer.TraceInfo("(debug message): startThd exited");
                 _startThd = null;
             }
         }
@@ -223,6 +233,14 @@ namespace BaiduCloudSync
             var buffer = new byte[_BUFFER_SIZE];
             try
             {
+                long length = ns.HTTP_Response.ContentLength;
+                if (length != -1 && (ulong)length + _position[index] != _content_length)
+                    throw new ArgumentException("数据流长度不匹配");
+                var content_range = ns.HTTP_Response.Headers[HttpResponseHeader.ContentRange];
+                var reg = System.Text.RegularExpressions.Regex.Match(content_range, @"bytes\s+(\d+)(-\d+)?/\d+");
+                if (long.Parse(reg.Result("$1")) != (long)_position[index])
+                    throw new ArgumentException("数据流长度不匹配");
+
                 lock (_data_lck)
                     _thread_situation[index] = 2;
                 if (istream != null && (int)ns.HTTP_Response.StatusCode >= 200 && (int)ns.HTTP_Response.StatusCode < 300)
@@ -268,14 +286,17 @@ namespace BaiduCloudSync
         }
         private void background_thread_callback(object arg)
         {
-            Tracer.GlobalTracer.TraceInfo("(debug message): background thread started");
+            //Tracer.GlobalTracer.TraceInfo("(debug message): background thread started");
             try
             {
                 var default_timeout = new TimeSpan(0, 0, 40);
+                var next_update = DateTime.Now.AddSeconds(1);
                 do
                 {
                     //wait for next call
-                    Thread.Sleep(1000);
+                    var ts = (int)(next_update - DateTime.Now).TotalMilliseconds;
+                    if (ts > 0) Thread.Sleep(ts);
+                    next_update = next_update.AddSeconds(1);
 
                     //data parsing
                     var ls = _dispatcher.GetSegments();
@@ -431,12 +452,12 @@ namespace BaiduCloudSync
                             lock (_data_lck)
                                 for (int i = 0; i < _requests.Length; i++)
                                 {
-                                    if (_thread_situation[i] != 0)
+                                    if (_thread_situation[i] != 0 && _requests[i] != null)
                                     {
                                         _requests[i].Close();
-                                        _thread_situation[i] = 0;
-                                        _requests[i] = null;
                                     }
+                                    _thread_situation[i] = 0;
+                                    _requests[i] = null;
                                 }
                         }
                         _last_total_download_size = _total_download_size;
@@ -459,7 +480,7 @@ namespace BaiduCloudSync
             finally
             {
                 _background_thread = null;
-                Tracer.GlobalTracer.TraceInfo("(debug message): background thread exited");
+                //Tracer.GlobalTracer.TraceInfo("(debug message): background thread exited");
             }
         }
 

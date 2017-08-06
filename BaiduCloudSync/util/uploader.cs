@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Windows.Forms;
 
 namespace BaiduCloudSync
 {
@@ -37,17 +38,23 @@ namespace BaiduCloudSync
 
         private BaiduPCS _api;
         private BaiduPCS.ondup _ondup;
-        public Uploader(BaiduPCS api, string path, string local_path, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite)
+
+        private Form _parent_form;
+        public Uploader(Form parent, BaiduPCS api, string path, TrackedData local_data, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite)
         {
             _path = path;
-            _local_path = local_path;
+            _local_path = local_data.Path;
+            _parent_form = parent;
 
             _api = api;
             _ondup = ondup;
             _state = 8;
-            _content_length = (ulong)(new FileInfo(local_path)).Length;
-            _content_crc32 = string.Empty;
-            _content_md5 = string.Empty;
+            _content_length = local_data.ContentSize;
+            _content_crc32 = local_data.CRC32;
+            _content_md5 = local_data.MD5;
+
+            if (string.IsNullOrEmpty(_content_md5))
+                _content_length = (ulong)(new FileInfo(_local_path).Length);
         }
         private void onStatusUpdated(string path, string local_path, long current, long length)
         {
@@ -83,17 +90,45 @@ namespace BaiduCloudSync
                 _speed_timer.Start();
 
                 //calculating local file
-                var rapid_upload_data = _api.GetRapidUploadArguments(_local_path, onStatusUpdated);
-                _content_length = rapid_upload_data.content_length;
-                _content_crc32 = rapid_upload_data.content_crc32;
-                _content_md5 = rapid_upload_data.content_md5;
-                _slice_md5 = rapid_upload_data.slice_md5;
-
+                if (string.IsNullOrEmpty(_content_md5))
+                {
+                    var rapid_upload_data = _api.GetRapidUploadArguments(_local_path, onStatusUpdated);
+                    _content_length = rapid_upload_data.content_length;
+                    _content_crc32 = rapid_upload_data.content_crc32;
+                    _content_md5 = rapid_upload_data.content_md5;
+                    _slice_md5 = rapid_upload_data.slice_md5;
+                }
+                else if (string.IsNullOrEmpty(_slice_md5) && _content_length >= 262144)
+                {
+                    var stream = new FileStream(_local_path, FileMode.Open, FileAccess.Read);
+                    var md5 = new System.Security.Cryptography.MD5CryptoServiceProvider();
+                    int buffer_size = 8192;
+                    var buffer = new byte[buffer_size];
+                    int rb = 0, tb = 0;
+                    do
+                    {
+                        rb = stream.Read(buffer, 0, buffer_size);
+                        if (rb + tb > 262144) rb = 262144 - tb;
+                        md5.TransformBlock(buffer, 0, rb, buffer, 0);
+                        tb += rb;
+                    } while (rb != 0 && tb < 262144);
+                    stream.Close();
+                    md5.TransformFinalBlock(buffer, 0, 0);
+                    var slice_md5 = md5.Hash;
+                    _slice_md5 = util.Hex(slice_md5);
+                }
                 BaiduPCS.ObjectMetadata data = new BaiduPCS.ObjectMetadata();
                 //posting rapid upload info
                 if (!string.IsNullOrEmpty(_slice_md5))
                 {
-                    data = _api.RapidUploadRaw(_path, _content_length, _content_md5, _content_crc32, _slice_md5, _ondup);
+                    try { data = _api.RapidUploadRaw(_path, _content_length, _content_md5, _content_crc32, _slice_md5, _ondup); }
+                    catch (ErrnoException ex)
+                    {
+                        _parent_form.Invoke(new ThreadStart(delegate
+                        {
+                            MessageBox.Show(_parent_form, "秒传错误: 错误代码: " + ex.Errno, "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }));
+                    }
                 }
 
                 if (data.FS_ID != 0)
@@ -109,7 +144,13 @@ namespace BaiduCloudSync
                     _state = 2;
 
                     _open_stream = new FileStream(_local_path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                    data = _api.UploadRaw(_open_stream, _content_length, _path, _ondup, onStatusUpdated);
+                    try { data = _api.UploadRaw(_open_stream, _content_length, _path, _ondup, onStatusUpdated); }
+                    catch (ErrnoException ex)
+                    {
+                        Tracer.GlobalTracer.TraceError("Upload failed, response returned errno = " + ex.Errno);
+                        TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, false));
+                        return;
+                    }
 
                     if (data.FS_ID == 0)
                     {

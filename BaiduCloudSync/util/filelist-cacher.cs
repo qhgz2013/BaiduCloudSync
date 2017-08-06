@@ -75,7 +75,12 @@ namespace BaiduCloudSync
                 int page = 1;
                 do
                 {
-                    files = _api.GetFileList(dir, page: page, count: _MAX_COUNT);
+                    try { files = _api.GetFileList(dir, page: page, count: _MAX_COUNT); }
+                    catch (ErrnoException ex)
+                    {
+                        if (ex.Errno == 9) Tracer.GlobalTracer.TraceWarning("Error 9 detected when fetching file list: no such directory");
+                        else Tracer.GlobalTracer.TraceError("Error " + ex.Errno + " detected when fetching file list: unknown code");
+                    }
                     if (files == null)
                     {
                         Tracer.GlobalTracer.TraceWarning("Fetching file list failed, retry in 1 second");

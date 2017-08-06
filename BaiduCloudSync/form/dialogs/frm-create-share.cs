@@ -125,10 +125,29 @@ namespace BaiduCloudSync
                         _generated = true;
                     }));
                 }
+                catch (ErrnoException ex)
+                {
+                    Invoke(new ThreadStart(delegate
+                    {
+                        switch (ex.Errno)
+                        {
+                            case 115:
+                                MessageBox.Show(this, "错误代号115: 该文件禁止分享", "分享错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                break;
+                            default:
+                                MessageBox.Show(this, "天有不测风云，少侠，有错误发生啦！:\r\n错误代号" + ex.Errno + ": 未知错误", "分享错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                break;
+                        }
+                        btnConfirm.Text = "确定";
+                    }));
+                }
                 catch (Exception ex)
                 {
+                    Invoke(new ThreadStart(delegate 
+                    {
                     MessageBox.Show(this, "天有不测风云，少侠，有错误发生啦！:\r\n" + ex.ToString(), "叕是Error Message!", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    Invoke(new ThreadStart(delegate { btnConfirm.Text = "确定"; }));
+                        btnConfirm.Text = "确定";
+                    }));
                 }
                 finally
                 {

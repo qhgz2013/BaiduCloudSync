@@ -43,7 +43,7 @@ namespace BaiduCloudSync
             {
                 var ns = new NetStream();
                 //下载文件的验证段数据并进行MD5验算
-                var bytes = new byte[_buffer_size];
+                var bytes = new byte[BUFFER_SIZE];
                 var md5_calc = new System.Security.Cryptography.MD5CryptoServiceProvider();
                 md5_calc.Initialize();
 
@@ -59,7 +59,7 @@ namespace BaiduCloudSync
 
                 while (total_bytes < VALIDATE_SIZE)
                 {
-                    read_bytes = stream_in.Read(bytes, 0, _buffer_size);
+                    read_bytes = stream_in.Read(bytes, 0, BUFFER_SIZE);
                     if (read_bytes == 0) break;
                     total_bytes += read_bytes;
                     if (total_bytes > VALIDATE_SIZE)
@@ -217,7 +217,10 @@ namespace BaiduCloudSync
                 var remote_data = remote_files.First(o => o.ServerFileName == item);
 
                 //skip same files
-                if (local_data.ContentSize != remote_data.Size || local_data.MD5 != remote_data.MD5)
+                //if (local_data.ContentSize != remote_data.Size || local_data.MD5 != remote_data.MD5)
+
+                //忽略大于2G文件时的md5检查
+                if (local_data.ContentSize != remote_data.Size || (remote_data.Size < int.MaxValue && local_data.MD5 != remote_data.MD5))
                 {
                     upload_file_data.Add(local_data);
                 }
@@ -337,7 +340,10 @@ namespace BaiduCloudSync
             {
                 var local_data = local_files.First(o => o.Path.Split('/').Last() == item);
                 var remote_data = remote_files.First(o => o.ServerFileName == item);
-                if (local_data.ContentSize != remote_data.Size || local_data.MD5 != remote_data.MD5)
+                //if (local_data.ContentSize != remote_data.Size || local_data.MD5 != remote_data.MD5)
+
+                //忽略大于2G文件时的md5检查
+                if (local_data.ContentSize != remote_data.Size || (remote_data.Size < int.MaxValue && local_data.MD5 != remote_data.MD5))
                 {
                     download_file_data.Add(remote_data);
                 }

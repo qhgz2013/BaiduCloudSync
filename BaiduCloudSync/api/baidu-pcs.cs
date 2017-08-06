@@ -52,8 +52,13 @@ namespace BaiduCloudSync
 
         //http://pan.baidu.com/disk/home
         public const string BAIDU_NETDISK_URL = "http://pan.baidu.com/disk/home";
-        private const int _buffer_size = 16384;
-        private const long VALIDATE_SIZE = 262144; //验证段：前256KB字节
+
+        //默认数据流缓存区大小
+        private const int BUFFER_SIZE = 2048;
+        //文件验证段：前256KB字节
+        private const long VALIDATE_SIZE = 262144;
+        //errno出错时是否传递异常
+        private const bool TRANSFER_ERRNO_EXCEPTION = true;
         #endregion
 
 
@@ -335,7 +340,8 @@ namespace BaiduCloudSync
             {
                 _trace.TraceError("error " + errno);
             }
-            throw new Exception("errno is not zero (" + errno + ")");
+            //throw new Exception("errno is not zero (" + errno + ")");
+            throw new ErrnoException(errno, "errno is not zero (" + errno + ")");
         }
         /// <summary>
         /// 从json数据中读取到结构中
@@ -414,6 +420,11 @@ namespace BaiduCloudSync
                 ret.Total = json.Value<ulong>("total");
 
             }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION) throw;
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
@@ -464,7 +475,7 @@ namespace BaiduCloudSync
                 postJson.Add(item);
             }
 
-            if (empty) return false;
+            if (empty) return true;
 
             postParam.Add("filelist", JsonConvert.SerializeObject(postJson));
 
@@ -479,6 +490,12 @@ namespace BaiduCloudSync
                 _check_error(json);
 
                 return true;
+            }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
             }
             catch (Exception ex)
             {
@@ -565,6 +582,12 @@ namespace BaiduCloudSync
 
                 data_array = json.Value<JArray>("info");
                 //could not use "yield return" in try...catch segment
+            }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
             }
             catch (Exception ex)
             {
@@ -665,6 +688,12 @@ namespace BaiduCloudSync
                 data_array = json.Value<JArray>("info");
                 //could not use "yield return" in try...catch segment
             }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
@@ -753,6 +782,12 @@ namespace BaiduCloudSync
 
                 data_array = json.Value<JArray>("info");
             }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
@@ -817,6 +852,12 @@ namespace BaiduCloudSync
                 ret.MD5 = string.Empty;
 
             }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
@@ -873,6 +914,12 @@ namespace BaiduCloudSync
                 return ret.ToArray();
 
             }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
@@ -918,12 +965,12 @@ namespace BaiduCloudSync
 
             long readed_bytes = 0;
             int cur_read = 0;
-            var buffer = new byte[_buffer_size];
-            var temp_buffer = new byte[_buffer_size];
+            var buffer = new byte[BUFFER_SIZE];
+            var temp_buffer = new byte[BUFFER_SIZE];
 
             do
             {
-                cur_read = stream_in.Read(buffer, 0, _buffer_size);
+                cur_read = stream_in.Read(buffer, 0, BUFFER_SIZE);
 
                 crc_calc.Append(buffer, 0, cur_read);
                 if (readed_bytes + cur_read <= VALIDATE_SIZE)
@@ -1028,6 +1075,12 @@ namespace BaiduCloudSync
                 ret.FS_ID = json.Value<ulong>("fs_id");
                 ret.IsDir = json.Value<int>("isdir") == 1;
             }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
@@ -1080,10 +1133,10 @@ namespace BaiduCloudSync
                 stream_out.Write(head_bytes, 0, head_bytes.Length);
 
                 long total_read = 0, current_read = 0;
-                var buffer = new byte[_buffer_size];
+                var buffer = new byte[BUFFER_SIZE];
                 do
                 {
-                    current_read = stream_in.Read(buffer, 0, _buffer_size);
+                    current_read = stream_in.Read(buffer, 0, BUFFER_SIZE);
                     stream_out.Write(buffer, 0, (int)current_read);
                     total_read += current_read;
                     callback?.Invoke(path, string.Empty, total_read, (long)content_length);
@@ -1099,6 +1152,12 @@ namespace BaiduCloudSync
                 _check_error(json);
 
                 ret = _read_json_meta(json);
+            }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
             }
             catch (Exception ex)
             {
@@ -1179,6 +1238,12 @@ namespace BaiduCloudSync
 
                 return dlink;
             }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
@@ -1220,6 +1285,12 @@ namespace BaiduCloudSync
                 {
                     ret_list.Add(item.Value<string>("url"));
                 }
+            }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
             }
             catch (Exception ex)
             {
@@ -1322,6 +1393,12 @@ namespace BaiduCloudSync
                 ret.ShareID = json.Value<ulong>("shareid");
                 ret.ShortURL = json.Value<string>("shorturl");
             }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(new Exception("创建分享失败", ex).ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(new Exception("创建分享失败", ex).ToString());
@@ -1378,6 +1455,12 @@ namespace BaiduCloudSync
                 ret.ShareID = json.Value<ulong>("shareid");
                 ret.ShortURL = json.Value<string>("shorturl");
             }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(new Exception("创建私密分享错误", ex).ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(new Exception("创建私密分享错误", ex).ToString());
@@ -1427,6 +1510,12 @@ namespace BaiduCloudSync
                 var json = JsonConvert.DeserializeObject(response) as JObject;
                 _check_error(json);
 
+            }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(new Exception("取消分享失败", ex).ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
             }
             catch (Exception ex)
             {
@@ -1565,6 +1654,12 @@ namespace BaiduCloudSync
                     ret.Add(record);
                 }
             }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(new Exception("获取分享列表时发生错误", ex).ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(new Exception("获取分享列表时发生错误", ex).ToString());
@@ -1573,5 +1668,21 @@ namespace BaiduCloudSync
         }
 
         #endregion
+    }
+    public class ErrnoException: Exception
+    {
+        public int Errno { get; }
+        public ErrnoException(int errno) : base()
+        {
+            Errno = errno;
+        }
+        public ErrnoException(int errno, string message): base(message)
+        {
+            Errno = errno;
+        }
+        public ErrnoException(int errno, string message, Exception innerException): base(message, innerException)
+        {
+            Errno = errno;
+        }
     }
 }

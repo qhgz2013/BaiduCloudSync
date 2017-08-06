@@ -65,29 +65,29 @@ namespace BaiduCloudSync
             this.treeView_DirList = new System.Windows.Forms.TreeView();
             this.listView_DirData = new System.Windows.Forms.ListView();
             this.tabPage2 = new System.Windows.Forms.TabPage();
-            this.downloadTransferList1 = new BaiduCloudSync.DownloadTransferList();
             this.tabPage3 = new System.Windows.Forms.TabPage();
-            this.uploadTransferList1 = new BaiduCloudSync.UploadTransferList();
             this.tabPage4 = new System.Windows.Forms.TabPage();
-            this.ctlDebugOutput1 = new BaiduCloudSync.CtlDebugOutput();
+            this.tabPage5 = new System.Windows.Forms.TabPage();
+            this.label6 = new System.Windows.Forms.Label();
+            this.nDebugListCnt = new System.Windows.Forms.NumericUpDown();
+            this.nListCount = new System.Windows.Forms.NumericUpDown();
+            this.nDlThdCnt = new System.Windows.Forms.NumericUpDown();
+            this.label5 = new System.Windows.Forms.Label();
+            this.label4 = new System.Windows.Forms.Label();
+            this.nMaxUpload = new System.Windows.Forms.NumericUpDown();
+            this.label3 = new System.Windows.Forms.Label();
+            this.nMaxDownload = new System.Windows.Forms.NumericUpDown();
+            this.label2 = new System.Windows.Forms.Label();
+            this.label1 = new System.Windows.Forms.Label();
             this.downloadFilePath = new System.Windows.Forms.SaveFileDialog();
             this.downloadFileDir = new System.Windows.Forms.FolderBrowserDialog();
             this.UploadFilePath = new System.Windows.Forms.OpenFileDialog();
             this.UploadFileDir = new System.Windows.Forms.FolderBrowserDialog();
             this.lAsyncStatus = new System.Windows.Forms.Label();
             this.bAsyncCancel = new System.Windows.Forms.Button();
-            this.tabPage5 = new System.Windows.Forms.TabPage();
-            this.label1 = new System.Windows.Forms.Label();
-            this.label2 = new System.Windows.Forms.Label();
-            this.nMaxDownload = new System.Windows.Forms.NumericUpDown();
-            this.label3 = new System.Windows.Forms.Label();
-            this.nMaxUpload = new System.Windows.Forms.NumericUpDown();
-            this.nDlThdCnt = new System.Windows.Forms.NumericUpDown();
-            this.label4 = new System.Windows.Forms.Label();
-            this.nListCount = new System.Windows.Forms.NumericUpDown();
-            this.label5 = new System.Windows.Forms.Label();
-            this.nDebugListCnt = new System.Windows.Forms.NumericUpDown();
-            this.label6 = new System.Windows.Forms.Label();
+            this.downloadTransferList1 = new BaiduCloudSync.DownloadTransferList();
+            this.uploadTransferList1 = new BaiduCloudSync.UploadTransferList();
+            this.ctlDebugOutput1 = new BaiduCloudSync.CtlDebugOutput();
             this.contextMenuStrip1.SuspendLayout();
             this.tabControl1.SuspendLayout();
             this.tabPage1.SuspendLayout();
@@ -99,11 +99,11 @@ namespace BaiduCloudSync
             this.tabPage3.SuspendLayout();
             this.tabPage4.SuspendLayout();
             this.tabPage5.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.nMaxDownload)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.nMaxUpload)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.nDlThdCnt)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.nListCount)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nDebugListCnt)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.nListCount)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.nDlThdCnt)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.nMaxUpload)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.nMaxDownload)).BeginInit();
             this.SuspendLayout();
             // 
             // contextMenuStrip1
@@ -293,9 +293,9 @@ namespace BaiduCloudSync
             // pQuota
             // 
             this.pQuota.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.pQuota.Location = new System.Drawing.Point(4, 407);
+            this.pQuota.Location = new System.Drawing.Point(4, 410);
             this.pQuota.Name = "pQuota";
-            this.pQuota.Size = new System.Drawing.Size(305, 18);
+            this.pQuota.Size = new System.Drawing.Size(305, 15);
             this.pQuota.TabIndex = 3;
             // 
             // lQuota
@@ -396,15 +396,6 @@ namespace BaiduCloudSync
             this.tabPage2.Text = "下载列表";
             this.tabPage2.UseVisualStyleBackColor = true;
             // 
-            // downloadTransferList1
-            // 
-            this.downloadTransferList1.BackColor = System.Drawing.SystemColors.Control;
-            this.downloadTransferList1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.downloadTransferList1.Location = new System.Drawing.Point(3, 3);
-            this.downloadTransferList1.Name = "downloadTransferList1";
-            this.downloadTransferList1.Size = new System.Drawing.Size(720, 373);
-            this.downloadTransferList1.TabIndex = 0;
-            // 
             // tabPage3
             // 
             this.tabPage3.Controls.Add(this.uploadTransferList1);
@@ -415,15 +406,6 @@ namespace BaiduCloudSync
             this.tabPage3.TabIndex = 2;
             this.tabPage3.Text = "上传列表";
             this.tabPage3.UseVisualStyleBackColor = true;
-            // 
-            // uploadTransferList1
-            // 
-            this.uploadTransferList1.BackColor = System.Drawing.SystemColors.Control;
-            this.uploadTransferList1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uploadTransferList1.Location = new System.Drawing.Point(3, 3);
-            this.uploadTransferList1.Name = "uploadTransferList1";
-            this.uploadTransferList1.Size = new System.Drawing.Size(720, 373);
-            this.uploadTransferList1.TabIndex = 0;
             // 
             // tabPage4
             // 
@@ -436,17 +418,158 @@ namespace BaiduCloudSync
             this.tabPage4.Text = "调试输出";
             this.tabPage4.UseVisualStyleBackColor = true;
             // 
-            // ctlDebugOutput1
+            // tabPage5
             // 
-            this.ctlDebugOutput1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.ctlDebugOutput1.Location = new System.Drawing.Point(3, 3);
-            this.ctlDebugOutput1.Name = "ctlDebugOutput1";
-            this.ctlDebugOutput1.Size = new System.Drawing.Size(720, 373);
-            this.ctlDebugOutput1.TabIndex = 0;
+            this.tabPage5.Controls.Add(this.label6);
+            this.tabPage5.Controls.Add(this.nDebugListCnt);
+            this.tabPage5.Controls.Add(this.nListCount);
+            this.tabPage5.Controls.Add(this.nDlThdCnt);
+            this.tabPage5.Controls.Add(this.label5);
+            this.tabPage5.Controls.Add(this.label4);
+            this.tabPage5.Controls.Add(this.nMaxUpload);
+            this.tabPage5.Controls.Add(this.label3);
+            this.tabPage5.Controls.Add(this.nMaxDownload);
+            this.tabPage5.Controls.Add(this.label2);
+            this.tabPage5.Controls.Add(this.label1);
+            this.tabPage5.Location = new System.Drawing.Point(4, 22);
+            this.tabPage5.Name = "tabPage5";
+            this.tabPage5.Size = new System.Drawing.Size(726, 379);
+            this.tabPage5.TabIndex = 4;
+            this.tabPage5.Text = "设置&使用说明";
+            this.tabPage5.UseVisualStyleBackColor = true;
+            // 
+            // label6
+            // 
+            this.label6.AutoSize = true;
+            this.label6.Location = new System.Drawing.Point(218, 10);
+            this.label6.Name = "label6";
+            this.label6.Size = new System.Drawing.Size(167, 168);
+            this.label6.TabIndex = 2;
+            this.label6.Text = "简单的使用说明:\r\n以文件管理的右边栏为准：\r\n鼠标右击 显示操作菜单\r\n鼠标双击文件夹 进入该文件夹\r\n键盘快捷键\r\nBackspace: 返回上层目录\r\nEn" +
+    "ter: 进入文件夹\r\nCtrl+C: 复制\r\nCtrl+X: 剪切\r\nCtrl+V: 粘贴\r\n\r\n目前就这么多了\r\n上传的分块跟暂停还在坑着\r\n程序关闭时保存" +
+    "列表也在坑着";
+            // 
+            // nDebugListCnt
+            // 
+            this.nDebugListCnt.Location = new System.Drawing.Point(121, 104);
+            this.nDebugListCnt.Maximum = new decimal(new int[] {
+            1000,
+            0,
+            0,
+            0});
+            this.nDebugListCnt.Name = "nDebugListCnt";
+            this.nDebugListCnt.Size = new System.Drawing.Size(65, 21);
+            this.nDebugListCnt.TabIndex = 1;
+            this.nDebugListCnt.ValueChanged += new System.EventHandler(this.nDebugListCnt_ValueChanged);
+            // 
+            // nListCount
+            // 
+            this.nListCount.Location = new System.Drawing.Point(121, 80);
+            this.nListCount.Maximum = new decimal(new int[] {
+            200,
+            0,
+            0,
+            0});
+            this.nListCount.Name = "nListCount";
+            this.nListCount.Size = new System.Drawing.Size(65, 21);
+            this.nListCount.TabIndex = 1;
+            this.nListCount.ValueChanged += new System.EventHandler(this.nListCount_ValueChanged);
+            // 
+            // nDlThdCnt
+            // 
+            this.nDlThdCnt.Location = new System.Drawing.Point(121, 56);
+            this.nDlThdCnt.Maximum = new decimal(new int[] {
+            200,
+            0,
+            0,
+            0});
+            this.nDlThdCnt.Name = "nDlThdCnt";
+            this.nDlThdCnt.Size = new System.Drawing.Size(65, 21);
+            this.nDlThdCnt.TabIndex = 1;
+            this.nDlThdCnt.ValueChanged += new System.EventHandler(this.nDlThdCnt_ValueChanged);
+            // 
+            // label5
+            // 
+            this.label5.AutoSize = true;
+            this.label5.Location = new System.Drawing.Point(14, 106);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(101, 12);
+            this.label5.TabIndex = 0;
+            this.label5.Text = "调试输出数量限制";
+            // 
+            // label4
+            // 
+            this.label4.AutoSize = true;
+            this.label4.Location = new System.Drawing.Point(14, 82);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(101, 12);
+            this.label4.TabIndex = 0;
+            this.label4.Text = "列表显示的任务数";
+            // 
+            // nMaxUpload
+            // 
+            this.nMaxUpload.Location = new System.Drawing.Point(121, 32);
+            this.nMaxUpload.Maximum = new decimal(new int[] {
+            50,
+            0,
+            0,
+            0});
+            this.nMaxUpload.Name = "nMaxUpload";
+            this.nMaxUpload.Size = new System.Drawing.Size(65, 21);
+            this.nMaxUpload.TabIndex = 1;
+            this.nMaxUpload.ValueChanged += new System.EventHandler(this.nMaxUpload_ValueChanged);
+            // 
+            // label3
+            // 
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(14, 58);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(53, 12);
+            this.label3.TabIndex = 0;
+            this.label3.Text = "下载线程";
+            // 
+            // nMaxDownload
+            // 
+            this.nMaxDownload.Location = new System.Drawing.Point(121, 8);
+            this.nMaxDownload.Maximum = new decimal(new int[] {
+            50,
+            0,
+            0,
+            0});
+            this.nMaxDownload.Name = "nMaxDownload";
+            this.nMaxDownload.Size = new System.Drawing.Size(65, 21);
+            this.nMaxDownload.TabIndex = 1;
+            this.nMaxDownload.ValueChanged += new System.EventHandler(this.nMaxDownload_ValueChanged);
+            // 
+            // label2
+            // 
+            this.label2.AutoSize = true;
+            this.label2.Location = new System.Drawing.Point(14, 34);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(89, 12);
+            this.label2.TabIndex = 0;
+            this.label2.Text = "最大上传任务数";
+            // 
+            // label1
+            // 
+            this.label1.AutoSize = true;
+            this.label1.Location = new System.Drawing.Point(14, 10);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(89, 12);
+            this.label1.TabIndex = 0;
+            this.label1.Text = "最大下载任务数";
+            // 
+            // downloadFileDir
+            // 
+            this.downloadFileDir.RootFolder = System.Environment.SpecialFolder.MyComputer;
             // 
             // UploadFilePath
             // 
             this.UploadFilePath.Multiselect = true;
+            // 
+            // UploadFileDir
+            // 
+            this.UploadFileDir.RootFolder = System.Environment.SpecialFolder.MyComputer;
             // 
             // lAsyncStatus
             // 
@@ -472,146 +595,31 @@ namespace BaiduCloudSync
             this.bAsyncCancel.Visible = false;
             this.bAsyncCancel.Click += new System.EventHandler(this.bAsyncCancel_Click);
             // 
-            // tabPage5
+            // downloadTransferList1
             // 
-            this.tabPage5.Controls.Add(this.label6);
-            this.tabPage5.Controls.Add(this.nDebugListCnt);
-            this.tabPage5.Controls.Add(this.nListCount);
-            this.tabPage5.Controls.Add(this.nDlThdCnt);
-            this.tabPage5.Controls.Add(this.label5);
-            this.tabPage5.Controls.Add(this.label4);
-            this.tabPage5.Controls.Add(this.nMaxUpload);
-            this.tabPage5.Controls.Add(this.label3);
-            this.tabPage5.Controls.Add(this.nMaxDownload);
-            this.tabPage5.Controls.Add(this.label2);
-            this.tabPage5.Controls.Add(this.label1);
-            this.tabPage5.Location = new System.Drawing.Point(4, 22);
-            this.tabPage5.Name = "tabPage5";
-            this.tabPage5.Size = new System.Drawing.Size(726, 379);
-            this.tabPage5.TabIndex = 4;
-            this.tabPage5.Text = "设置&使用说明";
-            this.tabPage5.UseVisualStyleBackColor = true;
+            this.downloadTransferList1.BackColor = System.Drawing.SystemColors.Control;
+            this.downloadTransferList1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.downloadTransferList1.Location = new System.Drawing.Point(3, 3);
+            this.downloadTransferList1.Name = "downloadTransferList1";
+            this.downloadTransferList1.Size = new System.Drawing.Size(720, 373);
+            this.downloadTransferList1.TabIndex = 0;
             // 
-            // label1
+            // uploadTransferList1
             // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(14, 10);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(89, 12);
-            this.label1.TabIndex = 0;
-            this.label1.Text = "最大下载任务数";
+            this.uploadTransferList1.BackColor = System.Drawing.SystemColors.Control;
+            this.uploadTransferList1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.uploadTransferList1.Location = new System.Drawing.Point(3, 3);
+            this.uploadTransferList1.Name = "uploadTransferList1";
+            this.uploadTransferList1.Size = new System.Drawing.Size(720, 373);
+            this.uploadTransferList1.TabIndex = 0;
             // 
-            // label2
+            // ctlDebugOutput1
             // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(14, 34);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(89, 12);
-            this.label2.TabIndex = 0;
-            this.label2.Text = "最大上传任务数";
-            // 
-            // nMaxDownload
-            // 
-            this.nMaxDownload.Location = new System.Drawing.Point(121, 8);
-            this.nMaxDownload.Maximum = new decimal(new int[] {
-            10,
-            0,
-            0,
-            0});
-            this.nMaxDownload.Name = "nMaxDownload";
-            this.nMaxDownload.Size = new System.Drawing.Size(65, 21);
-            this.nMaxDownload.TabIndex = 1;
-            this.nMaxDownload.ValueChanged += new System.EventHandler(this.nMaxDownload_ValueChanged);
-            // 
-            // label3
-            // 
-            this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(14, 58);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(53, 12);
-            this.label3.TabIndex = 0;
-            this.label3.Text = "下载线程";
-            // 
-            // nMaxUpload
-            // 
-            this.nMaxUpload.Location = new System.Drawing.Point(121, 32);
-            this.nMaxUpload.Maximum = new decimal(new int[] {
-            10,
-            0,
-            0,
-            0});
-            this.nMaxUpload.Name = "nMaxUpload";
-            this.nMaxUpload.Size = new System.Drawing.Size(65, 21);
-            this.nMaxUpload.TabIndex = 1;
-            this.nMaxUpload.ValueChanged += new System.EventHandler(this.nMaxUpload_ValueChanged);
-            // 
-            // nDlThdCnt
-            // 
-            this.nDlThdCnt.Location = new System.Drawing.Point(121, 56);
-            this.nDlThdCnt.Maximum = new decimal(new int[] {
-            200,
-            0,
-            0,
-            0});
-            this.nDlThdCnt.Name = "nDlThdCnt";
-            this.nDlThdCnt.Size = new System.Drawing.Size(65, 21);
-            this.nDlThdCnt.TabIndex = 1;
-            this.nDlThdCnt.ValueChanged += new System.EventHandler(this.nDlThdCnt_ValueChanged);
-            // 
-            // label4
-            // 
-            this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(14, 82);
-            this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(101, 12);
-            this.label4.TabIndex = 0;
-            this.label4.Text = "列表显示的任务数";
-            // 
-            // nListCount
-            // 
-            this.nListCount.Location = new System.Drawing.Point(121, 80);
-            this.nListCount.Maximum = new decimal(new int[] {
-            200,
-            0,
-            0,
-            0});
-            this.nListCount.Name = "nListCount";
-            this.nListCount.Size = new System.Drawing.Size(65, 21);
-            this.nListCount.TabIndex = 1;
-            this.nListCount.ValueChanged += new System.EventHandler(this.nListCount_ValueChanged);
-            // 
-            // label5
-            // 
-            this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(14, 106);
-            this.label5.Name = "label5";
-            this.label5.Size = new System.Drawing.Size(101, 12);
-            this.label5.TabIndex = 0;
-            this.label5.Text = "调试输出数量限制";
-            // 
-            // nDebugListCnt
-            // 
-            this.nDebugListCnt.Location = new System.Drawing.Point(121, 104);
-            this.nDebugListCnt.Maximum = new decimal(new int[] {
-            1000,
-            0,
-            0,
-            0});
-            this.nDebugListCnt.Name = "nDebugListCnt";
-            this.nDebugListCnt.Size = new System.Drawing.Size(65, 21);
-            this.nDebugListCnt.TabIndex = 1;
-            this.nDebugListCnt.ValueChanged += new System.EventHandler(this.nDebugListCnt_ValueChanged);
-            // 
-            // label6
-            // 
-            this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(218, 10);
-            this.label6.Name = "label6";
-            this.label6.Size = new System.Drawing.Size(167, 168);
-            this.label6.TabIndex = 2;
-            this.label6.Text = "简单的使用说明:\r\n以文件管理的右边栏为准：\r\n鼠标右击 显示操作菜单\r\n鼠标双击文件夹 进入该文件夹\r\n键盘快捷键\r\nBackspace: 返回上层目录\r\nEn" +
-    "ter: 进入文件夹\r\nCtrl+C: 复制\r\nCtrl+X: 剪切\r\nCtrl+V: 粘贴\r\n\r\n目前就这么多了\r\n上传的分块跟暂停还在坑着\r\n程序关闭时保存" +
-    "列表也在坑着";
+            this.ctlDebugOutput1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.ctlDebugOutput1.Location = new System.Drawing.Point(3, 3);
+            this.ctlDebugOutput1.Name = "ctlDebugOutput1";
+            this.ctlDebugOutput1.Size = new System.Drawing.Size(720, 373);
+            this.ctlDebugOutput1.TabIndex = 0;
             // 
             // frmMain
             // 
@@ -640,11 +648,11 @@ namespace BaiduCloudSync
             this.tabPage4.ResumeLayout(false);
             this.tabPage5.ResumeLayout(false);
             this.tabPage5.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.nMaxDownload)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.nMaxUpload)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.nDlThdCnt)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.nListCount)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.nDebugListCnt)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.nListCount)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.nDlThdCnt)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.nMaxUpload)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.nMaxDownload)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
