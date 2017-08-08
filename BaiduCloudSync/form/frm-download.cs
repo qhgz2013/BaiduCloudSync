@@ -17,7 +17,7 @@ namespace BaiduCloudSync
     //and buffering the connection stream -> memory stream (buffering) -> hard disk
     public partial class frmDownload : Form
     {
-        private const bool _enable_error_tracing = false;
+        private const bool _enable_error_tracing = true;
         public frmDownload(BaiduPCS pcs, BaiduPCS.ObjectMetadata data, string save_path, bool start_task_now = false)
         {
             InitializeComponent();
@@ -93,6 +93,11 @@ namespace BaiduCloudSync
         private delegate void NoArgSTA();
         private Thread _background_thread;
 
+        private struct _t_struct
+        {
+            public Guid id;
+            public int index;
+        }
         #endregion
 
         private void frmDownload_Load(object sender, EventArgs e)
@@ -114,15 +119,21 @@ namespace BaiduCloudSync
                 //Tracer.GlobalTracer.TraceInfo("(debug message): opening local filestream...");
                 lock (_stream_lck)
                 {
+                    _status = 0;
+
                     if (_save_stream != null)
                         _save_stream.Close();
-                    if (_status != 4)
+
+                    if (File.Exists(_save_path))
                         _save_stream = new FileStream(_save_path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
                     else
                         _save_stream = new FileStream(_save_path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read);
 
-                    _status = 0;
                     TaskStarted?.Invoke(this, new EventArgs());
+
+                    if (_save_stream.Length > (long)_content_length)
+                        _save_stream.SetLength((long)_content_length);
+
                     if (_save_stream.Length != (long)_content_length)
                     {
                         Tracer.GlobalTracer.TraceInfo("(debug message): setting filestream length to " + _content_length);
@@ -226,53 +237,10 @@ namespace BaiduCloudSync
 
         private void _url_download_callback(NetStream ns, object state)
         {
-            if (_guid_list[(int)state] == Guid.Empty) return;
-            var istream = ns.Stream;
-            int index = (int)state;
-            int nread = 0;
-            var buffer = new byte[_BUFFER_SIZE];
-            try
-            {
-                long length = ns.HTTP_Response.ContentLength;
-                if (length != -1 && (ulong)length + _position[index] != _content_length)
-                    throw new ArgumentException("数据流长度不匹配");
-                var content_range = ns.HTTP_Response.Headers[HttpResponseHeader.ContentRange];
-                var reg = System.Text.RegularExpressions.Regex.Match(content_range, @"bytes\s+(\d+)(-\d+)?/\d+");
-                if (long.Parse(reg.Result("$1")) != (long)_position[index])
-                    throw new ArgumentException("数据流长度不匹配");
 
-                lock (_data_lck)
-                    _thread_situation[index] = 2;
-                if (istream != null && (int)ns.HTTP_Response.StatusCode >= 200 && (int)ns.HTTP_Response.StatusCode < 300)
-                {
-                    bool is_continue = true;
-                    do
-                    {
-                        nread = istream.Read(buffer, 0, _BUFFER_SIZE);
-                        //writing data (no Exception allowed)
-                        lock (_data_lck)
-                        {
-                            _last_receive[index] = DateTime.Now;
-                            if (_guid_list[index] != Guid.Empty)
-                            {
-                                _save_stream.Seek((long)_position[index], SeekOrigin.Begin);
-                                _save_stream.Write(buffer, 0, nread);
-                                _position[index] += (uint)nread;
-                                _downloaded_bytes[index] += (uint)nread;
-                                is_continue = _dispatcher.UpdateTaskSituation(_guid_list[index], _position[index]);
-                            }
-                        }
-                    } while (_status == 0 && nread > 0 && is_continue);
-                }
-            }
-            catch (Exception ex)
-            {
-#pragma warning disable
-                if (_enable_error_tracing)
-                    Tracer.GlobalTracer.TraceError(ex.ToString());
-#pragma warning restore
-            }
-            finally
+            int index = ((_t_struct)state).index;
+            Guid id = ((_t_struct)state).id;
+            if (_guid_list[index] == Guid.Empty || _guid_list[index] != id)
             {
                 ns.Close();
                 lock (_data_lck)
@@ -281,6 +249,92 @@ namespace BaiduCloudSync
                     _requests[index] = null;
                     _guid_list[index] = Guid.Empty;
                     _thread_situation[index] = 0;
+                }
+                return;
+            }
+            var istream = ns.Stream;
+            int nread = 0;
+            var buffer = new byte[_BUFFER_SIZE];
+            try
+            {
+                if (ns.HTTP_Response != null && (int)ns.HTTP_Response.StatusCode >= 200 && (int)ns.HTTP_Response.StatusCode < 300)
+                {
+                    long length = ns.HTTP_Response.ContentLength;
+                    var content_range = ns.HTTP_Response.Headers[HttpResponseHeader.ContentRange];
+                    var reg = System.Text.RegularExpressions.Regex.Match(content_range, @"bytes\s+(\d+)-(\d+)?/\d+");
+                    lock (_data_lck)
+                    {
+                        if (_thread_situation[index] != 1) throw new ArgumentException("Invalid Situation, expected 1(pending)");
+                        if (_guid_list[index] != id) throw new ArgumentException("GUID mismatched");
+
+                        _thread_situation[index] = 2;
+                        if (long.Parse(reg.Result("$2")) - long.Parse(reg.Result("$1")) + 1 != length)
+                        {
+                            Tracer.GlobalTracer.TraceWarning("[dbg message][" + index + "]" + " length=" + length + " position=" + _position[index] + " range=" + content_range);
+                            throw new ArgumentException("数据流长度不匹配: ContentRange");
+                        }
+                        if (length != -1 && (ulong)length + _position[index] != _content_length)
+                        {
+                            Tracer.GlobalTracer.TraceWarning("[dbg message][" + index + "]" + " length=" + length + " position=" + _position[index]);
+                            throw new ArgumentException("数据流长度不匹配");
+                        }
+                    }
+                    if (istream != null)
+                    {
+                        bool is_continue = true;
+                        do
+                        {
+                            nread = istream.Read(buffer, 0, _BUFFER_SIZE);
+                            if (nread < 0) throw new ArgumentException("size invalid");
+                            //writing data (no Exception allowed)
+                            lock (_data_lck)
+                            {
+                                _last_receive[index] = DateTime.Now;
+                                if (_guid_list[index] != Guid.Empty && _guid_list[index] == id)
+                                {
+                                    lock (_stream_lck)
+                                    {
+                                        _save_stream.Seek((long)_position[index], SeekOrigin.Begin);
+                                        _save_stream.Write(buffer, 0, nread);
+                                    }
+                                    _position[index] += (uint)nread;
+                                    _downloaded_bytes[index] += (uint)nread;
+                                    is_continue = _dispatcher.UpdateTaskSituation(_guid_list[index], _position[index]);
+                                }
+                                else
+                                    throw new WebException();
+                            }
+                        } while (_status == 0 && nread > 0 && is_continue);
+                    }
+                }
+            }
+            catch (WebException ex)
+            {
+#pragma warning disable
+                if (_enable_error_tracing)
+                    Tracer.GlobalTracer.TraceError("[" + index + "]: " + ex.ToString());
+#pragma warning restore
+            }
+            catch (IOException ex)
+            {
+                Tracer.GlobalTracer.TraceError("[" + index + "]: " + ex.ToString());
+            }
+            catch (Exception ex)
+            {
+                Tracer.GlobalTracer.TraceError("[" + index + "]: " + ex.ToString());
+            }
+            finally
+            {
+                ns.Close();
+                lock (_data_lck)
+                {
+                    if (_guid_list[index] != Guid.Empty && _guid_list[index] == id)
+                    {
+                        _dispatcher.ReleaseTask(_guid_list[index]);
+                        _requests[index] = null;
+                        _guid_list[index] = Guid.Empty;
+                        _thread_situation[index] = 0;
+                    }
                 }
             }
         }
@@ -323,51 +377,59 @@ namespace BaiduCloudSync
                         _eta = TimeSpan.FromSeconds(1.0 * (_content_length - _total_download_size) / (_total_download_size - _last_total_download_size));
 
                     //requests auto disconnect (timed out)
-                    for (int i = 0; i < _requests.Length; i++)
+                    lock (_data_lck)
                     {
-                        if (_thread_situation[i] > 0 && _requests[i] != null && (DateTime.Now - _last_receive[i]) > default_timeout)
+                        for (int i = 0; i < _requests.Length; i++)
                         {
-                            //Tracer.GlobalTracer.TraceInfo("Aborting task #" + i + " (recv timed out)");
-                            lock (_data_lck)
+                            if (_thread_situation[i] > 0 && (DateTime.Now - _last_receive[i]) > default_timeout)
                             {
+                                Tracer.GlobalTracer.TraceInfo("Aborting task #" + i + " (recv timed out)");
                                 if (_status != 0) break;
-                                try { _requests[i].Close(); } catch (Exception) { }
+                                if (_requests[i] != null)
+                                {
+                                    try { _requests[i].Close(); } catch (Exception) { }
+                                }
                                 _dispatcher.ReleaseTask(_guid_list[i]);
                                 _guid_list[i] = Guid.Empty;
                                 _requests[i] = null;
+                                _thread_situation[i] = 0;
+                                break;
                             }
-                            break;
                         }
                     }
                     //auto starting tasks
-                    const int MAX_START_COUNT = 2; //starts 2 tasks in a working loop
+                    const int MAX_START_COUNT = 4; //starts 4 tasks in a working loop
                     int started_count = 0;
-                    for (int i = 0; i < _requests.Length && started_count < MAX_START_COUNT; i++)
+                    lock (_data_lck)
                     {
-                        if (_thread_situation[i] == 0)
+                        for (int i = 0; i < _requests.Length && started_count < MAX_START_COUNT; i++)
                         {
-                            lock (_data_lck)
+                            if (_thread_situation[i] == 0)
                             {
                                 if (_status != 0) break;
                                 _guid_list[i] = _dispatcher.AllocateNewTask(out _position[i]);
                                 if (_guid_list[i] == Guid.Empty) { break; }
                                 //Tracer.GlobalTracer.TraceInfo("Starting task #" + i);
-
+                                
                                 _requests[i] = new NetStream();
+                                //test via local proxy
+                                //cn_requests[i].Proxy = new WebProxy("http://localhost:8888/");
                                 _thread_situation[i] = 1;
                                 _last_receive[i] = DateTime.Now;
                                 try
                                 {
-                                    _requests[i].HttpGetAsync(_urls[i % _urls.Length], _url_download_callback, i, range: (long)_position[i]);
+                                    Tracer.GlobalTracer.TraceInfo("[dbg message][" + i + "]: fetching pos: " + _position[i]);
+                                    _requests[i].HttpGetAsync(_urls[i % _urls.Length], _url_download_callback, new _t_struct { index = i, id = _guid_list[i] }, range: (long)_position[i]);
                                 }
                                 catch (Exception)
                                 {
                                     _dispatcher.ReleaseTask(_guid_list[i]);
                                     _guid_list[i] = Guid.Empty;
                                     _thread_situation[i] = 0;
+                                    _requests[i] = null;
                                 }
+                                started_count++;
                             }
-                            started_count++;
                         }
                     }
 
@@ -524,119 +586,134 @@ namespace BaiduCloudSync
         /// </summary>
         public void Start()
         {
-            lock (_external_lck)
+            ThreadPool.QueueUserWorkItem(delegate
             {
-                if (_status == 0 || _status == 1) return;
-                if (_startThd != null)
+                lock (_external_lck)
                 {
-                    return;
-                }
-                _startThd = new Thread(new ThreadStart(startThdCallback));
-                _startThd.IsBackground = true;
-                _startThd.Start();
-                if (_form_initialized)
-                {
-                    Invoke(new NoArgSTA(delegate
+                    if (_status == 0 || _status == 1) return;
+                    if (_startThd != null)
                     {
-                        bStartPause.Text = "暂停下载";
-                    }));
+                        return;
+                    }
+                    _startThd = new Thread(new ThreadStart(startThdCallback));
+                    _startThd.IsBackground = true;
+                    _startThd.Start();
+                    if (_form_initialized)
+                    {
+                        Invoke(new NoArgSTA(delegate
+                        {
+                            bStartPause.Text = "暂停下载";
+                        }));
+                    }
                 }
-            }
+            });
         }
         /// <summary>
         /// 暂停任务
         /// </summary>
         public void Pause()
         {
-            lock (_external_lck)
+            ThreadPool.QueueUserWorkItem(delegate
             {
-                if (_status == 2 || _status == 1) return;
-                _status = 2;
-                if (_startThd != null)
+                lock (_external_lck)
                 {
-                    try { _startThd.Abort(); } catch (Exception) { }
-                }
-                //中断所有http请求
-                if (_requests != null)
-                    lock (_data_lck)
-                        for (int i = 0; i < _requests.Length; i++)
-                        {
-                            if (_requests[i] != null)
-                            {
-                                _requests[i].Close();
-                                _requests[i] = null;
-                                _dispatcher.ReleaseTask(_guid_list[i]);
-                                _guid_list[i] = Guid.Empty;
-                                _position[i] = 0;
-                                _downloaded_bytes[i] = 0;
-                            }
-                        }
-                //关闭输出数据流
-                lock (_stream_lck)
-                {
-                    if (_save_stream != null)
+                    if (_status == 2 || _status == 1) return;
+                    _status = 2;
+                    if (_startThd != null)
                     {
-                        _save_stream.Close();
-                        _save_stream = null;
+                        try { _startThd.Abort(); } catch (Exception) { }
                     }
+                    //中断所有http请求
+                    if (_requests != null)
+                        lock (_data_lck)
+                            for (int i = 0; i < _requests.Length; i++)
+                            {
+                                if (_requests[i] != null)
+                                {
+                                    _requests[i].Close();
+                                    _requests[i] = null;
+                                    _dispatcher.ReleaseTask(_guid_list[i]);
+                                    _guid_list[i] = Guid.Empty;
+                                    _position[i] = 0;
+                                    _downloaded_bytes[i] = 0;
+                                }
+                            }
+                    //关闭输出数据流
+                    lock (_stream_lck)
+                    {
+                        if (_save_stream != null)
+                        {
+                            _save_stream.Close();
+                            _save_stream = null;
+                        }
+                    }
+                    TaskPaused?.Invoke(this, new EventArgs());
                 }
-                TaskPaused?.Invoke(this, new EventArgs());
-            }
-            if (_form_initialized)
-            {
-                Invoke(new NoArgSTA(delegate
+                if (_form_initialized)
                 {
-                    //暂停下载
-                    bStartPause.Text = "恢复下载";
-                }));
-            }
+                    Invoke(new NoArgSTA(delegate
+                    {
+                        //暂停下载
+                        bStartPause.Text = "恢复下载";
+                    }));
+                }
+            });
         }
         /// <summary>
         /// 取消任务
         /// </summary>
         public void Cancel()
         {
-            lock (_external_lck)
+            ThreadPool.QueueUserWorkItem(delegate
             {
-                if (_status == 1) return;
-                _status = 1;
-                if (_startThd != null)
+                lock (_external_lck)
                 {
-                    try { _startThd.Abort(); } catch (Exception) { }
-                }
-                //中断所有http请求
-                if (_requests != null)
-                    lock (_data_lck)
-                        for (int i = 0; i < _requests.Length; i++)
-                        {
-                            if (_requests[i] != null)
-                            {
-                                _requests[i].Close();
-                                _dispatcher.ReleaseTask(_guid_list[i]);
-                                _guid_list[i] = Guid.Empty;
-                                _position[i] = 0;
-                                _downloaded_bytes[i] = 0;
-                                _requests[i] = null;
-                            }
-                        }
-                //关闭输出数据流
-                lock (_stream_lck)
-                {
-                    if (_save_stream != null)
+                    if (_status == 1) return;
+                    _status = 1;
+                    if (_startThd != null)
                     {
-                        _save_stream.Close();
-                        _save_stream = null;
+                        try { _startThd.Abort(); } catch (Exception) { }
+                    }
+                    //中断所有http请求
+                    if (_requests != null)
+                        lock (_data_lck)
+                            for (int i = 0; i < _requests.Length; i++)
+                            {
+                                if (_requests[i] != null)
+                                {
+                                    _requests[i].Close();
+                                    _dispatcher.ReleaseTask(_guid_list[i]);
+                                    _guid_list[i] = Guid.Empty;
+                                    _position[i] = 0;
+                                    _downloaded_bytes[i] = 0;
+                                    _requests[i] = null;
+                                }
+                            }
+                    //关闭输出数据流
+                    lock (_stream_lck)
+                    {
+                        if (_save_stream != null)
+                        {
+                            _save_stream.Close();
+                            _save_stream = null;
+                        }
+                    }
+                    TaskCancelled?.Invoke(this, new EventArgs());
+                    if (_form_initialized)
+                    {
+                        _form_initialized = false;
+                        Invoke(new NoArgSTA(delegate
+                        {
+                            Close();
+                        }));
+                    }
+
+                    if (File.Exists(_save_path))
+                    {
+                        try { File.Delete(_save_path); } catch (Exception) { }
                     }
                 }
-                TaskCancelled?.Invoke(this, new EventArgs());
-                if (_form_initialized)
-                {
-                    Invoke(new NoArgSTA(delegate
-                    {
-                        Close();
-                    }));
-                }
-            }
+            });
         }
         /// <summary>
         /// 重新开始任务
@@ -644,36 +721,38 @@ namespace BaiduCloudSync
         public void Restart()
         {
             if (_status != 0) return;
-            lock (_external_lck)
+            ThreadPool.QueueUserWorkItem(delegate
             {
-                //pause
-                if (_startThd != null)
+                lock (_external_lck)
                 {
-                    try { _startThd.Abort(); } catch (Exception) { }
-                }
-                lock (_data_lck)
-                    if (_requests != null)
-                        for (int i = 0; i < _requests.Length; i++)
-                        {
-                            if (_requests[i] != null)
+                    //pause
+                    if (_startThd != null)
+                    {
+                        try { _startThd.Abort(); } catch (Exception) { }
+                    }
+                    lock (_data_lck)
+                        if (_requests != null)
+                            for (int i = 0; i < _requests.Length; i++)
                             {
-                                _requests[i].Close();
-                                _requests[i] = null;
+                                if (_requests[i] != null)
+                                {
+                                    _requests[i].Close();
+                                    _requests[i] = null;
+                                }
                             }
-                        }
-                if (_save_stream != null)
-                {
-                    _save_stream.Close();
-                    _save_stream = null;
+                    if (_save_stream != null)
+                    {
+                        _save_stream.Close();
+                        _save_stream = null;
+                    }
+                    TaskPaused?.Invoke(this, new EventArgs());
+                    //start
+                    _startThd = new Thread(new ThreadStart(startThdCallback));
+                    _startThd.IsBackground = true;
+                    _startThd.Start();
+                    TaskStarted?.Invoke(this, new EventArgs());
                 }
-                TaskPaused?.Invoke(this, new EventArgs());
-                //start
-                _startThd = new Thread(new ThreadStart(startThdCallback));
-                _startThd.IsBackground = true;
-                _startThd.Start();
-                TaskStarted?.Invoke(this, new EventArgs());
-            }
-
+            });
         }
         /// <summary>
         /// 已下载大小

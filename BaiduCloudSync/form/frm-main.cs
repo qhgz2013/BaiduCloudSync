@@ -207,6 +207,7 @@ namespace BaiduCloudSync
         {
             var thd = new Thread(new ThreadStart(delegate
             {
+                Debug.Print("async call: " + status_name);
                 lock (__background_thd_lock)
                 {
                     try

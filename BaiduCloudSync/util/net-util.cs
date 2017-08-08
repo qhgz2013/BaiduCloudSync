@@ -996,6 +996,9 @@ namespace BaiduCloudSync
                         HTTP_Request.ContentLength = postLength;
                         HTTP_Request.ContentType = postContentType;
 
+                        //HTTP_Request.SendChunked = true;
+                        HTTP_Request.AllowWriteStreamBuffering = false;
+
                         if (range >= 0)
                         {
                             if (keyList.Contains(STR_RANGE))
