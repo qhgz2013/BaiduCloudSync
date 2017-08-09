@@ -26,6 +26,8 @@ namespace BaiduCloudSync
         public const string PCS_ROOT_URL = PCS_HOST + "rest/2.0/pcs/";
         //https://pcs.baidu.com/rest/2.0/pcs/file
         public const string PCS_FILE_URL = PCS_ROOT_URL + "file";
+        //https://pcs.baidu.com/rest/2.0/pcs/superfile2
+        public const string PCS_SUPERFILE_URL = PCS_ROOT_URL + "superfile2";
 
         //http://pan.baidu.com/
         public const string API_HOST = "http://pan.baidu.com/";
@@ -41,6 +43,8 @@ namespace BaiduCloudSync
         public const string API_DOWNLOAD_URL = API_ROOT_URL + "download";
         //http://pan.baidu.com/api/create
         public const string API_CREATE_URL = API_ROOT_URL + "create";
+        //http://pan.baidu.com/api/precreate
+        public const string API_PRECREATE_URL = API_ROOT_URL + "precreate";
         //http://pan.baidu.com/share/
         public const string API_SHARE_URL = API_HOST + "share/";
         //http://pan.baidu.com/share/set
@@ -59,6 +63,8 @@ namespace BaiduCloudSync
         private const long VALIDATE_SIZE = 262144;
         //errno出错时是否传递异常
         private const bool TRANSFER_ERRNO_EXCEPTION = true;
+        //默认上传分段的大小
+        private const int UPLOAD_SLICE_SIZE = 4194304;
         #endregion
 
 
@@ -304,6 +310,12 @@ namespace BaiduCloudSync
             }
         }
 
+        public struct PreCreateResult
+        {
+            public int BlockCount;
+            public int ReturnType;
+            public string UploadId;
+        }
         #endregion
 
 
@@ -1102,7 +1114,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.UploadRaw called: Stream stream_in=" + stream_in.ToString() + ", ulong content_length=" + content_length + ", string path=" + path + ", ondup ondup=" + ondup + ", UploadStatusCallback callback=" + callback?.ToString());
 
             var ret = new ObjectMetadata();
-            if (!stream_in.CanRead) return ret;
+            if (!stream_in.CanRead || string.IsNullOrEmpty(path)) return ret;
             var param = new Parameters();
             param.Add("method", "upload");
             param.Add("app_id", APPID);
@@ -1165,6 +1177,230 @@ namespace BaiduCloudSync
             }
             stream_in.Close();
             stream_in.Dispose();
+            return ret;
+        }
+
+        /// <summary>
+        /// 预创建文件，用于分段上传
+        /// </summary>
+        /// <param name="path">文件路径</param>
+        /// <param name="block_count">分段数量（以4mb为一个分段）</param>
+        /// <returns></returns>
+        public PreCreateResult PreCreateFile(string path, int block_count)
+        {
+            _trace.TraceInfo("BaiduPCS.PreCreateFile called: string path=" + path + ", int block_count=" + block_count);
+            var ret = new PreCreateResult();
+            if (string.IsNullOrEmpty(path) || block_count == 0) return ret;
+
+            var ns = new NetStream();
+            var query_param = new Parameters();
+
+            query_param.Add("channel", "chunlei");
+            query_param.Add("web", 1);
+            query_param.Add("app_id", APPID);
+            query_param.Add("bdstoken", _bdstoken);
+            query_param.Add("logid", _get_logid());
+            query_param.Add("clienttype", 0);
+
+            var post_data = new Parameters();
+            post_data.Add("path", path);
+            post_data.Add("autoinit", 1);
+            var block_array = new JArray();
+            var rnd = new Random();
+            var rnd_md5 = new byte[16]; //这里直接随机就ok了，反正也没什么卵用
+            for (int i = 0; i < block_count; i++)
+            {
+                rnd.NextBytes(rnd_md5);
+                var str_md5 = util.Hex(rnd_md5);
+                block_array.Add(str_md5);
+            }
+            post_data.Add("block_list", JsonConvert.SerializeObject(block_array));
+
+            try
+            {
+                ns.HttpPost(API_PRECREATE_URL, post_data, headerParam: _get_xhr_param(), urlParam: query_param);
+                var response = ns.ReadResponseString();
+                ns.Close();
+
+                _trace.TraceInfo(response);
+                var json = JsonConvert.DeserializeObject(response) as JObject;
+                _check_error(json);
+
+                ret.BlockCount = json.Value<JArray>("block_list").Count;
+                ret.ReturnType = json.Value<int>("return_type");
+                ret.UploadId = json.Value<string>("uploadid");
+            }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
+            catch (Exception ex)
+            {
+                _trace.TraceError(ex.ToString());
+            }
+            return ret;
+        }
+        /// <summary>
+        /// 上传分段数据
+        /// </summary>
+        /// <param name="stream_in">输入数据流</param>
+        /// <param name="path">文件路径</param>
+        /// <param name="uploadid">上传id</param>
+        /// <param name="sequence">分段索引</param>
+        /// <param name="callback">进度回调函数</param>
+        /// <returns></returns>
+        public string UploadSliceRaw(Stream stream_in, string path, string uploadid, int sequence, UploadStatusCallback callback = null)
+        {
+            _trace.TraceInfo("BaiduPCS.UploadSliceRaw called: Stream stream_in=" + stream_in.ToString() + ", string uploadid=" + uploadid + ", int sequence=" + sequence + ", UploadStatusCallback callback=" + callback.ToString());
+            if (string.IsNullOrEmpty(uploadid) || string.IsNullOrEmpty(path) || !stream_in.CanRead) return string.Empty;
+            if (string.IsNullOrEmpty(BaiduOAuth.bduss)) return string.Empty;
+            
+            var query_param = new Parameters();
+            query_param.Add("method", "upload");
+            query_param.Add("app_id", APPID);
+            query_param.Add("channel", "chunlei");
+            query_param.Add("clienttype", 1);
+            query_param.Add("web", 1);
+            query_param.Add("BDUSS", BaiduOAuth.bduss);
+            query_param.Add("logid", _get_logid());
+            query_param.Add("path", path);
+            query_param.Add("uploadid", uploadid);
+            query_param.Add("partseq", sequence);
+
+            var ns = new NetStream();
+            var boundary = util.GenerateFormDataBoundary();
+
+            var formdata_param = new Parameters();
+            formdata_param.Add("Content-Disposition", "form-data; name=\"file\"; filename=\"blob\"");
+            formdata_param.Add("Content-Type", "application/octet-stream");
+
+            var head = util.GenerateFormDataObject(boundary, formdata_param);
+            var foot = util.GenerateFormDataEnding(boundary);
+
+            var head_bytes = Encoding.UTF8.GetBytes(head);
+            var foot_bytes = Encoding.UTF8.GetBytes(foot);
+
+            var temp_ms = new MemoryStream();
+            var buffer = new byte[BUFFER_SIZE];
+            //load to memory stream
+            try
+            {
+                int nread = 0, totalread = 0;
+                do
+                {
+                    int length = Math.Min(BUFFER_SIZE, UPLOAD_SLICE_SIZE - totalread);
+                    nread = stream_in.Read(buffer, 0, length);
+                    temp_ms.Write(buffer, 0, nread);
+                    totalread += length;
+                } while (nread != 0);
+            }
+            catch (Exception ex)
+            {
+                _trace.TraceError(ex.ToString());
+                return string.Empty;
+            }
+            temp_ms.Seek(0, SeekOrigin.Begin);
+
+            long total_length = head_bytes.Length + foot_bytes.Length + temp_ms.Length;
+
+            try
+            {
+                var stream_out = ns.HttpPost(PCS_FILE_URL, total_length, "multipart/form-data; boundary=" + boundary, headerParam: _get_xhr_param(), urlParam: query_param);
+                stream_out.Write(head_bytes, 0, head_bytes.Length);
+
+                long total_read = 0, current_read = 0;
+                do
+                {
+                    current_read = temp_ms.Read(buffer, 0, BUFFER_SIZE);
+                    stream_out.Write(buffer, 0, (int)current_read);
+                    total_read += current_read;
+                    callback?.Invoke(path, string.Empty, total_read, temp_ms.Length);
+                } while (current_read != 0);
+
+                stream_out.Write(foot_bytes, 0, foot_bytes.Length);
+
+                ns.HttpPostClose();
+                var response = ns.ReadResponseString();
+                ns.Close();
+
+                _trace.TraceInfo(response);
+                var json = JsonConvert.DeserializeObject(response) as JObject;
+                _check_error(json);
+                
+                return json.Value<string>("md5");
+            }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
+            catch (Exception ex)
+            {
+                _trace.TraceError(ex.ToString());
+            }
+            return string.Empty;
+
+        }
+        public ObjectMetadata CreateSuperFile(string path, string uploadid, IEnumerable<string> block_list, ulong file_size)
+        {
+            _trace.TraceInfo("BaiduPCS.CreateSuperFile called: string path=" + path + ", string uploadid=" + uploadid + ", Ienumerable<string> block_list=[count=" + block_list.Count() + "]");
+            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(uploadid) || block_list == null) return new ObjectMetadata();
+            var ret = new ObjectMetadata();
+            
+            var query_param = new Parameters();
+            query_param.Add("isdir", 0);
+            query_param.Add("channel", "chunlei");
+            query_param.Add("web", 1);
+            query_param.Add("app_id", APPID);
+            query_param.Add("bdstoken", _bdstoken);
+            query_param.Add("logid", _get_logid());
+            query_param.Add("clienttype", 0);
+
+            var post_param = new Parameters();
+            post_param.Add("path", path);
+            post_param.Add("size", file_size);
+            post_param.Add("uploadid", uploadid);
+            var blist = new JArray();
+            foreach (var item in block_list)
+            {
+                blist.Add(item);
+            }
+            post_param.Add("block_list", JsonConvert.SerializeObject(blist));
+
+            var ns = new NetStream();
+            try
+            {
+                ns.HttpPost(API_CREATE_URL, post_param, headerParam: _get_xhr_param(), urlParam: query_param);
+                var response = ns.ReadResponseString();
+                ns.Close();
+
+                _trace.TraceInfo(response);
+                var json = JsonConvert.DeserializeObject(response) as JObject;
+                _check_error(json);
+
+                ret.ServerCTime = json.Value<ulong>("ctime");
+                ret.ServerMTime = json.Value<ulong>("mtime");
+                ret.FS_ID = json.Value<ulong>("fs_id");
+                ret.IsDir = json.Value<int>("isdir") != 0;
+                ret.MD5 = json.Value<string>("md5");
+                ret.Path = json.Value<string>("path");
+                ret.Size = json.Value<ulong>("size");
+
+                ret.ServerFileName = ret.Path.Split('/').Last();
+            }
+            catch (ErrnoException ex)
+            {
+                _trace.TraceError(ex.ToString());
+                if (TRANSFER_ERRNO_EXCEPTION)
+                    throw;
+            }
+            catch (Exception ex)
+            {
+                _trace.TraceError(ex.ToString());
+            }
             return ret;
         }
         #endregion
@@ -1669,18 +1905,18 @@ namespace BaiduCloudSync
 
         #endregion
     }
-    public class ErrnoException: Exception
+    public class ErrnoException : Exception
     {
         public int Errno { get; }
         public ErrnoException(int errno) : base()
         {
             Errno = errno;
         }
-        public ErrnoException(int errno, string message): base(message)
+        public ErrnoException(int errno, string message) : base(message)
         {
             Errno = errno;
         }
-        public ErrnoException(int errno, string message, Exception innerException): base(message, innerException)
+        public ErrnoException(int errno, string message, Exception innerException) : base(message, innerException)
         {
             Errno = errno;
         }

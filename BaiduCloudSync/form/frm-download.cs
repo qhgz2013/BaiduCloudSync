@@ -17,7 +17,7 @@ namespace BaiduCloudSync
     //and buffering the connection stream -> memory stream (buffering) -> hard disk
     public partial class frmDownload : Form
     {
-        private const bool _enable_error_tracing = true;
+        private const bool _enable_error_tracing = false;
         public frmDownload(BaiduPCS pcs, BaiduPCS.ObjectMetadata data, string save_path, bool start_task_now = false)
         {
             InitializeComponent();
@@ -270,12 +270,12 @@ namespace BaiduCloudSync
                         _thread_situation[index] = 2;
                         if (long.Parse(reg.Result("$2")) - long.Parse(reg.Result("$1")) + 1 != length)
                         {
-                            Tracer.GlobalTracer.TraceWarning("[dbg message][" + index + "]" + " length=" + length + " position=" + _position[index] + " range=" + content_range);
+                            //Tracer.GlobalTracer.TraceWarning("[dbg message][" + index + "]" + " length=" + length + " position=" + _position[index] + " range=" + content_range);
                             throw new ArgumentException("数据流长度不匹配: ContentRange");
                         }
                         if (length != -1 && (ulong)length + _position[index] != _content_length)
                         {
-                            Tracer.GlobalTracer.TraceWarning("[dbg message][" + index + "]" + " length=" + length + " position=" + _position[index]);
+                            //Tracer.GlobalTracer.TraceWarning("[dbg message][" + index + "]" + " length=" + length + " position=" + _position[index]);
                             throw new ArgumentException("数据流长度不匹配");
                         }
                     }
@@ -383,16 +383,19 @@ namespace BaiduCloudSync
                         {
                             if (_thread_situation[i] > 0 && (DateTime.Now - _last_receive[i]) > default_timeout)
                             {
-                                Tracer.GlobalTracer.TraceInfo("Aborting task #" + i + " (recv timed out)");
+                                //Tracer.GlobalTracer.TraceInfo("Aborting task #" + i + " (recv timed out)");
                                 if (_status != 0) break;
                                 if (_requests[i] != null)
                                 {
-                                    try { _requests[i].Close(); } catch (Exception) { }
+                                    try { _requests[i].Close(); } catch (Exception ex) { Tracer.GlobalTracer.TraceError(ex.ToString()); }
                                 }
                                 _dispatcher.ReleaseTask(_guid_list[i]);
+                                //rst
                                 _guid_list[i] = Guid.Empty;
                                 _requests[i] = null;
                                 _thread_situation[i] = 0;
+                                _downloaded_bytes[i] = 0;
+                                _position[i] = 0;
                                 break;
                             }
                         }
@@ -418,11 +421,12 @@ namespace BaiduCloudSync
                                 _last_receive[i] = DateTime.Now;
                                 try
                                 {
-                                    Tracer.GlobalTracer.TraceInfo("[dbg message][" + i + "]: fetching pos: " + _position[i]);
+                                    //Tracer.GlobalTracer.TraceInfo("[dbg message][" + i + "]: fetching pos: " + _position[i]);
                                     _requests[i].HttpGetAsync(_urls[i % _urls.Length], _url_download_callback, new _t_struct { index = i, id = _guid_list[i] }, range: (long)_position[i]);
                                 }
-                                catch (Exception)
+                                catch (Exception ex)
                                 {
+                                    Tracer.GlobalTracer.TraceError(ex.ToString());
                                     _dispatcher.ReleaseTask(_guid_list[i]);
                                     _guid_list[i] = Guid.Empty;
                                     _thread_situation[i] = 0;
