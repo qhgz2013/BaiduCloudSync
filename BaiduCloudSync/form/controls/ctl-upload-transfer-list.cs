@@ -170,7 +170,6 @@ namespace BaiduCloudSync
                         break;
                     case _STAT.START:
                         col6_startpause.Text = "暂停";
-                        col6_startpause.Enabled = false;
                         break;
                     case _STAT.STOP:
                     case _STAT.UNDEFINED:
@@ -318,7 +317,7 @@ namespace BaiduCloudSync
                 Invoke(new ThreadStart(delegate
                 {
                     var ctl = Controls["ctl-" + ctl_index + "-6"];
-                    if (ctl != null) { ctl.Text = "暂停"; ctl.Enabled = false; }
+                    if (ctl != null) { ctl.Text = "暂停"; }
                 }));
             }
         }
@@ -333,7 +332,7 @@ namespace BaiduCloudSync
             {
                 Invoke(new ThreadStart(delegate
                 {
-                    var ctl = Controls["ctl-" + ctl_index + "-7"];
+                    var ctl = Controls["ctl-" + ctl_index + "-6"];
                     ctl.Text = "开始";
                 }));
             }
@@ -372,7 +371,7 @@ namespace BaiduCloudSync
         private object _external_lock = new object();
         public void AddTask(Uploader task)
         {
-            if (task == null || task.IsCancelled || task.IsPaused) return;
+            if (task == null || task.IsCancelled) return;
             ThreadPool.QueueUserWorkItem(delegate
             {
                 lock (_external_lock)
@@ -386,7 +385,7 @@ namespace BaiduCloudSync
 
                         _total_bytes += task.Content_Length;
                         if (task.IsInitialized) _status.Add(_STAT.INIT);
-                        //else if (task.IsPaused) _status.Add(_STAT.PAUSE);
+                        else if (task.IsPaused) _status.Add(_STAT.PAUSE);
                         //else if (task.IsCancelled) _status.Add(_STAT.STOP);
                         else if (task.IsStarted) _status.Add(_STAT.START);
                         else _status.Add(_STAT.UNDEFINED);

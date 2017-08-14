@@ -86,6 +86,7 @@ namespace BaiduCloudSync
         private DateTime _start_time;
         private ulong _total_download_size;
         private ulong _last_total_download_size;
+        private ulong _speed;
         //flag status : 0000 0X (inited) X (paused) X(calcelled) (0 for running)
         private byte _status;
         private TimeSpan _eta;
@@ -119,8 +120,6 @@ namespace BaiduCloudSync
                 //Tracer.GlobalTracer.TraceInfo("(debug message): opening local filestream...");
                 lock (_stream_lck)
                 {
-                    _status = 0;
-
                     if (_save_stream != null)
                         _save_stream.Close();
 
@@ -129,7 +128,6 @@ namespace BaiduCloudSync
                     else
                         _save_stream = new FileStream(_save_path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read);
 
-                    TaskStarted?.Invoke(this, new EventArgs());
 
                     if (_save_stream.Length > (long)_content_length)
                         _save_stream.SetLength((long)_content_length);
@@ -354,6 +352,8 @@ namespace BaiduCloudSync
 
                     //data parsing
                     var ls = _dispatcher.GetSegments();
+                    _speed = _total_download_size - _last_total_download_size;
+                    if (_speed < 0) _speed = 0;
                     _last_total_download_size = _total_download_size;
                     _total_download_size = 0;
 
@@ -371,10 +371,10 @@ namespace BaiduCloudSync
                     }
                     var process = _total_download_size * 10000.0 / _content_length;
 
-                    if (_last_total_download_size == _total_download_size)
+                    if (_speed == 0)
                         _eta = TimeSpan.MaxValue;
                     else
-                        _eta = TimeSpan.FromSeconds(1.0 * (_content_length - _total_download_size) / (_total_download_size - _last_total_download_size));
+                        _eta = TimeSpan.FromSeconds(1.0 * (_content_length - _total_download_size) / _speed);
 
                     //requests auto disconnect (timed out)
                     lock (_data_lck)
@@ -601,6 +601,8 @@ namespace BaiduCloudSync
                     }
                     _startThd = new Thread(new ThreadStart(startThdCallback));
                     _startThd.IsBackground = true;
+                    _status = 0;
+                    TaskStarted?.Invoke(this, new EventArgs());
                     _startThd.Start();
                     if (_form_initialized)
                     {
@@ -753,8 +755,9 @@ namespace BaiduCloudSync
                     //start
                     _startThd = new Thread(new ThreadStart(startThdCallback));
                     _startThd.IsBackground = true;
-                    _startThd.Start();
+                    _status = 0;
                     TaskStarted?.Invoke(this, new EventArgs());
+                    _startThd.Start();
                 }
             });
         }
@@ -765,7 +768,7 @@ namespace BaiduCloudSync
         /// <summary>
         /// 速度
         /// </summary>
-        public ulong Speed { get { return _total_download_size - _last_total_download_size; } }
+        public ulong Speed { get { return _speed; } }
         /// <summary>
         /// 开始时间
         /// </summary>

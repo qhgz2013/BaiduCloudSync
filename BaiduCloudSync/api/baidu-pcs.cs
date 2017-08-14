@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -1093,6 +1094,18 @@ namespace BaiduCloudSync
                 if (TRANSFER_ERRNO_EXCEPTION)
                     throw;
             }
+            //ignored http 404 code
+            catch (WebException ex)
+            {
+                if (ex.Response != null)
+                {
+                    var http_resp = (HttpWebResponse)ex.Response;
+                    if (http_resp.StatusCode != HttpStatusCode.NotFound)
+                    {
+                        _trace.TraceError(ex.ToString());
+                    }
+                }
+            }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
@@ -1307,7 +1320,7 @@ namespace BaiduCloudSync
 
             try
             {
-                var stream_out = ns.HttpPost(PCS_FILE_URL, total_length, "multipart/form-data; boundary=" + boundary, headerParam: _get_xhr_param(), urlParam: query_param);
+                var stream_out = ns.HttpPost(PCS_SUPERFILE_URL, total_length, "multipart/form-data; boundary=" + boundary, headerParam: _get_xhr_param(), urlParam: query_param);
                 stream_out.Write(head_bytes, 0, head_bytes.Length);
 
                 long total_read = 0, current_read = 0;
@@ -1340,6 +1353,10 @@ namespace BaiduCloudSync
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
+            }
+            finally
+            {
+                temp_ms.Close();
             }
             return string.Empty;
 
