@@ -51,10 +51,10 @@ namespace BaiduCloudSync
             //rm.KeySize = key.Length * 8;
             if (IV != null && IV.Length != 16) throw new ArgumentException("IV only support 128 bit(16 bytes length)");
             if (IV != null) rm.IV = IV;
-            if (rm.IV == null)
-            {
-            }
-            rm.IV = util.ReadBytes(encData, 16);
+            //if (rm.IV == null)
+            //{
+            //    rm.IV = util.ReadBytes(encData, 16);
+            //}
 
             var decrypt_stream = new CryptoStream(encData, rm.CreateDecryptor(), CryptoStreamMode.Read);
             return decrypt_stream;

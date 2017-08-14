@@ -49,7 +49,8 @@ namespace BaiduCloudSync
         private ondup _ondup;
 
         private Form _parent_form;
-        public Uploader(Form parent, BaiduPCS api, string path, TrackedData local_data, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite)
+        private bool _is_encrypt_upload;
+        public Uploader(Form parent, BaiduPCS api, string path, TrackedData local_data, ondup ondup = ondup.overwrite, bool encrypt = false)
         {
             _path = path;
             _local_path = local_data.Path;
@@ -67,6 +68,10 @@ namespace BaiduCloudSync
             _rapid_upload_requested = false;
             _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
             _slice_upload_data = new List<string>();
+
+            _is_encrypt_upload = encrypt;
+            if (_is_encrypt_upload && !_path.EndsWith(".bcsd"))
+                path += ".bcsd";
         }
         private void onStatusUpdated(string path, string local_path, long current, long length)
         {
@@ -104,13 +109,59 @@ namespace BaiduCloudSync
                 _speed_timer.Start();
 
                 if (_content_length == 0) return;
+
+                //encryption
+                if (_is_encrypt_upload)
+                {
+                    if (frmKeyCreate.HasRsaPublicKey)
+                    {
+                        try
+                        {
+                            var key = frmKeyCreate.LoadRsaKey(false);
+                            FileEncrypt.EncryptFile(_local_path, _local_path + "_temp", key);
+                            _content_md5 = string.Empty;
+                        }
+                        catch (Exception ex)
+                        {
+                            Tracer.GlobalTracer.TraceError(ex.ToString());
+                            _state = 4;
+                            TaskCancelled?.Invoke(this, new EventArgs());
+                            return;
+                        }
+                    }
+                    else if (frmKeyCreate.HasAesKey)
+                    {
+                        try
+                        {
+                            byte[] key, iv;
+                            frmKeyCreate.LoadAesKey(out key, out iv);
+                            if (key == null) throw new ArgumentNullException("key", "加载AES key失败：无效的密钥文件");
+                            FileEncrypt.EncryptFile(_local_path, _local_path + "_temp", key, iv);
+                            _content_md5 = string.Empty;
+                        }
+                        catch (Exception ex)
+                        {
+                            Tracer.GlobalTracer.TraceError(ex.ToString());
+                            _state = 4;
+                            TaskCancelled?.Invoke(this, new EventArgs());
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        Tracer.GlobalTracer.TraceWarning("RSA and AES key not found, upload cancelled");
+                        _state = 4;
+                        TaskCancelled?.Invoke(this, new EventArgs());
+                        return;
+                    }
+                }
                 //calculating local file
                 if (!_rapid_upload_requested && _ENABLE_RAPID_UPLOAD)
                 {
                     _state = 8;
                     if (string.IsNullOrEmpty(_content_md5))
                     {
-                        var rapid_upload_data = _api.GetRapidUploadArguments(_local_path, onStatusUpdated);
+                        var rapid_upload_data = _api.GetRapidUploadArguments(_local_path + (_is_encrypt_upload ? "_temp" : ""), onStatusUpdated);
                         _content_length = rapid_upload_data.content_length;
                         _content_crc32 = rapid_upload_data.content_crc32;
                         _content_md5 = rapid_upload_data.content_md5;
@@ -118,7 +169,7 @@ namespace BaiduCloudSync
                     }
                     else if (string.IsNullOrEmpty(_slice_md5) && _content_length >= 262144)
                     {
-                        var stream = new FileStream(_local_path, FileMode.Open, FileAccess.Read);
+                        var stream = new FileStream(_local_path + (_is_encrypt_upload ? "_temp" : ""), FileMode.Open, FileAccess.Read);
                         var md5 = new System.Security.Cryptography.MD5CryptoServiceProvider();
                         int buffer_size = 8192;
                         var buffer = new byte[buffer_size];
@@ -146,7 +197,8 @@ namespace BaiduCloudSync
                         }
                         catch (ErrnoException ex)
                         {
-                            _parent_form.Invoke(new ThreadStart(delegate
+                            Tracer.GlobalTracer.TraceError("Rapid upload file failed, response returned errno = " + ex.Errno);
+                            _parent_form?.Invoke(new ThreadStart(delegate
                             {
                                 MessageBox.Show(_parent_form, "秒传错误: 错误代码: " + ex.Errno, "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             }));
@@ -179,7 +231,7 @@ namespace BaiduCloudSync
                     }
                 }
 
-                _open_stream = new FileStream(_local_path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                _open_stream = new FileStream(_local_path + (_is_encrypt_upload ? "_temp" : ""), FileMode.Open, FileAccess.Read, FileShare.Read);
                 while (_slice_upload_data.Count < _slice_count)
                 {
                     if (_open_stream.Position != 4194304 * _slice_upload_data.Count)
@@ -249,9 +301,20 @@ namespace BaiduCloudSync
             finally
             {
                 if (_speed_timer != null)
+                {
                     _speed_timer.Abort();
+                    _speed_timer = null;
+                }
                 if (_open_stream != null)
+                {
                     _open_stream.Close();
+                    _open_stream = null;
+                }
+                if (_is_encrypt_upload)
+                {
+                    if (File.Exists(_local_path + "_temp"))
+                        File.Delete(_local_path + "_temp");
+                }
             }
 
         }
@@ -303,6 +366,7 @@ namespace BaiduCloudSync
                         _state = 4;
                     }
                 }
+                if (File.Exists(_local_path + "_temp")) File.Decrypt(_local_path + "_temp");
                 TaskCancelled?.Invoke(this, new EventArgs());
             }
         }

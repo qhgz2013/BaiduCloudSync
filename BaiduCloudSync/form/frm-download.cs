@@ -87,7 +87,7 @@ namespace BaiduCloudSync
         private ulong _total_download_size;
         private ulong _last_total_download_size;
         private ulong _speed;
-        //flag status : 0000 0X (inited) X (paused) X(calcelled) (0 for running)
+        //flag status : 0000 X (decrypting) X (inited) X (paused) X(calcelled) (0 for running)
         private byte _status;
         private TimeSpan _eta;
 
@@ -220,7 +220,7 @@ namespace BaiduCloudSync
                     _background_thread.Name = "数据更新线程";
                     _background_thread.IsBackground = true;
                     _background_thread.Priority = ThreadPriority.AboveNormal;
-
+                    _background_thread.SetApartmentState(ApartmentState.STA);
                     //Tracer.GlobalTracer.TraceInfo("(debug message): calling data update thread");
                     _background_thread.Start();
                 }
@@ -413,7 +413,7 @@ namespace BaiduCloudSync
                                 _guid_list[i] = _dispatcher.AllocateNewTask(out _position[i]);
                                 if (_guid_list[i] == Guid.Empty) { break; }
                                 //Tracer.GlobalTracer.TraceInfo("Starting task #" + i);
-                                
+
                                 _requests[i] = new NetStream();
                                 //test via local proxy
                                 //cn_requests[i].Proxy = new WebProxy("http://localhost:8888/");
@@ -499,13 +499,75 @@ namespace BaiduCloudSync
                     //download completed
                     if (_content_length == _total_download_size)
                     {
-                        _status = 1;
-                        lock (_stream_lck)
+                        //decryption
+                        #region decryption
+                        if (_path.Split('.').Last() == "bcsd")
                         {
-                            _save_stream.Close();
-                            _save_stream = null;
+                            int data;
+                            lock (_stream_lck)
+                            {
+                                _save_stream.Seek(0, SeekOrigin.Begin);
+                                data = _save_stream.ReadByte();
+                                _save_stream.Close();
+                                _save_stream = null;
+                            }
+                            _status = 8;
+                            if (data == FileEncrypt.FLG_DYNAMIC_KEY)
+                            {
+                                if (frmKeyCreate.HasRsaPrivateKey || frmKeyCreate.QueryKeyFile())
+                                {
+                                    try
+                                    {
+                                        var key = frmKeyCreate.LoadRsaKey(true);
+                                        FileEncrypt.DecryptFile(_save_path, _save_path + "_temp", key);
+                                        File.Delete(_save_path);
+                                        File.Move(_save_path + "_temp", _save_path);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Tracer.GlobalTracer.TraceWarning("解密出错：" + ex.ToString());
+                                    }
+                                }
+                                else
+                                    Tracer.GlobalTracer.TraceWarning("找不到解密密钥，解密跳过");
+                            }
+                            else if (data == FileEncrypt.FLG_STATIC_KEY)
+                            {
+                                if (frmKeyCreate.HasAesKey || frmKeyCreate.QueryKeyFile())
+                                {
+                                    try
+                                    {
+                                        byte[] key, iv;
+                                        frmKeyCreate.LoadAesKey(out key, out iv);
+                                        FileEncrypt.DecryptFile(_save_path, _save_path + "_temp", key, iv);
+                                        File.Delete(_save_path);
+                                        File.Move(_save_path + "_temp", _save_path);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Tracer.GlobalTracer.TraceWarning("解密出错：" + ex.ToString());
+                                    }
+                                }
+                                else
+                                    Tracer.GlobalTracer.TraceWarning("找不到解密密钥，解密跳过");
+                            }
+                            else
+                                Tracer.GlobalTracer.TraceWarning("该文件并非有效的加密文件，解密跳过");
+                            _status = 1;
+                            TaskFinished?.Invoke(this, new EventArgs());
                         }
-                        TaskFinished?.Invoke(this, new EventArgs());
+                        #endregion
+                        else
+                        {
+                            _status = 1;
+                            lock (_stream_lck)
+                            {
+                                _save_stream.Close();
+                                _save_stream = null;
+                            }
+                            TaskFinished?.Invoke(this, new EventArgs());
+                        }
+
                         if (_form_initialized)
                         {
                             Invoke(new NoArgSTA(delegate
@@ -526,10 +588,7 @@ namespace BaiduCloudSync
                                     _requests[i] = null;
                                 }
                         }
-                        _last_total_download_size = _total_download_size;
-
                         break;
-
                     }
                     //paused or cancelled
                     else if (_status != 0)
@@ -594,7 +653,7 @@ namespace BaiduCloudSync
             {
                 lock (_external_lck)
                 {
-                    if (_status == 0 || _status == 1) return;
+                    if (_status == 0 || _status == 1 || _status == 8) return;
                     if (_startThd != null)
                     {
                         return;
@@ -623,7 +682,7 @@ namespace BaiduCloudSync
             {
                 lock (_external_lck)
                 {
-                    if (_status == 2 || _status == 1) return;
+                    if (_status == 2 || _status == 1 || _status == 8) return;
                     _status = 2;
                     if (_startThd != null)
                     {
@@ -761,6 +820,10 @@ namespace BaiduCloudSync
                 }
             });
         }
+        public void SaveTask(string path)
+        {
+            throw new NotImplementedException();
+        }
         /// <summary>
         /// 已下载大小
         /// </summary>
@@ -859,6 +922,10 @@ namespace BaiduCloudSync
         /// 剩余时间
         /// </summary>
         public TimeSpan ETA { get { return _eta; } }
+        /// <summary>
+        /// 任务是否处在解密阶段
+        /// </summary>
+        public bool IsDecrypting { get { return _status == 8; } }
         #endregion
     }
 }

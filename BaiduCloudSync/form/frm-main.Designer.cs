@@ -85,9 +85,14 @@ namespace BaiduCloudSync
             this.UploadFileDir = new System.Windows.Forms.FolderBrowserDialog();
             this.lAsyncStatus = new System.Windows.Forms.Label();
             this.bAsyncCancel = new System.Windows.Forms.Button();
+            this.上传加密文件ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.上传加密文件夹ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.downloadTransferList1 = new BaiduCloudSync.DownloadTransferList();
             this.uploadTransferList1 = new BaiduCloudSync.UploadTransferList();
             this.ctlDebugOutput1 = new BaiduCloudSync.CtlDebugOutput();
+            this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.label7 = new System.Windows.Forms.Label();
+            this.bResetKey = new System.Windows.Forms.Button();
             this.contextMenuStrip1.SuspendLayout();
             this.tabControl1.SuspendLayout();
             this.tabPage1.SuspendLayout();
@@ -104,6 +109,7 @@ namespace BaiduCloudSync
             ((System.ComponentModel.ISupportInitialize)(this.nDlThdCnt)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nMaxUpload)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nMaxDownload)).BeginInit();
+            this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
             // contextMenuStrip1
@@ -134,7 +140,9 @@ namespace BaiduCloudSync
             // 
             this.上传ToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.上传文件ToolStripMenuItem,
-            this.上传文件夹ToolStripMenuItem});
+            this.上传文件夹ToolStripMenuItem,
+            this.上传加密文件ToolStripMenuItem,
+            this.上传加密文件夹ToolStripMenuItem});
             this.上传ToolStripMenuItem.Name = "上传ToolStripMenuItem";
             this.上传ToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
             this.上传ToolStripMenuItem.Text = "上传 (&U)";
@@ -142,14 +150,14 @@ namespace BaiduCloudSync
             // 上传文件ToolStripMenuItem
             // 
             this.上传文件ToolStripMenuItem.Name = "上传文件ToolStripMenuItem";
-            this.上传文件ToolStripMenuItem.Size = new System.Drawing.Size(136, 22);
+            this.上传文件ToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
             this.上传文件ToolStripMenuItem.Text = "上传文件";
             this.上传文件ToolStripMenuItem.Click += new System.EventHandler(this.上传文件ToolStripMenuItem_Click);
             // 
             // 上传文件夹ToolStripMenuItem
             // 
             this.上传文件夹ToolStripMenuItem.Name = "上传文件夹ToolStripMenuItem";
-            this.上传文件夹ToolStripMenuItem.Size = new System.Drawing.Size(136, 22);
+            this.上传文件夹ToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
             this.上传文件夹ToolStripMenuItem.Text = "上传文件夹";
             this.上传文件夹ToolStripMenuItem.Click += new System.EventHandler(this.上传文件夹ToolStripMenuItem_Click);
             // 
@@ -420,6 +428,7 @@ namespace BaiduCloudSync
             // 
             // tabPage5
             // 
+            this.tabPage5.Controls.Add(this.groupBox1);
             this.tabPage5.Controls.Add(this.label6);
             this.tabPage5.Controls.Add(this.nDebugListCnt);
             this.tabPage5.Controls.Add(this.nListCount);
@@ -595,6 +604,20 @@ namespace BaiduCloudSync
             this.bAsyncCancel.Visible = false;
             this.bAsyncCancel.Click += new System.EventHandler(this.bAsyncCancel_Click);
             // 
+            // 上传加密文件ToolStripMenuItem
+            // 
+            this.上传加密文件ToolStripMenuItem.Name = "上传加密文件ToolStripMenuItem";
+            this.上传加密文件ToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
+            this.上传加密文件ToolStripMenuItem.Text = "上传加密文件";
+            this.上传加密文件ToolStripMenuItem.Click += new System.EventHandler(this.上传加密文件ToolStripMenuItem_Click);
+            // 
+            // 上传加密文件夹ToolStripMenuItem
+            // 
+            this.上传加密文件夹ToolStripMenuItem.Name = "上传加密文件夹ToolStripMenuItem";
+            this.上传加密文件夹ToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
+            this.上传加密文件夹ToolStripMenuItem.Text = "上传加密文件夹";
+            this.上传加密文件夹ToolStripMenuItem.Click += new System.EventHandler(this.上传加密文件夹ToolStripMenuItem_Click);
+            // 
             // downloadTransferList1
             // 
             this.downloadTransferList1.BackColor = System.Drawing.SystemColors.Control;
@@ -620,6 +643,37 @@ namespace BaiduCloudSync
             this.ctlDebugOutput1.Name = "ctlDebugOutput1";
             this.ctlDebugOutput1.Size = new System.Drawing.Size(720, 373);
             this.ctlDebugOutput1.TabIndex = 0;
+            // 
+            // groupBox1
+            // 
+            this.groupBox1.Controls.Add(this.bResetKey);
+            this.groupBox1.Controls.Add(this.label7);
+            this.groupBox1.Location = new System.Drawing.Point(391, 10);
+            this.groupBox1.Name = "groupBox1";
+            this.groupBox1.Size = new System.Drawing.Size(327, 148);
+            this.groupBox1.TabIndex = 3;
+            this.groupBox1.TabStop = false;
+            this.groupBox1.Text = "重置加密密钥";
+            // 
+            // label7
+            // 
+            this.label7.AutoSize = true;
+            this.label7.Location = new System.Drawing.Point(10, 23);
+            this.label7.Name = "label7";
+            this.label7.Size = new System.Drawing.Size(257, 60);
+            this.label7.TabIndex = 0;
+            this.label7.Text = "请您读完这行字再按下按钮：\r\n该操作将会删除你所有的加密密钥\r\n（包括静态加密和动态加密）\r\n网盘上所有使用该密钥的加密文件都将无法解密\r\n确认重置加密密钥？\r\n" +
+    "";
+            // 
+            // bResetKey
+            // 
+            this.bResetKey.Location = new System.Drawing.Point(114, 94);
+            this.bResetKey.Name = "bResetKey";
+            this.bResetKey.Size = new System.Drawing.Size(95, 43);
+            this.bResetKey.TabIndex = 1;
+            this.bResetKey.Text = "重置加密密钥";
+            this.bResetKey.UseVisualStyleBackColor = true;
+            this.bResetKey.Click += new System.EventHandler(this.bResetKey_Click);
             // 
             // frmMain
             // 
@@ -653,6 +707,8 @@ namespace BaiduCloudSync
             ((System.ComponentModel.ISupportInitialize)(this.nDlThdCnt)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.nMaxUpload)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.nMaxDownload)).EndInit();
+            this.groupBox1.ResumeLayout(false);
+            this.groupBox1.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -714,6 +770,11 @@ namespace BaiduCloudSync
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.Label label6;
+        private System.Windows.Forms.ToolStripMenuItem 上传加密文件ToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem 上传加密文件夹ToolStripMenuItem;
+        private System.Windows.Forms.GroupBox groupBox1;
+        private System.Windows.Forms.Button bResetKey;
+        private System.Windows.Forms.Label label7;
     }
 }
 

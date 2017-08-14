@@ -130,6 +130,8 @@ namespace BaiduCloudSync
                 __sign2 = Convert.ToBase64String(o);
 
                 _trace.TraceInfo("Initialization complete.\r\nbdstoken=" + __bdstoken + "\r\nsign1=" + __sign1 + "\r\nsign2=" + __sign2 + "\r\nsign3=" + __sign3 + "\r\ntimestamp=" + __timestamp);
+                //test
+                TestFunc();
 
                 //next update thread
                 __next_update_thread = new Thread(() =>
@@ -1921,6 +1923,27 @@ namespace BaiduCloudSync
         }
 
         #endregion
+
+        private void TestFunc()
+        {
+            var url = "http://pan.baidu.com/api/report/user";
+            var query_param = new Parameters();
+            query_param.Add("channel", "chunlei");
+            query_param.Add("web", 1);
+            query_param.Add("app_id", APPID);
+            query_param.Add("bdstoken", _bdstoken);
+            query_param.Add("logid", _get_logid());
+            query_param.Add("clienttype", 0);
+
+            var post_param = new Parameters();
+            post_param.Add("timestamp", (long)util.ToUnixTimestamp(DateTime.Now));
+            post_param.Add("action", "fm_self");
+
+            var ns = new NetStream();
+            ns.HttpPost(url, post_param, headerParam: _get_xhr_param(), urlParam: query_param);
+            var rep = ns.ReadResponseString();
+            ns.Close();
+        }
     }
     public class ErrnoException : Exception
     {

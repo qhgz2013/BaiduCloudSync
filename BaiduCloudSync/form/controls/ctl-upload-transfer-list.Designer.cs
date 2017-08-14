@@ -33,9 +33,12 @@
             this.lTaskCount = new System.Windows.Forms.Label();
             this.pFinishRate = new System.Windows.Forms.ProgressBar();
             this.lDownloadSize = new System.Windows.Forms.Label();
-            this.lTotalSize = new System.Windows.Forms.Label();
             this.lSpeed = new System.Windows.Forms.Label();
             this.panel1 = new System.Windows.Forms.Panel();
+            this.bStart = new System.Windows.Forms.Button();
+            this.bPause = new System.Windows.Forms.Button();
+            this.bCancel = new System.Windows.Forms.Button();
+            this.panel1.SuspendLayout();
             this.SuspendLayout();
             // 
             // scroll
@@ -73,31 +76,22 @@
             // 
             this.pFinishRate.Location = new System.Drawing.Point(103, 9);
             this.pFinishRate.Name = "pFinishRate";
-            this.pFinishRate.Size = new System.Drawing.Size(252, 12);
+            this.pFinishRate.Size = new System.Drawing.Size(176, 12);
             this.pFinishRate.TabIndex = 2;
             // 
             // lDownloadSize
             // 
             this.lDownloadSize.AutoSize = true;
-            this.lDownloadSize.Location = new System.Drawing.Point(361, 9);
+            this.lDownloadSize.Location = new System.Drawing.Point(285, 9);
             this.lDownloadSize.Name = "lDownloadSize";
-            this.lDownloadSize.Size = new System.Drawing.Size(17, 12);
+            this.lDownloadSize.Size = new System.Drawing.Size(35, 12);
             this.lDownloadSize.TabIndex = 3;
-            this.lDownloadSize.Text = "0B";
-            // 
-            // lTotalSize
-            // 
-            this.lTotalSize.AutoSize = true;
-            this.lTotalSize.Location = new System.Drawing.Point(427, 9);
-            this.lTotalSize.Name = "lTotalSize";
-            this.lTotalSize.Size = new System.Drawing.Size(23, 12);
-            this.lTotalSize.TabIndex = 3;
-            this.lTotalSize.Text = "/0B";
+            this.lDownloadSize.Text = "0B/0B";
             // 
             // lSpeed
             // 
             this.lSpeed.AutoSize = true;
-            this.lSpeed.Location = new System.Drawing.Point(491, 9);
+            this.lSpeed.Location = new System.Drawing.Point(392, 9);
             this.lSpeed.Name = "lSpeed";
             this.lSpeed.Size = new System.Drawing.Size(29, 12);
             this.lSpeed.TabIndex = 3;
@@ -105,19 +99,51 @@
             // 
             // panel1
             // 
+            this.panel1.Controls.Add(this.bCancel);
+            this.panel1.Controls.Add(this.bPause);
+            this.panel1.Controls.Add(this.bStart);
+            this.panel1.Controls.Add(this.lSpeed);
+            this.panel1.Controls.Add(this.lDownloadSize);
             this.panel1.Location = new System.Drawing.Point(0, 0);
             this.panel1.Name = "panel1";
             this.panel1.Size = new System.Drawing.Size(703, 28);
             this.panel1.TabIndex = 4;
+            // 
+            // bStart
+            // 
+            this.bStart.Location = new System.Drawing.Point(496, 2);
+            this.bStart.Name = "bStart";
+            this.bStart.Size = new System.Drawing.Size(64, 23);
+            this.bStart.TabIndex = 4;
+            this.bStart.Text = "全部开始";
+            this.bStart.UseVisualStyleBackColor = true;
+            this.bStart.Click += new System.EventHandler(this.bStart_Click);
+            // 
+            // bPause
+            // 
+            this.bPause.Location = new System.Drawing.Point(566, 2);
+            this.bPause.Name = "bPause";
+            this.bPause.Size = new System.Drawing.Size(64, 23);
+            this.bPause.TabIndex = 4;
+            this.bPause.Text = "全部暂停";
+            this.bPause.UseVisualStyleBackColor = true;
+            this.bPause.Click += new System.EventHandler(this.bPause_Click);
+            // 
+            // bCancel
+            // 
+            this.bCancel.Location = new System.Drawing.Point(636, 2);
+            this.bCancel.Name = "bCancel";
+            this.bCancel.Size = new System.Drawing.Size(64, 23);
+            this.bCancel.TabIndex = 4;
+            this.bCancel.Text = "全部取消";
+            this.bCancel.UseVisualStyleBackColor = true;
+            this.bCancel.Click += new System.EventHandler(this.bCancel_Click);
             // 
             // UploadTransferList
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.Control;
-            this.Controls.Add(this.lSpeed);
-            this.Controls.Add(this.lTotalSize);
-            this.Controls.Add(this.lDownloadSize);
             this.Controls.Add(this.pFinishRate);
             this.Controls.Add(this.lTaskCount);
             this.Controls.Add(this.label1);
@@ -127,6 +153,8 @@
             this.Size = new System.Drawing.Size(721, 434);
             this.Load += new System.EventHandler(this.UploadTransferList_Load);
             this.Resize += new System.EventHandler(this.UploadTransferList_Resize);
+            this.panel1.ResumeLayout(false);
+            this.panel1.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -139,8 +167,10 @@
         private System.Windows.Forms.Label lTaskCount;
         private System.Windows.Forms.ProgressBar pFinishRate;
         private System.Windows.Forms.Label lDownloadSize;
-        private System.Windows.Forms.Label lTotalSize;
         private System.Windows.Forms.Label lSpeed;
         private System.Windows.Forms.Panel panel1;
+        private System.Windows.Forms.Button bCancel;
+        private System.Windows.Forms.Button bPause;
+        private System.Windows.Forms.Button bStart;
     }
 }

@@ -63,7 +63,6 @@ namespace BaiduCloudSync
 
         private ulong _uploaded_bytes;
         private ulong _uploading_bytes;
-        private ulong _total_bytes;
 
         private int _current_list_size;
         private object _list_lock = new object();
@@ -72,7 +71,7 @@ namespace BaiduCloudSync
         {
             for (int i = 0; i < _upload_list.Count & i < StaticConfig.MAX_UPLOAD_PARALLEL_TASK_COUNT; i++)
             {
-                if (_upload_list[i].IsInitialized)
+                if (_status[i] == _STAT.INIT)
                     _upload_list[i].Start();
             }
         }
@@ -220,18 +219,22 @@ namespace BaiduCloudSync
             {
                 _uploaded_bytes = 0;
                 _uploading_bytes = 0;
-                _total_bytes = 0;
             }
 
 
             lTaskCount.Text = _upload_list.Count.ToString();
-
+            ulong total_bytes = 0;
+            foreach (var item in _upload_list)
+            {
+                total_bytes += item.Content_Length;
+            }
             int scale_size;
-            pFinishRate.Maximum = _convert_ulong_to_fit_int(_total_bytes, out scale_size);
-            pFinishRate.Value = (int)((_uploaded_bytes + _uploading_bytes) >> scale_size);
+            pFinishRate.Maximum = _convert_ulong_to_fit_int(total_bytes, out scale_size);
+            int value = (int)((_uploaded_bytes + _uploading_bytes) >> scale_size);
+            if (value > pFinishRate.Maximum) pFinishRate.Maximum = value;
+            pFinishRate.Value = value;
 
-            lDownloadSize.Text = util.FormatBytes(_uploaded_bytes + _uploading_bytes);
-            lTotalSize.Text = "/" + util.FormatBytes(_total_bytes);
+            lDownloadSize.Text = util.FormatBytes(_uploaded_bytes + _uploading_bytes) + "/" + util.FormatBytes(total_bytes);
 
             lSpeed.Text = util.FormatBytes(downspeed) + "/s";
         }
@@ -301,7 +304,6 @@ namespace BaiduCloudSync
             ThreadPool.QueueUserWorkItem(delegate
             {
                 _on_upload_completed(sender, e);
-                _total_bytes -= ((Uploader)sender).Content_Length;
                 _uploaded_bytes -= ((Uploader)sender).Content_Length;
             });
         }
@@ -357,7 +359,7 @@ namespace BaiduCloudSync
                 Tracer.GlobalTracer.TraceError(ex.ToString());
             }
         }
-        
+
         private int _convert_ulong_to_fit_int(ulong _in, out int scale_size)
         {
             if (_in <= 0x7fffffff) { scale_size = 0; return (int)_in; }
@@ -369,6 +371,7 @@ namespace BaiduCloudSync
 
         // ****** PUBLIC INTERFACES
         private object _external_lock = new object();
+        public int TaskCount { get { return _upload_list.Count; } }
         public void AddTask(Uploader task)
         {
             if (task == null || task.IsCancelled) return;
@@ -383,7 +386,6 @@ namespace BaiduCloudSync
                         task.TaskPaused += _on_upload_paused;
                         task.TaskStarted += _on_upload_started;
 
-                        _total_bytes += task.Content_Length;
                         if (task.IsInitialized) _status.Add(_STAT.INIT);
                         else if (task.IsPaused) _status.Add(_STAT.PAUSE);
                         //else if (task.IsCancelled) _status.Add(_STAT.STOP);
@@ -442,6 +444,62 @@ namespace BaiduCloudSync
                     item.Top += (e.OldValue - e.NewValue);
             }
         }
-        
+
+        private void bStart_Click(object sender, EventArgs e)
+        {
+            lock (_external_lock)
+            {
+                lock (_list_lock)
+                {
+                    for (int i = 0; i < _upload_list.Count; i++)
+                    {
+                        if (_status[i] == _STAT.PAUSE)
+                            _status[i] = _STAT.INIT;
+                    }
+                }
+            }
+        }
+
+        private void bPause_Click(object sender, EventArgs e)
+        {
+            lock (_external_lock)
+            {
+                lock (_list_lock)
+                {
+                    for (int i = 0; i < _upload_list.Count && i < StaticConfig.MAX_UPLOAD_PARALLEL_TASK_COUNT; i++)
+                    {
+                        _upload_list[i].Pause();
+                    }
+                }
+            }
+        }
+
+        private void bCancel_Click(object sender, EventArgs e)
+        {
+            lock (_external_lock)
+            {
+                lock (_list_lock)
+                {
+                    for (int i = 0; i < _upload_list.Count && i < StaticConfig.MAX_UPLOAD_PARALLEL_TASK_COUNT; i++)
+                    {
+                        _upload_list[i].TaskCancelled -= _on_upload_cancelled;
+                        _upload_list[i].Cancel();
+                    }
+                    _upload_list.Clear();
+                    _status.Clear();
+                    _index_list.Clear();
+                    _current_list_size = 0;
+
+                    for (int i = 0; i < Controls.Count; i++)
+                    {
+                        if (Controls[i].Name == "ctl-")
+                        {
+                            Controls.RemoveAt(i);
+                            i--;
+                        }
+                    }
+                }
+            }
+        }
     }
 }

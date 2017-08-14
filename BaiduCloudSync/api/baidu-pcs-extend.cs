@@ -146,7 +146,9 @@ namespace BaiduCloudSync
 
                 if (content_length == 0 || string.IsNullOrEmpty(content_md5) || string.IsNullOrEmpty(content_crc32)) return false;
 
-                var new_path = path.TrimEnd(".symbollink".ToArray());
+                //var new_path = path.TrimEnd(".symbollink".ToArray());
+                var new_path = path.EndsWith(".symbollink") ? path.Substring(0, path.Length - 11) : (path + "." + path.Split('.').Last());
+
                 var data = RapidUploadRaw(new_path, content_length, content_md5, content_crc32, slice_md5);
 
                 if (data.FS_ID == 0 || string.IsNullOrEmpty(data.MD5)) return false;

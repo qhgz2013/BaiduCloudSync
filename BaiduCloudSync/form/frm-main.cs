@@ -254,7 +254,7 @@ namespace BaiduCloudSync
                         }));
                         __background_thread.Name = "后台线程";
                         __background_thread.IsBackground = true;
-
+                        __background_thread.SetApartmentState(ApartmentState.STA);
                         //output
                         Invoke(new NoArgSTA(delegate
                         {
@@ -864,6 +864,7 @@ namespace BaiduCloudSync
                 var dst_path = save_path;
                 if (dst_path.Last() != '/' && dst_path.Last() != '\\') dst_path += "/";
                 dst_path += item.ServerFileName;
+                if (dst_path.EndsWith(".bcsd")) dst_path = dst_path.Substring(0, dst_path.Length - 5);
                 if (item.IsDir)
                 {
                     _download_files(item.Path + "/", dst_path);
@@ -896,6 +897,7 @@ namespace BaiduCloudSync
             if (data_list.Count == 1 && !data_list[0].IsDir)
             {
                 downloadFilePath.FileName = data_list[0].ServerFileName;
+                if (data_list[0].ServerFileName.EndsWith(".bcsd")) downloadFilePath.FileName = downloadFilePath.FileName.Substring(0, downloadFilePath.FileName.Length - 5);
                 if (downloadFilePath.ShowDialog() != DialogResult.OK) return;
                 var save_path = downloadFilePath.FileName;
                 var frm = new frmDownload(_pcsAPI, data_list[0], save_path);
@@ -911,6 +913,7 @@ namespace BaiduCloudSync
                     var path = save_path;
                     if (path.Last() != '/' && path.Last() != '\\') path += "/";
                     path += item.ServerFileName;
+                    if (path.EndsWith(".bcsd")) path = path.Substring(0, path.Length - 5);
                     if (item.IsDir)
                     {
                         lock (__thd_lck)
@@ -1086,14 +1089,16 @@ namespace BaiduCloudSync
             }, "获取文件信息...");
 
         }
-        private void upload_files(string local_path, string remote_path)
+        private void upload_files(string local_path, string remote_path, bool encrypt = false)
         {
             var dir_info = new DirectoryInfo(local_path);
             var data = _file_list.GetFileList(remote_path).ToList();
             foreach (var item in dir_info.GetFiles())
             {
                 ondup o = ondup.newcopy;
-                if (data.FindIndex(x => { return x.Path == remote_path + item.Name; }) != -1)
+                var cur_remote_path = remote_path + item.Name;
+                if (encrypt && !cur_remote_path.EndsWith(".bcsd")) cur_remote_path += ".bcsd";
+                if (data.FindIndex(x => { return x.Path == cur_remote_path; }) != -1)
                 {
                     //file exists
                     bool cancelled = false;
@@ -1109,7 +1114,7 @@ namespace BaiduCloudSync
                 }
                 var trkdata = new TrackedData();
                 trkdata.Path = item.FullName;
-                var new_class = new Uploader(this, _pcsAPI, remote_path + item.Name, trkdata, o);
+                var new_class = new Uploader(this, _pcsAPI, cur_remote_path, trkdata, o, encrypt);
                 new_class.TaskFinished += _on_upload_finished;
                 uploadTransferList1.AddTask(new_class);
             }
@@ -1539,5 +1544,92 @@ namespace BaiduCloudSync
             StaticConfig.SaveStaticConfig();
         }
         #endregion
+
+        private void 上传加密文件ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (!frmKeyCreate.HasRsaPrivateKey && !frmKeyCreate.HasAesKey)
+            {
+                frmKeyCreate frm = new frmKeyCreate();
+                frm.ShowDialog(this);
+                if (frm.Cancelled) return;
+            }
+            if (string.IsNullOrEmpty(__current_listview_path)) return;
+
+            if (UploadFilePath.ShowDialog() != DialogResult.OK) return;
+            var local_paths = UploadFilePath.FileNames;
+
+            _asyncCall(delegate
+            {
+                lock (__thd_lck)
+                {
+                    foreach (var local_path in local_paths)
+                    {
+                        var temp_str = local_path.Replace(@"\", "/");
+                        var file_name = temp_str.Split('/').Last();
+
+                        var remote_path = __current_listview_path + file_name;
+                        if (!remote_path.EndsWith(".bcsd"))
+                            remote_path += ".bcsd";
+
+                        var data = _file_list.GetData(remote_path);
+                        ondup o = ondup.newcopy;
+                        if (data.FS_ID != 0)
+                        {
+                            bool cancelled = false;
+                            Invoke(new NoArgSTA(delegate
+                            {
+                                var result = MessageBox.Show(this, "文件已存在，是否覆盖（否则保存为新的文件）", "文件已存在", MessageBoxButtons.YesNoCancel);
+                                if (result == DialogResult.Cancel) cancelled = true;
+                                else if (result == DialogResult.Yes) o = ondup.overwrite;
+                                else if (result == DialogResult.No) o = ondup.newcopy;
+                            }));
+
+                            if (cancelled) return;
+                        }
+                        var trkdata = new TrackedData();
+                        trkdata.Path = local_path;
+                        var new_class = new Uploader(this, _pcsAPI, remote_path, trkdata, o, true);
+                        new_class.TaskFinished += _on_upload_finished;
+                        uploadTransferList1.AddTask(new_class);
+                    }
+                }
+            }, "获取文件信息...");
+
+        }
+
+        private void 上传加密文件夹ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (!frmKeyCreate.HasRsaPrivateKey && !frmKeyCreate.HasAesKey)
+            {
+                frmKeyCreate frm = new frmKeyCreate();
+                frm.ShowDialog(this);
+                if (frm.Cancelled) return;
+            }
+            if (string.IsNullOrEmpty(__current_listview_path)) return;
+            if (UploadFileDir.ShowDialog() != DialogResult.OK) return;
+            _asyncCall(delegate
+            {
+                lock (__thd_lck)
+                {
+                    var path = UploadFileDir.SelectedPath.Replace(@"\", "/");
+                    var pathname = path.Substring(path.LastIndexOf('/') + 1);
+                    upload_files(path + "/", __current_listview_path + pathname + "/", true);
+                }
+            }, "获取文件信息...");
+        }
+
+        private void bResetKey_Click(object sender, EventArgs e)
+        {
+            string result = Microsoft.VisualBasic.Interaction.InputBox("二次确认：\r\n请输入“重置密钥”或者“Reset Key”(区分大小写)进行密钥重置", "二次确认");
+            if (result == "重置密钥" || result == "Reset Key")
+            {
+                frmKeyCreate.ResetKey();
+                MessageBox.Show(this, "重置完成", "成功", MessageBoxButtons.OK);
+            }
+            else
+            {
+                MessageBox.Show(this, "已取消重置", "输入错误", MessageBoxButtons.OK);
+            }
+        }
     }
 }

@@ -124,16 +124,21 @@ namespace BaiduCloudSync
             const string header2 = "-----BEGIN RSA PUBLIC KEY-----";
             const string footer = "-----END PUBLIC KEY-----";
             const string footer2 = "-----END RSA PUBLIC KEY-----";
+            const string private_key_header = "-----BEGIN RSA PRIVATE KEY-----";
+            const string private_key_footer = "-----END RSA PRIVATE KEY-----";
 
             publicPEMKey = publicPEMKey.Replace("\r", "").Replace("\n", "");
             bool use_2 = false;
+            bool use_private = false;
             int start = publicPEMKey.IndexOf(header);
             if (start == -1) { start = publicPEMKey.IndexOf(header2); use_2 = true; }
-            if (start == -1) throw new ArgumentException("Expected " + header);
-            start += (use_2) ? header2.Length : header.Length;
+            //falling to using private key to export
+            if (start == -1) { use_2 = false; use_private = true; start = publicPEMKey.IndexOf(private_key_header); }
+            if (start == -1) { throw new ArgumentException("Expected " + header); }
+            start += (use_2) ? header2.Length : (use_private ? private_key_header.Length : header.Length);
 
-            int end = publicPEMKey.IndexOf(use_2 ? footer2 : footer);
-            if (end == -1) throw new ArgumentException("Expected " + (use_2 ? footer2 : footer));
+            int end = publicPEMKey.IndexOf(use_2 ? footer2 : (use_private ? private_key_footer : footer));
+            if (end == -1) throw new ArgumentException("Expected " + (use_2 ? footer2 : (use_private ? private_key_footer : footer)));
 
             var base64 = publicPEMKey.Substring(start, (end - start));
             var data = Convert.FromBase64String(base64);

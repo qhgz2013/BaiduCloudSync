@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Threading;
+using System.IO;
 
 namespace BaiduCloudSync
 {
@@ -72,7 +73,7 @@ namespace BaiduCloudSync
         {
             for (int i = 0; i < _download_list.Count & i < StaticConfig.MAX_DOWNLOAD_PARALLEL_TASK_COUNT; i++)
             {
-                if (_download_list[i].IsInitialized)
+                if (_status[i] == _STAT.INIT)
                     _download_list[i].Start();
             }
         }
@@ -243,8 +244,7 @@ namespace BaiduCloudSync
             pFinishRate.Maximum = _convert_ulong_to_fit_int(_total_bytes, out scale_size);
             pFinishRate.Value = (int)((_downloaded_bytes + _downloading_bytes) >> scale_size);
 
-            lDownloadSize.Text = util.FormatBytes(_downloaded_bytes + _downloading_bytes);
-            lTotalSize.Text = "/" + util.FormatBytes(_total_bytes);
+            lDownloadSize.Text = util.FormatBytes(_downloaded_bytes + _downloading_bytes)+ "/" + util.FormatBytes(_total_bytes);
 
             lSpeed.Text = util.FormatBytes(downspeed) + "/s";
         }
@@ -277,23 +277,26 @@ namespace BaiduCloudSync
                         _current_list_size--;
 
                         scroll.Maximum -= 35;
-                        var ctl_index = _index_list[index];
-                        //移除当前行
-                        for (int i = 0; i < 8; i++)
-                            Controls.RemoveByKey("ctl-" + ctl_index + "-" + (i + 1));
-                        _downloaded_bytes += base_form.Content_Length;
-                        _download_list.RemoveAt(index);
-                        _index_list.RemoveAt(index);
-                        _status.RemoveAt(index);
-                        //上移下面的每一行
-                        for (int i = index; i < _current_list_size; i++)
+                        if (index != -1)
                         {
-                            ctl_index = _index_list[i];
-                            for (int j = 0; j < 8; j++)
+                            var ctl_index = _index_list[index];
+                            //移除当前行
+                            for (int i = 0; i < 8; i++)
+                                Controls.RemoveByKey("ctl-" + ctl_index + "-" + (i + 1));
+                            _downloaded_bytes += base_form.Content_Length;
+                            _download_list.RemoveAt(index);
+                            _index_list.RemoveAt(index);
+                            _status.RemoveAt(index);
+                            //上移下面的每一行
+                            for (int i = index; i < _current_list_size; i++)
                             {
-                                var control = Controls["ctl-" + ctl_index + "-" + (j + 1)];
-                                if (control == null) continue;
-                                control.Top -= 35;
+                                ctl_index = _index_list[i];
+                                for (int j = 0; j < 8; j++)
+                                {
+                                    var control = Controls["ctl-" + ctl_index + "-" + (j + 1)];
+                                    if (control == null) continue;
+                                    control.Top -= 35;
+                                }
                             }
                         }
                         _create_tasks();
@@ -303,9 +306,12 @@ namespace BaiduCloudSync
                 else
                 {
                     _downloaded_bytes += base_form.Content_Length;
-                    _download_list.RemoveAt(index);
-                    _index_list.RemoveAt(index);
-                    _status.RemoveAt(index);
+                    if (index != -1)
+                    {
+                        _download_list.RemoveAt(index);
+                        _index_list.RemoveAt(index);
+                        _status.RemoveAt(index);
+                    }
                 }
             }
         }
@@ -417,7 +423,22 @@ namespace BaiduCloudSync
                 }
             });
         }
-
+        public int TaskCount { get { return _download_list.Count; } }
+        public void SaveTasks()
+        {
+            throw new NotImplementedException();
+            lock (_external_lock)
+            {
+                lock (_list_lock)
+                {
+                    if (!Directory.Exists(".tasks")) Directory.CreateDirectory(".tasks");
+                    for (int i = 0; i < _download_list.Count; i++)
+                    {
+                        _download_list[i].Pause();
+                    }
+                }
+            }
+        }
         private void DownloadTransferList_Resize(object sender, EventArgs e)
         {
             if (Height > 30)
@@ -456,5 +477,61 @@ namespace BaiduCloudSync
             }
         }
 
+        private void bStart_Click(object sender, EventArgs e)
+        {
+            lock (_external_lock)
+            {
+                lock (_list_lock)
+                {
+                    for (int i = 0; i < _download_list.Count; i++)
+                    {
+                        if (_status[i] == _STAT.PAUSE)
+                            _status[i] = _STAT.INIT;
+                    }
+                }
+            }
+        }
+
+        private void bPause_Click(object sender, EventArgs e)
+        {
+            lock (_external_lock)
+            {
+                lock (_list_lock)
+                {
+                    for (int i = 0; i < _download_list.Count && i < StaticConfig.MAX_DOWNLOAD_PARALLEL_TASK_COUNT; i++)
+                    {
+                        _download_list[i].Pause();
+                    }
+                }
+            }
+        }
+
+        private void bCancel_Click(object sender, EventArgs e)
+        {
+            lock (_external_lock)
+            {
+                lock (_list_lock)
+                {
+                    for (int i = 0; i < _download_list.Count && i < StaticConfig.MAX_DOWNLOAD_PARALLEL_TASK_COUNT; i++)
+                    {
+                        _download_list[i].TaskCancelled -= _on_download_cancelled;
+                        _download_list[i].Cancel();
+                    }
+                    _download_list.Clear();
+                    _status.Clear();
+                    _index_list.Clear();
+                    _current_list_size = 0;
+
+                    for (int i = 0; i < Controls.Count; i++)
+                    {
+                        if (Controls[i].Name.StartsWith("ctl-"))
+                        {
+                            Controls.RemoveAt(i);
+                            i--;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
