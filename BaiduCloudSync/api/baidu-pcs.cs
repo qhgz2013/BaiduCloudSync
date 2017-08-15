@@ -368,7 +368,7 @@ namespace BaiduCloudSync
             var ret = new ObjectMetadata();
             ret.Category = obj.Value<uint>("category");
             ret.FS_ID = obj.Value<ulong>("fs_id");
-            ret.IsDir = obj.Value<int>("isdir") == 1;
+            ret.IsDir = obj.Value<int>("isdir") != 0;
             ret.LocalCTime = obj.Value<uint>("local_ctime");
             ret.LocalMTime = obj.Value<uint>("local_mtime");
             ret.OperID = obj.Value<uint>("oper_id");
@@ -863,7 +863,7 @@ namespace BaiduCloudSync
                 ret.ServerCTime = json.Value<ulong>("ctime");
                 ret.ServerMTime = json.Value<ulong>("mtime");
                 ret.ServerFileName = ret.Path.Substring(ret.Path.LastIndexOf('/') + 1);
-                ret.IsDir = json.Value<uint>("isdir") == 1;
+                ret.IsDir = json.Value<uint>("isdir") != 0;
                 ret.MD5 = string.Empty;
 
             }
@@ -1024,7 +1024,7 @@ namespace BaiduCloudSync
             return ret;
         }
         /// <summary>
-        /// 秒传文件，使用本地路径计算，失败时返回fs_id = MD5 = 0
+        /// 秒传文件，使用本地路径计算，失败时返回fs_id为0，MD5为null，没有找到文件时MD5="404"
         /// </summary>
         /// <param name="path">网盘的文件路径</param>
         /// <param name="local_path">本地文件的路径</param>
@@ -1043,7 +1043,7 @@ namespace BaiduCloudSync
             return RapidUploadRaw(path, arg.content_length, arg.content_md5, arg.content_crc32, arg.slice_md5, ondup);
         }
         /// <summary>
-        /// 秒传文件，失败时返回fs_id和MD5都为0
+        /// 秒传文件，失败时返回fs_id为0，MD5为null，没有找到文件时MD5="404"
         /// </summary>
         /// <param name="path">路径</param>
         /// <param name="content_length">文件大小</param>
@@ -1051,7 +1051,7 @@ namespace BaiduCloudSync
         /// <param name="content_crc">文件总体CRC32 (Hex数值)</param>
         /// <param name="slice_md5">前256K验证段的MD5</param>
         /// <param name="ondup">同名覆盖方式</param>
-        /// <returns>成功时返回文件信息，失败时会抛出异常或返回fs_id和MD5都为0</returns>
+        /// <returns>返回文件信息</returns>
         public ObjectMetadata RapidUploadRaw(string path, ulong content_length, string content_md5, string content_crc, string slice_md5, ondup ondup = ondup.overwrite)
         {
             _trace.TraceInfo("BaiduPCS.RapidUploadRaw called: string path=" + path + ", ulong content_length=" + content_length + ", string content_md5=" + content_md5 + ", string content_crc=" + content_crc + ", string slice_md5=" + slice_md5 + ", ondup ondup=" + ondup);
@@ -1088,7 +1088,7 @@ namespace BaiduCloudSync
                 ret.ServerMTime = json.Value<ulong>("mtime");
                 ret.MD5 = json.Value<string>("md5");
                 ret.FS_ID = json.Value<ulong>("fs_id");
-                ret.IsDir = json.Value<int>("isdir") == 1;
+                ret.IsDir = json.Value<int>("isdir") != 0;
             }
             catch (ErrnoException ex)
             {
@@ -1096,16 +1096,17 @@ namespace BaiduCloudSync
                 if (TRANSFER_ERRNO_EXCEPTION)
                     throw;
             }
-            //ignored http 404 code
             catch (WebException ex)
             {
                 if (ex.Response != null)
                 {
                     var http_resp = (HttpWebResponse)ex.Response;
-                    if (http_resp.StatusCode != HttpStatusCode.NotFound)
+                    if (http_resp.StatusCode == HttpStatusCode.NotFound)
                     {
-                        _trace.TraceError(ex.ToString());
+                        ret.MD5 = "404";
                     }
+                    else
+                        _trace.TraceError(ex.ToString());
                 }
             }
             catch (Exception ex)
@@ -1271,7 +1272,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.UploadSliceRaw called: Stream stream_in=" + stream_in.ToString() + ", string uploadid=" + uploadid + ", int sequence=" + sequence + ", UploadStatusCallback callback=" + callback.ToString());
             if (string.IsNullOrEmpty(uploadid) || string.IsNullOrEmpty(path) || !stream_in.CanRead) return string.Empty;
             if (string.IsNullOrEmpty(BaiduOAuth.bduss)) return string.Empty;
-            
+
             var query_param = new Parameters();
             query_param.Add("method", "upload");
             query_param.Add("app_id", APPID);
@@ -1343,7 +1344,7 @@ namespace BaiduCloudSync
                 _trace.TraceInfo(response);
                 var json = JsonConvert.DeserializeObject(response) as JObject;
                 _check_error(json);
-                
+
                 return json.Value<string>("md5");
             }
             catch (ErrnoException ex)
@@ -1363,12 +1364,20 @@ namespace BaiduCloudSync
             return string.Empty;
 
         }
+        /// <summary>
+        /// 合并分段数据（注意：返回的MD5值有很大几率是错误的）
+        /// </summary>
+        /// <param name="path">文件路径</param>
+        /// <param name="uploadid">上传id</param>
+        /// <param name="block_list">分段数据的MD5值</param>
+        /// <param name="file_size">文件大小</param>
+        /// <returns></returns>
         public ObjectMetadata CreateSuperFile(string path, string uploadid, IEnumerable<string> block_list, ulong file_size)
         {
             _trace.TraceInfo("BaiduPCS.CreateSuperFile called: string path=" + path + ", string uploadid=" + uploadid + ", Ienumerable<string> block_list=[count=" + block_list.Count() + "]");
             if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(uploadid) || block_list == null) return new ObjectMetadata();
             var ret = new ObjectMetadata();
-            
+
             var query_param = new Parameters();
             query_param.Add("isdir", 0);
             query_param.Add("channel", "chunlei");
@@ -1897,7 +1906,7 @@ namespace BaiduCloudSync
                     {
                         record.FS_IDs.Add((ulong)item2);
                     }
-                    record.IsPublic = item.Value<int>("public") == 1;
+                    record.IsPublic = item.Value<int>("public") != 0;
                     record.Password = item.Value<string>("passwd");
                     record.ShareID = item.Value<ulong>("shareId");
                     record.ShortURL = item.Value<string>("shortlink");

@@ -336,6 +336,8 @@ namespace BaiduCloudSync
                 if (entry.IsDir)
                 {
                     _remove_files_from_data(entry.Path + "/");
+                    if (_data.ContainsKey(entry.Path + "/"))
+                        _data.Remove(entry.Path + "/");
                 }
                 else
                 {

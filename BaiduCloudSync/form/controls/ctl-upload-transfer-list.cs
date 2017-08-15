@@ -21,6 +21,7 @@ namespace BaiduCloudSync
             _index_list = new List<int>();
             _index_counter = 0;
             _status = new List<_STAT>();
+            _length_cache = new List<ulong>();
             InitializeComponent();
             MouseWheel += new MouseEventHandler((object _sender, MouseEventArgs _e) =>
             {
@@ -39,14 +40,12 @@ namespace BaiduCloudSync
             _background_thd = new Thread(_timer_thd_callback);
             _background_thd.Name = "background worker";
             _background_thd.IsBackground = true;
-            _background_thd.Start();
             scroll.LargeChange = Height;
         }
 
-        private bool _form_created = false;
         private void UploadTransferList_Load(object sender, EventArgs e)
         {
-            _form_created = true;
+            _background_thd.Start();
         }
 
         private Thread _background_thd;
@@ -54,6 +53,7 @@ namespace BaiduCloudSync
         private List<Uploader> _upload_list;
         private List<int> _index_list;
         private List<_STAT> _status;
+        private List<ulong> _length_cache;
         private enum _STAT
         {
             UNDEFINED, INIT, START, PAUSE, STOP
@@ -63,6 +63,7 @@ namespace BaiduCloudSync
 
         private ulong _uploaded_bytes;
         private ulong _uploading_bytes;
+        ulong _total_bytes;
 
         private int _current_list_size;
         private object _list_lock = new object();
@@ -94,6 +95,16 @@ namespace BaiduCloudSync
                 col3_progress.Value = (int)(process * 10000);
                 col4_percent.Text = (process * 100).ToString("0.000") + "%";
                 col5_speed.Text = util.FormatBytes(speed) + "/s";
+                if (_length_cache[i] > size)
+                {
+                    _total_bytes -= _length_cache[i] - size;
+                    _length_cache[i] = size;
+                }
+                else if (_length_cache[i] < size)
+                {
+                    _total_bytes += size - _length_cache[i];
+                    _length_cache[i] = size;
+                }
             }
         }
         private void _create_tasks()
@@ -219,22 +230,19 @@ namespace BaiduCloudSync
             {
                 _uploaded_bytes = 0;
                 _uploading_bytes = 0;
+                _total_bytes = 0;
             }
 
 
             lTaskCount.Text = _upload_list.Count.ToString();
-            ulong total_bytes = 0;
-            foreach (var item in _upload_list)
-            {
-                total_bytes += item.Content_Length;
-            }
+            
             int scale_size;
-            pFinishRate.Maximum = _convert_ulong_to_fit_int(total_bytes, out scale_size);
+            pFinishRate.Maximum = _convert_ulong_to_fit_int(_total_bytes, out scale_size);
             int value = (int)((_uploaded_bytes + _uploading_bytes) >> scale_size);
             if (value > pFinishRate.Maximum) pFinishRate.Maximum = value;
             pFinishRate.Value = value;
 
-            lDownloadSize.Text = util.FormatBytes(_uploaded_bytes + _uploading_bytes) + "/" + util.FormatBytes(total_bytes);
+            lDownloadSize.Text = util.FormatBytes(_uploaded_bytes + _uploading_bytes) + "/" + util.FormatBytes(_total_bytes);
 
             lSpeed.Text = util.FormatBytes(downspeed) + "/s";
         }
@@ -243,71 +251,95 @@ namespace BaiduCloudSync
             lock (_list_lock)
             {
                 _auto_start_new_tasks();
-                if (_form_created)
+                Invoke(new ThreadStart(delegate
                 {
-                    Invoke(new ThreadStart(delegate
+                    try
                     {
-                        try
-                        {
-                            _updating_tasks();
-                            _create_tasks();
-                            _updating_statistics();
-                        }
-                        catch (Exception) { }
-                    }));
-                }
+                        _updating_tasks();
+                        _create_tasks();
+                        _updating_statistics();
+                    }
+                    catch (Exception) { }
+                }));
             }
         }
-        private void _on_upload_completed(object sender, EventArgs e)
+        private void _on_upload_completed(object sender, UploadResultEventArgs e)
         {
             lock (_list_lock)
             {
                 var base_form = (Uploader)sender;
                 var index = _upload_list.FindIndex(o => o == base_form);
-                if (_form_created)
+                Invoke(new ThreadStart(delegate
                 {
-                    Invoke(new ThreadStart(delegate
-                    {
-                        _current_list_size--;
+                    _current_list_size--;
 
-                        scroll.Maximum -= 35;
-                        var ctl_index = _index_list[index];
-                        //移除当前行
-                        for (int i = 0; i < 7; i++)
-                            Controls.RemoveByKey("ctl-" + ctl_index + "-" + (i + 1));
-                        _uploaded_bytes += base_form.Content_Length;
-                        _upload_list.RemoveAt(index);
-                        _index_list.RemoveAt(index);
-                        _status.RemoveAt(index);
-                        //上移下面的每一行
-                        for (int i = index; i < _current_list_size; i++)
-                        {
-                            ctl_index = _index_list[i];
-                            for (int j = 0; j < 7; j++)
-                            {
-                                var control = Controls["ctl-" + ctl_index + "-" + (j + 1)];
-                                if (control == null) continue;
-                                control.Top -= 35;
-                            }
-                        }
-                        _create_tasks();
-                        UploadTransferList_Resize(this, new EventArgs());
-                    }));
-                }
-                else
-                {
+                    scroll.Maximum -= 35;
+                    var ctl_index = _index_list[index];
+                    //移除当前行
+                    for (int i = 0; i < 7; i++)
+                        Controls.RemoveByKey("ctl-" + ctl_index + "-" + (i + 1));
                     _uploaded_bytes += base_form.Content_Length;
                     _upload_list.RemoveAt(index);
                     _index_list.RemoveAt(index);
                     _status.RemoveAt(index);
-                }
+                    _length_cache.RemoveAt(index);
+                    //上移下面的每一行
+                    for (int i = index; i < _current_list_size; i++)
+                    {
+                        ctl_index = _index_list[i];
+                        for (int j = 0; j < 7; j++)
+                        {
+                            var control = Controls["ctl-" + ctl_index + "-" + (j + 1)];
+                            if (control == null) continue;
+                            control.Top -= 35;
+                        }
+                    }
+                    _create_tasks();
+                    UploadTransferList_Resize(this, new EventArgs());
+
+                    if (base_form.IsFinished && e.Code != Uploader.FailCode.SUCCESS)
+                    {
+                        string reason;
+                        switch (e.Code)
+                        {
+                            case Uploader.FailCode.MD5_CHECK_ERROR:
+                                reason = "文件特征码（MD5）不匹配";
+                                break;
+                            case Uploader.FailCode.LENGTH_CHECK_ERROR:
+                                reason = "文件长度不匹配";
+                                break;
+                            case Uploader.FailCode.FSID_CHECK_ERROR:
+                                reason = "文件ID检验错误";
+                                break;
+                            default:
+                                reason = "未知错误";
+                                break;
+                        }
+                        reason += "，是否重新上传";
+                        if (MessageBox.Show(this, reason, "文件上传错误", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                        {
+                            base_form.Reupload();
+                            if (base_form.IsInitialized) _status.Add(_STAT.INIT);
+                            else if (base_form.IsPaused) _status.Add(_STAT.PAUSE);
+                            //else if (base_form.IsCancelled) _status.Add(_STAT.STOP);
+                            else if (base_form.IsStarted) _status.Add(_STAT.START);
+                            else _status.Add(_STAT.UNDEFINED);
+
+                            _index_list.Add(_index_counter++);
+                            _upload_list.Add(base_form);
+                            _length_cache.Add(base_form.Content_Length);
+                            _total_bytes += base_form.Content_Length;
+                            _create_tasks();
+                        }
+                    }
+                }));
             }
         }
         private void _on_upload_cancelled(object sender, EventArgs e)
         {
             ThreadPool.QueueUserWorkItem(delegate
             {
-                _on_upload_completed(sender, e);
+                _on_upload_completed(sender, new UploadResultEventArgs(null, null, false, Uploader.FailCode.UNKNOWN));
                 _uploaded_bytes -= ((Uploader)sender).Content_Length;
             });
         }
@@ -318,14 +350,11 @@ namespace BaiduCloudSync
             if (index == -1) return;
             _status[index] = _STAT.START;
             var ctl_index = _index_list[index];
-            if (_form_created)
+            Invoke(new ThreadStart(delegate
             {
-                Invoke(new ThreadStart(delegate
-                {
-                    var ctl = Controls["ctl-" + ctl_index + "-6"];
-                    if (ctl != null) { ctl.Text = "暂停"; }
-                }));
-            }
+                var ctl = Controls["ctl-" + ctl_index + "-6"];
+                if (ctl != null) { ctl.Text = "暂停"; }
+            }));
         }
         private void _on_upload_paused(object sender, EventArgs e)
         {
@@ -334,14 +363,11 @@ namespace BaiduCloudSync
             if (index == -1) return;
             var ctl_index = _index_list[index];
             _status[index] = _STAT.PAUSE;
-            if (_form_created)
+            Invoke(new ThreadStart(delegate
             {
-                Invoke(new ThreadStart(delegate
-                {
-                    var ctl = Controls["ctl-" + ctl_index + "-6"];
-                    ctl.Text = "开始";
-                }));
-            }
+                var ctl = Controls["ctl-" + ctl_index + "-6"];
+                ctl.Text = "开始";
+            }));
         }
         private void _timer_thd_callback()
         {
@@ -398,14 +424,13 @@ namespace BaiduCloudSync
 
                         _index_list.Add(_index_counter++);
                         _upload_list.Add(task);
+                        _length_cache.Add(task.Content_Length);
+                        _total_bytes += task.Content_Length;
 
-                        if (_form_created)
+                        Invoke(new ThreadStart(delegate
                         {
-                            Invoke(new ThreadStart(delegate
-                            {
-                                _create_tasks();
-                            }));
-                        }
+                            _create_tasks();
+                        }));
                     }
                 }
             });
@@ -493,6 +518,9 @@ namespace BaiduCloudSync
                     _status.Clear();
                     _index_list.Clear();
                     _current_list_size = 0;
+                    _total_bytes = 0;
+                    _uploaded_bytes = 0;
+                    _uploading_bytes = 0;
 
                     for (int i = 0; i < Controls.Count; i++)
                     {
@@ -502,8 +530,12 @@ namespace BaiduCloudSync
                             i--;
                         }
                     }
+
+                    UploadTransferList_Resize(sender, e);
                 }
             }
         }
+
+
     }
 }

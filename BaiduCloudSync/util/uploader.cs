@@ -17,6 +17,11 @@ namespace BaiduCloudSync
     {
         //是否使用秒传api传输
         private const bool _ENABLE_RAPID_UPLOAD = true;
+        public enum FailCode
+        {
+            SUCCESS, UNKNOWN,
+            MD5_CHECK_ERROR, LENGTH_CHECK_ERROR, FSID_CHECK_ERROR
+        }
 
         private string _path;
         private string _local_path;
@@ -47,10 +52,10 @@ namespace BaiduCloudSync
 
         private BaiduPCS _api;
         private ondup _ondup;
-        private FileListCacher _cache;
+
         private Form _parent_form;
         private bool _is_encrypt_upload;
-        public Uploader(Form parent, BaiduPCS api, FileListCacher cache, string path, TrackedData local_data, ondup ondup = ondup.overwrite, bool encrypt = false)
+        public Uploader(Form parent, BaiduPCS api, string path, TrackedData local_data, ondup ondup = ondup.overwrite, bool encrypt = false)
         {
             _path = path;
             _local_path = local_data.Path;
@@ -58,7 +63,6 @@ namespace BaiduCloudSync
 
             _api = api;
             _ondup = ondup;
-            _cache = cache;
             _state = 1;
             _content_length = local_data.ContentSize;
             _content_crc32 = local_data.CRC32;
@@ -77,7 +81,11 @@ namespace BaiduCloudSync
         private void onStatusUpdated(string path, string local_path, long current, long length)
         {
             _upload_size = (ulong)(current + _slice_upload_data.Count * 4194304);
-            _content_length = (ulong)length;
+            //_content_length = (ulong)length;
+            if (_upload_size > _content_length)
+            {
+
+            }
         }
         private void _speed_timer_callback()
         {
@@ -112,6 +120,7 @@ namespace BaiduCloudSync
                 if (_content_length == 0) return;
 
                 //encryption
+                #region File Encryption
                 if (_is_encrypt_upload)
                 {
                     if (frmKeyCreate.HasRsaPublicKey)
@@ -122,6 +131,7 @@ namespace BaiduCloudSync
                             FileEncrypt.EncryptFile(_local_path, _local_path + "_temp", key);
                             _content_md5 = string.Empty;
                             _content_length = (ulong)new FileInfo(_local_path + "_temp").Length;
+                            _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
                         }
                         catch (Exception ex)
                         {
@@ -141,6 +151,7 @@ namespace BaiduCloudSync
                             FileEncrypt.EncryptFile(_local_path, _local_path + "_temp", key, iv);
                             _content_md5 = string.Empty;
                             _content_length = (ulong)new FileInfo(_local_path + "_temp").Length;
+                            _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
                         }
                         catch (Exception ex)
                         {
@@ -158,7 +169,10 @@ namespace BaiduCloudSync
                         return;
                     }
                 }
+                #endregion
+
                 //calculating local file
+                #region MD5 calculation (if null) & RapidUploadTest
                 if (!_rapid_upload_requested && _ENABLE_RAPID_UPLOAD)
                 {
                     _state = 8;
@@ -169,6 +183,7 @@ namespace BaiduCloudSync
                         _content_crc32 = rapid_upload_data.content_crc32;
                         _content_md5 = rapid_upload_data.content_md5;
                         _slice_md5 = rapid_upload_data.slice_md5;
+                        _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
                     }
                     else if (string.IsNullOrEmpty(_slice_md5) && _content_length >= 262144)
                     {
@@ -195,7 +210,15 @@ namespace BaiduCloudSync
                     {
                         try
                         {
-                            data = _api.RapidUploadRaw(_path, _content_length, _content_md5, _content_crc32, _slice_md5, _ondup);
+                            while (string.IsNullOrEmpty(data.MD5))
+                            {
+                                data = _api.RapidUploadRaw(_path, _content_length, _content_md5, _content_crc32, _slice_md5, _ondup);
+                                if (string.IsNullOrEmpty(data.MD5))
+                                {
+                                    Tracer.GlobalTracer.TraceWarning("Rapid upload file failed: Network Error, retry in 1 second");
+                                    Thread.Sleep(1000);
+                                }
+                            }
                             _rapid_upload_requested = true;
                         }
                         catch (ErrnoException ex)
@@ -212,26 +235,32 @@ namespace BaiduCloudSync
                         //rapid upload succeeded, thread exited
                         _background_thread = null;
                         _state = 16;
-                        TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, true));
+                        TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, true, FailCode.SUCCESS));
                         return;
                     }
                 }
+                #endregion
 
                 //upload begins
                 _state = 0;
 
                 //deleting exist file for overwrite: slice upload does not support the overwrite characteristic
-                var remote_data = _cache.GetData(_path);
-                if (_ondup == ondup.overwrite && remote_data.FS_ID != 0)
+                if (_ondup == ondup.overwrite)
                 {
-                    _api.DeletePath(remote_data.Path);
-                    _cache.RemoveEntry(remote_data);
+                    _api.DeletePath(_path);
                 }
+
+                //pre-creating file
                 while (string.IsNullOrEmpty(_uploadid))
                 {
                     try
                     {
                         _uploadid = _api.PreCreateFile(_path, _slice_count).UploadId;
+                        if (string.IsNullOrEmpty(_uploadid))
+                        {
+                            Tracer.GlobalTracer.TraceWarning("Pre-creating upload file failed: Network Error, retry in 1 second");
+                            Thread.Sleep(1000);
+                        }
                     }
                     catch (ErrnoException ex)
                     {
@@ -243,6 +272,7 @@ namespace BaiduCloudSync
                 }
 
                 _open_stream = new FileStream(_local_path + (_is_encrypt_upload ? "_temp" : ""), FileMode.Open, FileAccess.Read, FileShare.Read);
+                //upload slice
                 while (_slice_upload_data.Count < _slice_count)
                 {
                     if (_open_stream.Position != 4194304 * _slice_upload_data.Count)
@@ -260,6 +290,11 @@ namespace BaiduCloudSync
 
                     if (!string.IsNullOrEmpty(data))
                         _slice_upload_data.Add(data);
+                    else
+                    {
+                        Tracer.GlobalTracer.TraceError("Upload failed: Network Error, retry in 1 second");
+                        Thread.Sleep(1000);
+                    }
                 }
 
                 ObjectMetadata dat = new ObjectMetadata();
@@ -276,35 +311,61 @@ namespace BaiduCloudSync
                         TaskCancelled?.Invoke(this, new EventArgs());
                         return;
                     }
+                    if (dat.FS_ID == 0)
+                    {
+                        Tracer.GlobalTracer.TraceError("Create super file failed: Network Error, retry in 1 second");
+                        Thread.Sleep(1000);
+                    }
                 }
 
-                if (dat.FS_ID == 0)
+                //upload finished, checking file meta
+                _state = 16;
+                if (dat.Size != _content_length)
                 {
-                    //upload failed
-                    Tracer.GlobalTracer.TraceWarning("Upload failed, response returned FS_ID = 0 (possibly a bug)");
-                    TaskCancelled?.Invoke(this, new EventArgs());
+                    Tracer.GlobalTracer.TraceWarning("[LENGTH CHECK]: Upload file Length mismatch! response returned " + dat.Size + " (expected: " + _content_length + ")");
+                    TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, false, FailCode.LENGTH_CHECK_ERROR));
+                }
+                else if (!string.IsNullOrEmpty(_content_md5) && dat.MD5 != _content_md5)
+                {
+                    Tracer.GlobalTracer.TraceWarning("[MD5 CHECK]: Upload file MD5 mismatch! response returned " + dat.MD5 + " (expected: " + _content_md5 + "), trying to resolve using RapidUpload Test");
+                    //resolve md5 error by using RapidUpload
+                    if (!string.IsNullOrEmpty(_slice_md5))
+                    {
+                        ObjectMetadata test_data = new ObjectMetadata();
+                        Thread.Sleep(3000);
+                        int retry_time = 0;
+                        while (string.IsNullOrEmpty(test_data.MD5))
+                        {
+                            test_data = _api.RapidUploadRaw(_path, _content_length, _content_md5, _content_crc32, _slice_md5, ondup.overwrite);
+                            if (string.IsNullOrEmpty(test_data.MD5))
+                            {
+                                Tracer.GlobalTracer.TraceWarning("Rapid upload file failed: Network Error, retry in 2 seconds");
+                                Thread.Sleep(2000);
+                            }
+                            else if (test_data.MD5 == "404" && retry_time++ < 5)
+                                continue;
+                        }
+                        if (test_data.Size != _content_length)
+                        {
+                            Tracer.GlobalTracer.TraceWarning("[LENGTH CHECK]: Upload file Length mismatch! response returned " + test_data.Size + " (expected: " + _content_length + ")");
+                            TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, false, FailCode.LENGTH_CHECK_ERROR));
+                        }
+                        else if (!string.IsNullOrEmpty(test_data.MD5) && test_data.MD5 != _content_md5)
+                        {
+                            Tracer.GlobalTracer.TraceWarning("[MD5 CHECK]: Upload file MD5 mismatch! response returned " + test_data.MD5 + " (expected: " + _content_md5 + ")");
+                            TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, false, FailCode.MD5_CHECK_ERROR));
+                        }
+                        else
+                        {
+                            TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, true, FailCode.SUCCESS));
+                        }
+                    }
                 }
                 else
                 {
-                    //checking info
-                    if (!string.IsNullOrEmpty(_content_md5) && dat.MD5 != _content_md5)
-                    {
-                        Tracer.GlobalTracer.TraceWarning("[MD5 CHECK]: Upload file MD5 mismatch! response returned " + dat.MD5 + " (expected: " + _content_md5 + ")");
-                        TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, false));
-                    }
-                    else if (dat.Size != _content_length)
-                    {
-                        Tracer.GlobalTracer.TraceWarning("[LENGTH CHECK]: Upload file Length mismatch! response returned " + dat.Size + " (expected: " + _content_length + ")");
-                        TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, false));
-                    }
-                    else
-                    {
-                        TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, true));
-                    }
-
+                    TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, true, FailCode.SUCCESS));
                 }
-                _state = 0;
-                _cache.AddEntry(dat);
+
                 _background_thread = null;
             }
             catch (Exception ex)
@@ -383,7 +444,26 @@ namespace BaiduCloudSync
                 TaskCancelled?.Invoke(this, new EventArgs());
             }
         }
-
+        public void Reupload()
+        {
+            if (_state != 4 && _state != 16)
+            {
+                Cancel();
+            }
+            lock (_external_lock)
+            {
+                _state = 1;
+                _content_crc32 = string.Empty;
+                _content_md5 = string.Empty;
+                _slice_md5 = string.Empty;
+                _content_length = (ulong)(new FileInfo(_local_path).Length);
+                _rapid_upload_requested = false;
+                _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
+                _slice_upload_data = new List<string>();
+                _uploadid = string.Empty;
+                _upload_size = 0;
+            }
+        }
         public bool IsStarted { get { return _state == 0 || _state == 8; } }
         public bool IsPaused { get { return _state == 2; } }
         public bool IsCancelled { get { return _state == 4; } }
@@ -406,11 +486,13 @@ namespace BaiduCloudSync
         public readonly string RemotePath;
         public readonly string LocalPath;
         public readonly bool Succeeded;
-        public UploadResultEventArgs(string _remote_path, string _local_path, bool _succeeded)
+        public readonly Uploader.FailCode Code;
+        public UploadResultEventArgs(string _remote_path, string _local_path, bool _succeeded, Uploader.FailCode code)
         {
             RemotePath = _remote_path;
             LocalPath = _local_path;
             Succeeded = _succeeded;
+            Code = code;
         }
     }
 

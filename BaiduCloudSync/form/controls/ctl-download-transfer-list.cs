@@ -525,6 +525,9 @@ namespace BaiduCloudSync
                     _status.Clear();
                     _index_list.Clear();
                     _current_list_size = 0;
+                    _total_bytes = 0;
+                    _downloading_bytes = 0;
+                    _downloaded_bytes = 0;
 
                     for (int i = 0; i < Controls.Count; i++)
                     {
@@ -534,6 +537,8 @@ namespace BaiduCloudSync
                             i--;
                         }
                     }
+
+                    DownloadTransferList_Resize(sender, e);
                 }
             }
         }

