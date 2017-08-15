@@ -35,9 +35,9 @@
             this.lDownloadSize = new System.Windows.Forms.Label();
             this.lSpeed = new System.Windows.Forms.Label();
             this.panel1 = new System.Windows.Forms.Panel();
-            this.bStart = new System.Windows.Forms.Button();
-            this.bPause = new System.Windows.Forms.Button();
             this.bCancel = new System.Windows.Forms.Button();
+            this.bPause = new System.Windows.Forms.Button();
+            this.bStart = new System.Windows.Forms.Button();
             this.panel1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -91,7 +91,7 @@
             // lSpeed
             // 
             this.lSpeed.AutoSize = true;
-            this.lSpeed.Location = new System.Drawing.Point(392, 9);
+            this.lSpeed.Location = new System.Drawing.Point(408, 9);
             this.lSpeed.Name = "lSpeed";
             this.lSpeed.Size = new System.Drawing.Size(29, 12);
             this.lSpeed.TabIndex = 3;
@@ -109,15 +109,15 @@
             this.panel1.Size = new System.Drawing.Size(703, 28);
             this.panel1.TabIndex = 4;
             // 
-            // bStart
+            // bCancel
             // 
-            this.bStart.Location = new System.Drawing.Point(496, 2);
-            this.bStart.Name = "bStart";
-            this.bStart.Size = new System.Drawing.Size(64, 23);
-            this.bStart.TabIndex = 4;
-            this.bStart.Text = "全部开始";
-            this.bStart.UseVisualStyleBackColor = true;
-            this.bStart.Click += new System.EventHandler(this.bStart_Click);
+            this.bCancel.Location = new System.Drawing.Point(636, 2);
+            this.bCancel.Name = "bCancel";
+            this.bCancel.Size = new System.Drawing.Size(64, 23);
+            this.bCancel.TabIndex = 4;
+            this.bCancel.Text = "全部取消";
+            this.bCancel.UseVisualStyleBackColor = true;
+            this.bCancel.Click += new System.EventHandler(this.bCancel_Click);
             // 
             // bPause
             // 
@@ -129,15 +129,15 @@
             this.bPause.UseVisualStyleBackColor = true;
             this.bPause.Click += new System.EventHandler(this.bPause_Click);
             // 
-            // bCancel
+            // bStart
             // 
-            this.bCancel.Location = new System.Drawing.Point(636, 2);
-            this.bCancel.Name = "bCancel";
-            this.bCancel.Size = new System.Drawing.Size(64, 23);
-            this.bCancel.TabIndex = 4;
-            this.bCancel.Text = "全部取消";
-            this.bCancel.UseVisualStyleBackColor = true;
-            this.bCancel.Click += new System.EventHandler(this.bCancel_Click);
+            this.bStart.Location = new System.Drawing.Point(496, 2);
+            this.bStart.Name = "bStart";
+            this.bStart.Size = new System.Drawing.Size(64, 23);
+            this.bStart.TabIndex = 4;
+            this.bStart.Text = "全部开始";
+            this.bStart.UseVisualStyleBackColor = true;
+            this.bStart.Click += new System.EventHandler(this.bStart_Click);
             // 
             // UploadTransferList
             // 

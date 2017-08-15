@@ -29,16 +29,16 @@ namespace BaiduCloudSync
         /// </summary>
         /// <param name="path">原文件路径（必要）</param>
         /// <param name="fs_id">fsid（必要）</param>
-        /// <returns>是否成功</returns>
-        public bool ConvertToSymbolLink(string path, ulong fs_id)
+        /// <returns>新的文件信息</returns>
+        public ObjectMetadata ConvertToSymbolLink(string path, ulong fs_id)
         {
             _trace.TraceInfo("BaiduPCS.ConvertToSymbolLink called: string path=" + path + ", ulong fs_id=" + fs_id);
 
-            if (string.IsNullOrEmpty(path) || fs_id == 0) return false;
+            if (string.IsNullOrEmpty(path) || fs_id == 0) return new ObjectMetadata();
             //var url = GetDownloadLink(fs_id);
             var url = GetDownloadLink_API(path);
 
-            if (string.IsNullOrEmpty(url)) return false; //获取下载地址失败，返回失败
+            if (string.IsNullOrEmpty(url)) return new ObjectMetadata(); //获取下载地址失败，返回失败
             try
             {
                 var ns = new NetStream();
@@ -50,7 +50,7 @@ namespace BaiduCloudSync
                 ns.HttpGet(url);
 
                 var content_length = ns.HTTP_Response.ContentLength;
-                if (content_length < VALIDATE_SIZE) return false;
+                if (content_length < VALIDATE_SIZE) return new ObjectMetadata();
 
                 var stream_in = ns.Stream;
 
@@ -82,7 +82,7 @@ namespace BaiduCloudSync
                 content_crc32 = int_crc32.ToString("X2").ToLower();
 
                 ns.Close();
-                if (string.IsNullOrEmpty(content_crc32) || string.IsNullOrEmpty(content_md5)) return false;
+                if (string.IsNullOrEmpty(content_crc32) || string.IsNullOrEmpty(content_md5)) return new ObjectMetadata();
 
                 //尝试发送rapid upload请求
                 var temp_path = "/BaiduCloudSyncCache/temp-rapid-upload-request-" + Guid.NewGuid().ToString();
@@ -90,7 +90,7 @@ namespace BaiduCloudSync
                 var rapid_upload_info = RapidUploadRaw(temp_path, (ulong)content_length, content_md5, content_crc32, slice_md5);
                 DeletePath("/BaiduCloudSyncCache");
 
-                if (string.IsNullOrEmpty(rapid_upload_info.MD5) || rapid_upload_info.FS_ID == 0) return false;
+                if (string.IsNullOrEmpty(rapid_upload_info.MD5) || rapid_upload_info.FS_ID == 0) return new ObjectMetadata();
 
                 //rapid upload通过，整合成json格式的文件上传到服务器
                 var json = new JObject();
@@ -106,30 +106,29 @@ namespace BaiduCloudSync
 
                 var file_meta = UploadRaw(stream_to_write, (ulong)bytes_json.Length, path + ".symbollink");
                 stream_to_write.Close();
-                if (file_meta.FS_ID == 0 || string.IsNullOrEmpty(file_meta.MD5)) return false;
-                else return true;
+                return file_meta;
             }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
             }
-            return false;
+            return new ObjectMetadata();
         }
         /// <summary>
         /// 将网盘的秒传数据文件转成原文件（将产生一个去掉末尾.symbollink的文件）
         /// </summary>
         /// <param name="path">symbollink文件路径（必要）</param>
         /// <param name="fs_id">fsid（必要）</param>
-        /// <returns>是否成功</returns>
-        public bool ConvertFromSymbolLink(string path, ulong fs_id)
+        /// <returns>新的文件信息</returns>
+        public ObjectMetadata ConvertFromSymbolLink(string path, ulong fs_id)
         {
             _trace.TraceInfo("BaiduPCS.ConvertFromSymbolLink called: string path=" + path + ", ulong fs_id=" + fs_id);
 
-            if (string.IsNullOrEmpty(path) || fs_id == 0) return false;
+            if (string.IsNullOrEmpty(path) || fs_id == 0) return new ObjectMetadata();
             //var url = GetDownloadLink(fs_id);
             var url = GetDownloadLink_API(path);
 
-            if (string.IsNullOrEmpty(url)) return false;
+            if (string.IsNullOrEmpty(url)) return new ObjectMetadata();
 
             var ns = new NetStream();
             try
@@ -144,21 +143,19 @@ namespace BaiduCloudSync
                 var content_crc32 = json.Value<string>("content_crc32");
                 var slice_md5 = json.Value<string>("slice_md5");
 
-                if (content_length == 0 || string.IsNullOrEmpty(content_md5) || string.IsNullOrEmpty(content_crc32)) return false;
+                if (content_length == 0 || string.IsNullOrEmpty(content_md5) || string.IsNullOrEmpty(content_crc32)) return new ObjectMetadata();
 
                 //var new_path = path.TrimEnd(".symbollink".ToArray());
                 var new_path = path.EndsWith(".symbollink") ? path.Substring(0, path.Length - 11) : (path + "." + path.Split('.').Last());
 
                 var data = RapidUploadRaw(new_path, content_length, content_md5, content_crc32, slice_md5);
-
-                if (data.FS_ID == 0 || string.IsNullOrEmpty(data.MD5)) return false;
-                return true;
+                return data;
             }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
             }
-            return false;
+            return new ObjectMetadata();
         }
 
         //文件夹同步

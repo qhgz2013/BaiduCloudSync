@@ -93,10 +93,10 @@
     <Compile Include="form\dialogs\frm-overwrite.Designer.cs">
       <DependentUpon>frm-overwrite.cs</DependentUpon>
     </Compile>
-    <Compile Include="frm-key-create.cs">
+    <Compile Include="form\dialogs\frm-key-create.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="frm-key-create.Designer.cs">
+    <Compile Include="form\dialogs\frm-key-create.Designer.cs">
       <DependentUpon>frm-key-create.cs</DependentUpon>
     </Compile>
     <Compile Include="util\filelist-cacher.cs" />
@@ -179,6 +179,9 @@
     <EmbeddedResource Include="form\dialogs\frm-create-share.resx">
       <DependentUpon>frm-create-share.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="form\dialogs\frm-overwrite.resx">
+      <DependentUpon>frm-overwrite.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="form\frm-download.resx">
       <DependentUpon>frm-download.cs</DependentUpon>
     </EmbeddedResource>
@@ -191,7 +194,7 @@
     <EmbeddedResource Include="form\dialogs\frm-property.resx">
       <DependentUpon>frm-property.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="frm-key-create.resx">
+    <EmbeddedResource Include="form\dialogs\frm-key-create.resx">
       <DependentUpon>frm-key-create.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">

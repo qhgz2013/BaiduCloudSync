@@ -352,8 +352,8 @@ namespace BaiduCloudSync
 
                     //data parsing
                     var ls = _dispatcher.GetSegments();
-                    _speed = _total_download_size - _last_total_download_size;
-                    if (_speed < 0) _speed = 0;
+                    ulong a = _total_download_size, b = _last_total_download_size;
+                    if (a > b) _speed = a - b; else _speed = 0;
                     _last_total_download_size = _total_download_size;
                     _total_download_size = 0;
 

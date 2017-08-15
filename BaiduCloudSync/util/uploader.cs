@@ -47,10 +47,10 @@ namespace BaiduCloudSync
 
         private BaiduPCS _api;
         private ondup _ondup;
-
+        private FileListCacher _cache;
         private Form _parent_form;
         private bool _is_encrypt_upload;
-        public Uploader(Form parent, BaiduPCS api, string path, TrackedData local_data, ondup ondup = ondup.overwrite, bool encrypt = false)
+        public Uploader(Form parent, BaiduPCS api, FileListCacher cache, string path, TrackedData local_data, ondup ondup = ondup.overwrite, bool encrypt = false)
         {
             _path = path;
             _local_path = local_data.Path;
@@ -58,6 +58,7 @@ namespace BaiduCloudSync
 
             _api = api;
             _ondup = ondup;
+            _cache = cache;
             _state = 1;
             _content_length = local_data.ContentSize;
             _content_crc32 = local_data.CRC32;
@@ -76,7 +77,7 @@ namespace BaiduCloudSync
         private void onStatusUpdated(string path, string local_path, long current, long length)
         {
             _upload_size = (ulong)(current + _slice_upload_data.Count * 4194304);
-            //_content_length = (ulong)length;
+            _content_length = (ulong)length;
         }
         private void _speed_timer_callback()
         {
@@ -84,8 +85,8 @@ namespace BaiduCloudSync
             {
                 do
                 {
-                    _speed = _upload_size - _last_upload_size;
-                    if (_speed < 0) _speed = 0;
+                    ulong a = _upload_size, b = _last_upload_size; ;
+                    if (a > b) _speed = a - b; else _speed = 0;
                     _last_upload_size = _upload_size;
                     Thread.Sleep(1000);
                 } while (true);
@@ -120,6 +121,7 @@ namespace BaiduCloudSync
                             var key = frmKeyCreate.LoadRsaKey(false);
                             FileEncrypt.EncryptFile(_local_path, _local_path + "_temp", key);
                             _content_md5 = string.Empty;
+                            _content_length = (ulong)new FileInfo(_local_path + "_temp").Length;
                         }
                         catch (Exception ex)
                         {
@@ -138,6 +140,7 @@ namespace BaiduCloudSync
                             if (key == null) throw new ArgumentNullException("key", "加载AES key失败：无效的密钥文件");
                             FileEncrypt.EncryptFile(_local_path, _local_path + "_temp", key, iv);
                             _content_md5 = string.Empty;
+                            _content_length = (ulong)new FileInfo(_local_path + "_temp").Length;
                         }
                         catch (Exception ex)
                         {
@@ -216,6 +219,14 @@ namespace BaiduCloudSync
 
                 //upload begins
                 _state = 0;
+
+                //deleting exist file for overwrite: slice upload does not support the overwrite characteristic
+                var remote_data = _cache.GetData(_path);
+                if (_ondup == ondup.overwrite && remote_data.FS_ID != 0)
+                {
+                    _api.DeletePath(remote_data.Path);
+                    _cache.RemoveEntry(remote_data);
+                }
                 while (string.IsNullOrEmpty(_uploadid))
                 {
                     try
@@ -271,7 +282,7 @@ namespace BaiduCloudSync
                 {
                     //upload failed
                     Tracer.GlobalTracer.TraceWarning("Upload failed, response returned FS_ID = 0 (possibly a bug)");
-                    TaskFinished?.Invoke(this, new UploadResultEventArgs(_path, _local_path, false));
+                    TaskCancelled?.Invoke(this, new EventArgs());
                 }
                 else
                 {
@@ -293,10 +304,12 @@ namespace BaiduCloudSync
 
                 }
                 _state = 0;
+                _cache.AddEntry(dat);
                 _background_thread = null;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Tracer.GlobalTracer.TraceError(ex.ToString());
             }
             finally
             {

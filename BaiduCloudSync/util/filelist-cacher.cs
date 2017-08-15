@@ -228,6 +228,11 @@ namespace BaiduCloudSync
             _remove_files_from_data(path);
             _sync_lock.ReleaseWriterLock();
         }
+        /// <summary>
+        /// 刷新文件列表
+        /// </summary>
+        /// <param name="path">文件夹路径</param>
+        /// <returns></returns>
         public ObjectMetadata[] RefreshFileList(string path)
         {
             if (_enable_tracing) Tracer.GlobalTracer.TraceInfo("FileListCacher.RefreshFileList called: string path=" + path);
@@ -249,8 +254,12 @@ namespace BaiduCloudSync
             }
             return ret;
         }
-        //获取单个文件的信息
-        //注意：未初始化时会有加载延时，建议：使用非主线程调用
+        /// <summary>
+        /// 获取单个文件的信息
+        /// 注意：未初始化时会有加载延时，建议：使用非主线程调用
+        /// </summary>
+        /// <param name="path">文件路径（文件夹要带最后的/）</param>
+        /// <returns></returns>
         public ObjectMetadata GetData(string path)
         {
             if (_enable_tracing) Tracer.GlobalTracer.TraceInfo("FileListCacher.GetData called: string path=" + path);
@@ -301,6 +310,52 @@ namespace BaiduCloudSync
                 _sync_lock.ReleaseWriterLock();
             }
             return ret;
+        }
+        /// <summary>
+        /// 手动添加文件信息
+        /// </summary>
+        /// <param name="entry">文件信息</param>
+        public void AddEntry(ObjectMetadata entry)
+        {
+            lock (_sync_lock)
+            {
+                if (entry.IsDir)
+                    _data.Add(entry.Path + "/", entry);
+                else
+                    _data.Add(entry.Path, entry);
+            }
+        }
+        /// <summary>
+        /// 手动删除文件信息
+        /// </summary>
+        /// <param name="entry">文件信息</param>
+        public void RemoveEntry(ObjectMetadata entry)
+        {
+            lock (_sync_lock)
+            {
+                if (entry.IsDir)
+                {
+                    _remove_files_from_data(entry.Path + "/");
+                }
+                else
+                {
+                    if (_data.ContainsKey(entry.Path))
+                        _data.Remove(entry.Path);
+                }
+                
+            }
+        }
+        /// <summary>
+        /// 手动删除文件信息
+        /// </summary>
+        /// <param name="entry">文件路径</param>
+        public void RemoveEntry(string entry)
+        {
+            lock (_sync_lock)
+            {
+                if (_data.ContainsKey(entry))
+                    _data.Remove(entry);
+            }
         }
         #endregion
 

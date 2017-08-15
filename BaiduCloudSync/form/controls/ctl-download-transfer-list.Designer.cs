@@ -35,9 +35,9 @@
             this.lDownloadSize = new System.Windows.Forms.Label();
             this.lSpeed = new System.Windows.Forms.Label();
             this.panel1 = new System.Windows.Forms.Panel();
-            this.bStart = new System.Windows.Forms.Button();
-            this.bPause = new System.Windows.Forms.Button();
             this.bCancel = new System.Windows.Forms.Button();
+            this.bPause = new System.Windows.Forms.Button();
+            this.bStart = new System.Windows.Forms.Button();
             this.panel1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -90,7 +90,7 @@
             // lSpeed
             // 
             this.lSpeed.AutoSize = true;
-            this.lSpeed.Location = new System.Drawing.Point(392, 9);
+            this.lSpeed.Location = new System.Drawing.Point(408, 9);
             this.lSpeed.Name = "lSpeed";
             this.lSpeed.Size = new System.Drawing.Size(29, 12);
             this.lSpeed.TabIndex = 3;
@@ -98,6 +98,7 @@
             // 
             // panel1
             // 
+            this.panel1.Controls.Add(this.lSpeed);
             this.panel1.Controls.Add(this.bCancel);
             this.panel1.Controls.Add(this.bPause);
             this.panel1.Controls.Add(this.bStart);
@@ -105,26 +106,6 @@
             this.panel1.Name = "panel1";
             this.panel1.Size = new System.Drawing.Size(703, 28);
             this.panel1.TabIndex = 4;
-            // 
-            // bStart
-            // 
-            this.bStart.Location = new System.Drawing.Point(496, 2);
-            this.bStart.Name = "bStart";
-            this.bStart.Size = new System.Drawing.Size(64, 23);
-            this.bStart.TabIndex = 0;
-            this.bStart.Text = "全部开始";
-            this.bStart.UseVisualStyleBackColor = true;
-            this.bStart.Click += new System.EventHandler(this.bStart_Click);
-            // 
-            // bPause
-            // 
-            this.bPause.Location = new System.Drawing.Point(566, 2);
-            this.bPause.Name = "bPause";
-            this.bPause.Size = new System.Drawing.Size(64, 23);
-            this.bPause.TabIndex = 0;
-            this.bPause.Text = "全部暂停";
-            this.bPause.UseVisualStyleBackColor = true;
-            this.bPause.Click += new System.EventHandler(this.bPause_Click);
             // 
             // bCancel
             // 
@@ -136,12 +117,31 @@
             this.bCancel.UseVisualStyleBackColor = true;
             this.bCancel.Click += new System.EventHandler(this.bCancel_Click);
             // 
+            // bPause
+            // 
+            this.bPause.Location = new System.Drawing.Point(566, 2);
+            this.bPause.Name = "bPause";
+            this.bPause.Size = new System.Drawing.Size(64, 23);
+            this.bPause.TabIndex = 0;
+            this.bPause.Text = "全部暂停";
+            this.bPause.UseVisualStyleBackColor = true;
+            this.bPause.Click += new System.EventHandler(this.bPause_Click);
+            // 
+            // bStart
+            // 
+            this.bStart.Location = new System.Drawing.Point(496, 2);
+            this.bStart.Name = "bStart";
+            this.bStart.Size = new System.Drawing.Size(64, 23);
+            this.bStart.TabIndex = 0;
+            this.bStart.Text = "全部开始";
+            this.bStart.UseVisualStyleBackColor = true;
+            this.bStart.Click += new System.EventHandler(this.bStart_Click);
+            // 
             // DownloadTransferList
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.Control;
-            this.Controls.Add(this.lSpeed);
             this.Controls.Add(this.lDownloadSize);
             this.Controls.Add(this.pFinishRate);
             this.Controls.Add(this.lTaskCount);
@@ -153,6 +153,7 @@
             this.Load += new System.EventHandler(this.DownloadTransferList_Load);
             this.Resize += new System.EventHandler(this.DownloadTransferList_Resize);
             this.panel1.ResumeLayout(false);
+            this.panel1.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 

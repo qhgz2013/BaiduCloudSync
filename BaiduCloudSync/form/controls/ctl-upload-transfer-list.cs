@@ -247,9 +247,13 @@ namespace BaiduCloudSync
                 {
                     Invoke(new ThreadStart(delegate
                     {
-                        _updating_tasks();
-                        _create_tasks();
-                        _updating_statistics();
+                        try
+                        {
+                            _updating_tasks();
+                            _create_tasks();
+                            _updating_statistics();
+                        }
+                        catch (Exception) { }
                     }));
                 }
             }
@@ -492,7 +496,7 @@ namespace BaiduCloudSync
 
                     for (int i = 0; i < Controls.Count; i++)
                     {
-                        if (Controls[i].Name == "ctl-")
+                        if (Controls[i].Name.StartsWith("ctl-"))
                         {
                             Controls.RemoveAt(i);
                             i--;
