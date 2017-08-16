@@ -319,6 +319,7 @@ namespace BaiduCloudSync
                         if (MessageBox.Show(this, reason, "文件上传错误", MessageBoxButtons.YesNo) == DialogResult.Yes)
                         {
                             base_form.Reupload();
+                            base_form.Ondup = BaiduPCS.ondup.overwrite;
                             if (base_form.IsInitialized) _status.Add(_STAT.INIT);
                             else if (base_form.IsPaused) _status.Add(_STAT.PAUSE);
                             //else if (base_form.IsCancelled) _status.Add(_STAT.STOP);
