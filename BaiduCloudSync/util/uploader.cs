@@ -15,8 +15,6 @@ namespace BaiduCloudSync
 {
     public class Uploader
     {
-        //是否使用秒传api传输
-        private const bool _ENABLE_RAPID_UPLOAD = true;
         public enum FailCode
         {
             SUCCESS, UNKNOWN,
@@ -52,31 +50,31 @@ namespace BaiduCloudSync
 
         private BaiduPCS _api;
         private ondup _ondup;
-
+        private LocalFileCacher _cache;
         private Form _parent_form;
         private bool _is_encrypt_upload;
-        public Uploader(Form parent, BaiduPCS api, string path, TrackedData local_data, ondup ondup = ondup.overwrite, bool encrypt = false)
+        public Uploader(Form parent, BaiduPCS api, string path, LocalFileCacher local_cache, string local_path, ondup ondup = ondup.overwrite, bool encrypt = false)
         {
             _path = path;
-            _local_path = local_data.Path;
+            _local_path = local_path;
             _parent_form = parent;
 
             _api = api;
             _ondup = ondup;
+            _cache = local_cache;
             _state = 1;
-            _content_length = local_data.ContentSize;
-            _content_crc32 = local_data.CRC32;
-            _content_md5 = local_data.MD5;
+            _content_length = (ulong)(new FileInfo(_local_path).Length);
+            _content_crc32 = string.Empty;
+            _content_md5 = string.Empty;
 
-            if (string.IsNullOrEmpty(_content_md5))
-                _content_length = (ulong)(new FileInfo(_local_path).Length);
             _rapid_upload_requested = false;
             _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
             _slice_upload_data = new List<string>();
 
             _is_encrypt_upload = encrypt;
             if (_is_encrypt_upload && !_path.EndsWith(".bcsd"))
-                path += ".bcsd";
+                _path += ".bcsd";
+
         }
         private void onStatusUpdated(string path, string local_path, long current, long length)
         {
@@ -99,10 +97,6 @@ namespace BaiduCloudSync
                     Thread.Sleep(1000);
                 } while (true);
             }
-            catch
-            {
-
-            }
             finally
             {
                 _speed_timer = null;
@@ -119,6 +113,17 @@ namespace BaiduCloudSync
 
                 if (_content_length == 0) return;
 
+                //calculating origin file
+                _state = 8;
+                var data = _cache.GetDataFromFile(_local_path);
+                string sha1 = null;
+                if (!data.IsDir)
+                {
+                    _content_crc32 = data.CRC32;
+                    _content_md5 = data.MD5;
+                    sha1 = data.SHA1;
+                    _content_length = data.ContentSize;
+                }
                 //encryption
                 #region File Encryption
                 if (_is_encrypt_upload)
@@ -128,10 +133,7 @@ namespace BaiduCloudSync
                         try
                         {
                             var key = frmKeyCreate.LoadRsaKey(false);
-                            FileEncrypt.EncryptFile(_local_path, _local_path + "_temp", key);
-                            _content_md5 = string.Empty;
-                            _content_length = (ulong)new FileInfo(_local_path + "_temp").Length;
-                            _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
+                            FileEncrypt.EncryptFile(_local_path, _local_path + "_temp", key, sha1);
                         }
                         catch (Exception ex)
                         {
@@ -148,10 +150,7 @@ namespace BaiduCloudSync
                             byte[] key, iv;
                             frmKeyCreate.LoadAesKey(out key, out iv);
                             if (key == null) throw new ArgumentNullException("key", "加载AES key失败：无效的密钥文件");
-                            FileEncrypt.EncryptFile(_local_path, _local_path + "_temp", key, iv);
-                            _content_md5 = string.Empty;
-                            _content_length = (ulong)new FileInfo(_local_path + "_temp").Length;
-                            _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
+                            FileEncrypt.EncryptFile(_local_path, _local_path + "_temp", key, iv, sha1);
                         }
                         catch (Exception ex)
                         {
@@ -168,52 +167,59 @@ namespace BaiduCloudSync
                         TaskCancelled?.Invoke(this, new EventArgs());
                         return;
                     }
+                    _content_md5 = string.Empty;
+                    _content_length = (ulong)new FileInfo(_local_path + "_temp").Length;
+                    _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
+                    _slice_md5 = string.Empty;
+                    _content_crc32 = string.Empty;
                 }
                 #endregion
 
                 //calculating local file
-                #region MD5 calculation (if null) & RapidUploadTest
-                if (!_rapid_upload_requested && _ENABLE_RAPID_UPLOAD)
+                #region MD5 calculation (if null)
+                if (string.IsNullOrEmpty(_content_md5) || string.IsNullOrEmpty(_content_crc32))
                 {
-                    _state = 8;
-                    if (string.IsNullOrEmpty(_content_md5))
+                    data = _cache.GetDataFromFile(_local_path + (_is_encrypt_upload ? "_temp" : ""));
+                    _content_length = data.ContentSize;
+                    _content_crc32 = data.CRC32;
+                    _content_md5 = data.MD5;
+                    sha1 = data.SHA1;
+                    _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
+                }
+                if (string.IsNullOrEmpty(_slice_md5) && _content_length >= 262144)
+                {
+                    var stream = new FileStream(_local_path + (_is_encrypt_upload ? "_temp" : ""), FileMode.Open, FileAccess.Read);
+                    var md5 = new System.Security.Cryptography.MD5CryptoServiceProvider();
+                    int buffer_size = 8192;
+                    var buffer = new byte[buffer_size];
+                    int rb = 0, tb = 0;
+                    do
                     {
-                        var rapid_upload_data = _api.GetRapidUploadArguments(_local_path + (_is_encrypt_upload ? "_temp" : ""), onStatusUpdated);
-                        _content_length = rapid_upload_data.content_length;
-                        _content_crc32 = rapid_upload_data.content_crc32;
-                        _content_md5 = rapid_upload_data.content_md5;
-                        _slice_md5 = rapid_upload_data.slice_md5;
-                        _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);
-                    }
-                    else if (string.IsNullOrEmpty(_slice_md5) && _content_length >= 262144)
-                    {
-                        var stream = new FileStream(_local_path + (_is_encrypt_upload ? "_temp" : ""), FileMode.Open, FileAccess.Read);
-                        var md5 = new System.Security.Cryptography.MD5CryptoServiceProvider();
-                        int buffer_size = 8192;
-                        var buffer = new byte[buffer_size];
-                        int rb = 0, tb = 0;
-                        do
-                        {
-                            rb = stream.Read(buffer, 0, buffer_size);
-                            if (rb + tb > 262144) rb = 262144 - tb;
-                            md5.TransformBlock(buffer, 0, rb, buffer, 0);
-                            tb += rb;
-                        } while (rb != 0 && tb < 262144);
-                        stream.Close();
-                        md5.TransformFinalBlock(buffer, 0, 0);
-                        var slice_md5 = md5.Hash;
-                        _slice_md5 = util.Hex(slice_md5);
-                    }
-                    ObjectMetadata data = new ObjectMetadata();
+                        rb = stream.Read(buffer, 0, buffer_size);
+                        if (rb + tb > 262144) rb = 262144 - tb;
+                        md5.TransformBlock(buffer, 0, rb, buffer, 0);
+                        tb += rb;
+                    } while (rb != 0 && tb < 262144);
+                    stream.Close();
+                    md5.TransformFinalBlock(buffer, 0, 0);
+                    var slice_md5 = md5.Hash;
+                    _slice_md5 = util.Hex(slice_md5);
+                }
+                #endregion
+
+                #region Rapid Upload Test
+                if (!_rapid_upload_requested)
+                {
+                    ObjectMetadata datameta = new ObjectMetadata();
                     //posting rapid upload info
                     if (!string.IsNullOrEmpty(_slice_md5))
                     {
                         try
                         {
-                            while (string.IsNullOrEmpty(data.MD5))
+                            while (string.IsNullOrEmpty(datameta.MD5))
                             {
-                                data = _api.RapidUploadRaw(_path, _content_length, _content_md5, _content_crc32, _slice_md5, _ondup);
-                                if (string.IsNullOrEmpty(data.MD5))
+                                datameta = _api.RapidUploadRaw(_path, _content_length, _content_md5, _content_crc32, _slice_md5, _ondup);
+                                if (string.IsNullOrEmpty(datameta.MD5))
                                 {
                                     Tracer.GlobalTracer.TraceWarning("Rapid upload file failed: Network Error, retry in 1 second");
                                     Thread.Sleep(1000);
@@ -230,7 +236,7 @@ namespace BaiduCloudSync
                             }));
                         }
                     }
-                    if (data.FS_ID != 0)
+                    if (datameta.FS_ID != 0)
                     {
                         //rapid upload succeeded, thread exited
                         _background_thread = null;
@@ -278,8 +284,8 @@ namespace BaiduCloudSync
                     if (_open_stream.Position != 4194304 * _slice_upload_data.Count)
                         _open_stream.Seek(4194304 * _slice_upload_data.Count, SeekOrigin.Begin);
 
-                    string data = null;
-                    try { data = _api.UploadSliceRaw(_open_stream, _path, _uploadid, _slice_upload_data.Count, onStatusUpdated); }
+                    string data_md5 = null;
+                    try { data_md5 = _api.UploadSliceRaw(_open_stream, _path, _uploadid, _slice_upload_data.Count, onStatusUpdated); }
                     catch (ErrnoException ex)
                     {
                         Tracer.GlobalTracer.TraceError("Upload failed, response returned errno = " + ex.Errno);
@@ -288,11 +294,11 @@ namespace BaiduCloudSync
                         return;
                     }
 
-                    if (!string.IsNullOrEmpty(data))
-                        _slice_upload_data.Add(data);
+                    if (!string.IsNullOrEmpty(data_md5))
+                        _slice_upload_data.Add(data_md5);
                     else
                     {
-                        Tracer.GlobalTracer.TraceError("Upload failed: Network Error, retry in 1 second");
+                        Tracer.GlobalTracer.TraceWarning("Upload failed: Network Error, retry in 1 second");
                         Thread.Sleep(1000);
                     }
                 }
@@ -313,7 +319,7 @@ namespace BaiduCloudSync
                     }
                     if (dat.FS_ID == 0)
                     {
-                        Tracer.GlobalTracer.TraceError("Create super file failed: Network Error, retry in 1 second");
+                        Tracer.GlobalTracer.TraceWarning("Create super file failed: Network Error, retry in 1 second");
                         Thread.Sleep(1000);
                     }
                 }

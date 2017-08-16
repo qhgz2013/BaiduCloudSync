@@ -360,6 +360,48 @@ namespace BaiduCloudSync
             }
             return list.ToArray();
         }
+        private TrackedData _get_data_from_file(string path)
+        {
+            var path_info = new FileInfo(path);
+            var cached_data = _get_data_from_cache(path_info.Directory.FullName);
+
+            //getting datas
+            var entry = new TrackedData();
+            entry.Path = path_info.FullName.Replace(@"\", "/");
+            entry.ContentSize = (ulong)path_info.Length;
+            entry.CreationTime = path_info.CreationTimeUtc;
+            entry.ModifiedTime = path_info.LastWriteTimeUtc;
+            entry.IsDir = false;
+            //update state analysis (todo: improve query speed)
+            var cached_entry = cached_data.Where(tvar => tvar.Path == entry.Path.ToLower()).FirstOrDefault();
+            if (!string.IsNullOrEmpty(cached_entry.Path))
+            {
+
+                if (cached_entry.ContentSize != entry.ContentSize || !_in_duration(cached_entry.CreationTime, entry.CreationTime, _DEFAULT_TIME_DIFF) || !_in_duration(cached_entry.ModifiedTime, entry.ModifiedTime, _DEFAULT_TIME_DIFF))
+                {
+                    //更新MD5
+                    var ifs = path_info.OpenRead();
+                    _calc_data(ifs, out entry.MD5, out entry.CRC32, out entry.SHA1);
+                    ifs.Close();
+                    _update_data(entry);
+                }
+                else
+                {
+                    entry.MD5 = cached_entry.MD5;
+                    entry.SHA1 = cached_entry.SHA1;
+                    entry.CRC32 = cached_entry.CRC32;
+                }
+            }
+            else
+            {
+                //数据不存在，添加到列表中
+                var ifs = path_info.OpenRead();
+                _calc_data(ifs, out entry.MD5, out entry.CRC32, out entry.SHA1);
+                ifs.Close();
+                _insert_data(entry);
+            }
+            return entry;
+        }
         #endregion
 
         #region public function for data io
@@ -407,7 +449,22 @@ namespace BaiduCloudSync
                 return ret;
             }
         }
+        public TrackedData GetDataFromFile(string path)
+        {
+            Tracer.GlobalTracer.TraceInfo("LocalFileCacher.GetDataFromPath called: string path=" + path);
+            if (string.IsNullOrEmpty(path)) return new TrackedData();
+            var dir_info = new FileInfo(path);
+            if (!dir_info.Exists) return new TrackedData();
 
+            lock (_external_lock)
+            {
+                var ret = _get_data_from_file(path);
+                if (_sql_trs != null) _sql_trs.Commit();
+                _sql_trs = _sql_con.BeginTransaction();
+                _validating_cache_size();
+                return ret;
+            }
+        }
         /// <summary>
         /// 清除所有缓存
         /// </summary>

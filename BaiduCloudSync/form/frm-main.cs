@@ -1097,9 +1097,7 @@ namespace BaiduCloudSync
                             if (cancelled) return;
                         }
                         if (skip && data.FS_ID != 0) continue;
-                        var trkdata = new TrackedData();
-                        trkdata.Path = local_path;
-                        var new_class = new Uploader(this, _pcsAPI, remote_path, trkdata, o);
+                        var new_class = new Uploader(this, _pcsAPI, remote_path, _local_file_list, local_path, o);
                         new_class.TaskFinished += _on_upload_finished;
                         uploadTransferList1.AddTask(new_class);
                     }
@@ -1136,9 +1134,7 @@ namespace BaiduCloudSync
                     if (cancelled) return;
                 }
                 if (skip && exist) continue;
-                var trkdata = new TrackedData();
-                trkdata.Path = item.FullName;
-                var new_class = new Uploader(this, _pcsAPI, cur_remote_path, trkdata, o, encrypt);
+                var new_class = new Uploader(this, _pcsAPI, cur_remote_path, _local_file_list, item.FullName, o, encrypt);
                 new_class.TaskFinished += _on_upload_finished;
                 uploadTransferList1.AddTask(new_class);
             }
@@ -1436,7 +1432,7 @@ namespace BaiduCloudSync
                     {
                         var relative_path = item.Path.Substring(local_path.Length + 1);
                         var absolute_remote_path = remote_path + relative_path;
-                        var uploader = new Uploader(this, _pcsAPI, absolute_remote_path, item);
+                        var uploader = new Uploader(this, _pcsAPI, absolute_remote_path, _local_file_list, item.Path, ondup.overwrite, false);
                         uploader.TaskFinished += _on_upload_finished;
                         uploadTransferList1.AddTask(uploader);
                     }
@@ -1627,9 +1623,7 @@ namespace BaiduCloudSync
                         }
                         if (skip && data.FS_ID != 0) continue;
 
-                        var trkdata = new TrackedData();
-                        trkdata.Path = local_path;
-                        var new_class = new Uploader(this, _pcsAPI, remote_path, trkdata, o, true);
+                        var new_class = new Uploader(this, _pcsAPI, remote_path, _local_file_list, local_path, o, true);
                         new_class.TaskFinished += _on_upload_finished;
                         uploadTransferList1.AddTask(new_class);
                     }
