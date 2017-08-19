@@ -51,6 +51,12 @@ namespace BaiduCloudSync
             nMaxUpload.ValueChanged -= nMaxUpload_ValueChanged;
             nMaxUpload.Value = StaticConfig.MAX_UPLOAD_PARALLEL_TASK_COUNT;
             nMaxUpload.ValueChanged += nMaxUpload_ValueChanged;
+            cIgnoreUploadFail.CheckedChanged -= cIgnoreUploadFail_CheckedChanged;
+            cIgnoreUploadFail.Checked = StaticConfig.IGNORE_UPLOAD_ERROR;
+            cIgnoreUploadFail.CheckedChanged += cIgnoreUploadFail_CheckedChanged;
+            cAutoReupload.CheckedChanged -= cAutoReupload_CheckedChanged;
+            cAutoReupload.Checked = StaticConfig.AUTO_REUPLOAD_WHEN_MD5_ERROR;
+            cAutoReupload.CheckedChanged += cAutoReupload_CheckedChanged;
 
             //login required
             if (string.IsNullOrEmpty(BaiduOAuth.bduss))
@@ -123,7 +129,7 @@ namespace BaiduCloudSync
 
                         pQuota.Minimum = 0;
                         pQuota.Maximum = 10000;
-                        pQuota.Value = (int)(quota.InUsed * 10000.0 / quota.Total);
+                        pQuota.Value = quota.Total != 0 ? (int)(quota.InUsed * 10000.0 / quota.Total): 0;
                         lQuota.Text = "可用: " + util.FormatBytes(quota.Total - quota.InUsed) + ", 总: " + util.FormatBytes(quota.Total) + " (" + (100 - pQuota.Value / 100.0).ToString("0.00") + "%)";
                     }));
                     __quota_thread = null;
@@ -950,10 +956,11 @@ namespace BaiduCloudSync
                         //__update_listview_data(__current_listview_path + filename + "/", __sortType, __asc);
                         var path = __current_listview_path + filename + "/";
                         __update_treeview_data(path);
-                        bool mamual_update_required = false;
+                        //bool mamual_update_required = false;
                         Invoke(new NoArgSTA(delegate
                         {
                             var node = treeView_DirList.Nodes[0];
+                            var first_node = node;
                             var paths = path.Split('/');
                             for (int i = 1; i < paths.Length - 1 && node != null; i++)
                             {
@@ -963,12 +970,12 @@ namespace BaiduCloudSync
                             {
                                 if (node != treeView_DirList.SelectedNode)
                                     treeView_DirList.SelectedNode = node;
-                                else
-                                    mamual_update_required = true;
+                                //else
+                                //    mamual_update_required = true;
                             }
                         }));
-                        if (mamual_update_required)
-                            __update_listview_data(path);
+                        //if (mamual_update_required)
+                        //    __update_listview_data(path);
                     }
                 }, "获取文件信息...");
         }
@@ -1572,6 +1579,17 @@ namespace BaiduCloudSync
             StaticConfig.MAX_DEBUG_OUTPUT_COUNT = (int)nDebugListCnt.Value;
             StaticConfig.SaveStaticConfig();
         }
+        private void cIgnoreUploadFail_CheckedChanged(object sender, EventArgs e)
+        {
+            StaticConfig.IGNORE_UPLOAD_ERROR = cIgnoreUploadFail.Checked;
+            StaticConfig.SaveStaticConfig();
+        }
+
+        private void cAutoReupload_CheckedChanged(object sender, EventArgs e)
+        {
+            StaticConfig.AUTO_REUPLOAD_WHEN_MD5_ERROR = cAutoReupload.Checked;
+            StaticConfig.SaveStaticConfig();
+        }
         #endregion
 
         private void 上传加密文件ToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1666,5 +1684,6 @@ namespace BaiduCloudSync
                 MessageBox.Show(this, "已取消重置", "输入错误", MessageBoxButtons.OK);
             }
         }
+
     }
 }

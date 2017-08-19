@@ -134,11 +134,16 @@ namespace BaiduCloudSync
                 TestFunc();
 
                 //next update thread
+                if (__next_update_thread != null)
+                {
+                    try { var thd = __next_update_thread; __next_update_thread = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch { }
+                }
                 __next_update_thread = new Thread(() =>
                 {
                     var ts = TimeSpan.FromHours(1);
                     Thread.Sleep(ts);
                     _init_login_data();
+                    __next_update_thread = null;
                 });
                 __next_update_thread.IsBackground = true;
                 __next_update_thread.Name = "网盘登陆数据刷新线程";
@@ -148,15 +153,21 @@ namespace BaiduCloudSync
             {
                 _trace.TraceError(ex.ToString());
                 //next update thread (exception raised mode)
+                if (__next_update_thread != null)
+                {
+                    try { var thd = __next_update_thread; __next_update_thread = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch { }
+                }
                 __next_update_thread = new Thread(() =>
                 {
                     var ts = TimeSpan.FromSeconds(15);
                     Thread.Sleep(ts);
                     _init_login_data();
+                    __next_update_thread = null;
                 });
                 __next_update_thread.IsBackground = true;
                 __next_update_thread.Name = "网盘登陆数据刷新线程";
                 __next_update_thread.Start();
+                __next_update_thread.Join();
             }
         }
         private string __bdstoken, __sign1, __sign2, __sign3, __timestamp;

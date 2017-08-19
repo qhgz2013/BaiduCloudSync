@@ -120,6 +120,26 @@
   <metadata name="contextMenuStrip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>15, 25</value>
   </metadata>
+  <data name="label6.Text" xml:space="preserve">
+    <value>简单的使用说明:
+以文件管理的右边栏为准：
+鼠标右击 显示操作菜单
+鼠标双击文件夹 进入该文件夹
+
+键盘快捷键
+Backspace: 返回上层目录
+Enter: 进入文件夹
+Ctrl+C: 复制
+Ctrl+X: 剪切
+Ctrl+V: 粘贴
+
+目前就这么多了
+程序关闭时保存列表也在坑着
+后续可能会加入查找文件功能和自己设置是否使用分段上传
+
+PS: 由于服务器的分段上传那边存在bug，大于4M以上的文件有很大几率会返回一个错误的文件特征码（MD5）
+当然，重新下载的话文件还是一致的</value>
+  </data>
   <metadata name="downloadFilePath.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>174, 5</value>
   </metadata>

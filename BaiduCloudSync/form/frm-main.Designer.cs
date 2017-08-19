@@ -31,12 +31,14 @@ namespace BaiduCloudSync
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            System.Windows.Forms.TreeNode treeNode1 = new System.Windows.Forms.TreeNode("<根目录>");
+            System.Windows.Forms.TreeNode treeNode3 = new System.Windows.Forms.TreeNode("<根目录>");
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(frmMain));
             this.contextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.上传ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.上传文件ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.上传文件夹ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.上传加密文件ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.上传加密文件夹ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.下载ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.同步ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.同步到云端ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -65,9 +67,15 @@ namespace BaiduCloudSync
             this.treeView_DirList = new System.Windows.Forms.TreeView();
             this.listView_DirData = new System.Windows.Forms.ListView();
             this.tabPage2 = new System.Windows.Forms.TabPage();
+            this.downloadTransferList1 = new BaiduCloudSync.DownloadTransferList();
             this.tabPage3 = new System.Windows.Forms.TabPage();
+            this.uploadTransferList1 = new BaiduCloudSync.UploadTransferList();
             this.tabPage4 = new System.Windows.Forms.TabPage();
+            this.ctlDebugOutput1 = new BaiduCloudSync.CtlDebugOutput();
             this.tabPage5 = new System.Windows.Forms.TabPage();
+            this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.bResetKey = new System.Windows.Forms.Button();
+            this.label7 = new System.Windows.Forms.Label();
             this.label6 = new System.Windows.Forms.Label();
             this.nDebugListCnt = new System.Windows.Forms.NumericUpDown();
             this.nListCount = new System.Windows.Forms.NumericUpDown();
@@ -85,14 +93,8 @@ namespace BaiduCloudSync
             this.UploadFileDir = new System.Windows.Forms.FolderBrowserDialog();
             this.lAsyncStatus = new System.Windows.Forms.Label();
             this.bAsyncCancel = new System.Windows.Forms.Button();
-            this.上传加密文件ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.上传加密文件夹ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.downloadTransferList1 = new BaiduCloudSync.DownloadTransferList();
-            this.uploadTransferList1 = new BaiduCloudSync.UploadTransferList();
-            this.ctlDebugOutput1 = new BaiduCloudSync.CtlDebugOutput();
-            this.groupBox1 = new System.Windows.Forms.GroupBox();
-            this.label7 = new System.Windows.Forms.Label();
-            this.bResetKey = new System.Windows.Forms.Button();
+            this.cIgnoreUploadFail = new System.Windows.Forms.CheckBox();
+            this.cAutoReupload = new System.Windows.Forms.CheckBox();
             this.contextMenuStrip1.SuspendLayout();
             this.tabControl1.SuspendLayout();
             this.tabPage1.SuspendLayout();
@@ -104,12 +106,12 @@ namespace BaiduCloudSync
             this.tabPage3.SuspendLayout();
             this.tabPage4.SuspendLayout();
             this.tabPage5.SuspendLayout();
+            this.groupBox1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.nDebugListCnt)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nListCount)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nDlThdCnt)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nMaxUpload)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nMaxDownload)).BeginInit();
-            this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
             // contextMenuStrip1
@@ -160,6 +162,20 @@ namespace BaiduCloudSync
             this.上传文件夹ToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
             this.上传文件夹ToolStripMenuItem.Text = "上传文件夹";
             this.上传文件夹ToolStripMenuItem.Click += new System.EventHandler(this.上传文件夹ToolStripMenuItem_Click);
+            // 
+            // 上传加密文件ToolStripMenuItem
+            // 
+            this.上传加密文件ToolStripMenuItem.Name = "上传加密文件ToolStripMenuItem";
+            this.上传加密文件ToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
+            this.上传加密文件ToolStripMenuItem.Text = "上传加密文件";
+            this.上传加密文件ToolStripMenuItem.Click += new System.EventHandler(this.上传加密文件ToolStripMenuItem_Click);
+            // 
+            // 上传加密文件夹ToolStripMenuItem
+            // 
+            this.上传加密文件夹ToolStripMenuItem.Name = "上传加密文件夹ToolStripMenuItem";
+            this.上传加密文件夹ToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
+            this.上传加密文件夹ToolStripMenuItem.Text = "上传加密文件夹";
+            this.上传加密文件夹ToolStripMenuItem.Click += new System.EventHandler(this.上传加密文件夹ToolStripMenuItem_Click);
             // 
             // 下载ToolStripMenuItem
             // 
@@ -368,10 +384,10 @@ namespace BaiduCloudSync
             this.treeView_DirList.Location = new System.Drawing.Point(0, 0);
             this.treeView_DirList.Margin = new System.Windows.Forms.Padding(1);
             this.treeView_DirList.Name = "treeView_DirList";
-            treeNode1.Name = "RootNode";
-            treeNode1.Text = "<根目录>";
+            treeNode3.Name = "RootNode";
+            treeNode3.Text = "<根目录>";
             this.treeView_DirList.Nodes.AddRange(new System.Windows.Forms.TreeNode[] {
-            treeNode1});
+            treeNode3});
             this.treeView_DirList.PathSeparator = "/";
             this.treeView_DirList.Size = new System.Drawing.Size(179, 373);
             this.treeView_DirList.TabIndex = 3;
@@ -404,6 +420,15 @@ namespace BaiduCloudSync
             this.tabPage2.Text = "下载列表";
             this.tabPage2.UseVisualStyleBackColor = true;
             // 
+            // downloadTransferList1
+            // 
+            this.downloadTransferList1.BackColor = System.Drawing.SystemColors.Control;
+            this.downloadTransferList1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.downloadTransferList1.Location = new System.Drawing.Point(3, 3);
+            this.downloadTransferList1.Name = "downloadTransferList1";
+            this.downloadTransferList1.Size = new System.Drawing.Size(720, 373);
+            this.downloadTransferList1.TabIndex = 0;
+            // 
             // tabPage3
             // 
             this.tabPage3.Controls.Add(this.uploadTransferList1);
@@ -414,6 +439,15 @@ namespace BaiduCloudSync
             this.tabPage3.TabIndex = 2;
             this.tabPage3.Text = "上传列表";
             this.tabPage3.UseVisualStyleBackColor = true;
+            // 
+            // uploadTransferList1
+            // 
+            this.uploadTransferList1.BackColor = System.Drawing.SystemColors.Control;
+            this.uploadTransferList1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.uploadTransferList1.Location = new System.Drawing.Point(3, 3);
+            this.uploadTransferList1.Name = "uploadTransferList1";
+            this.uploadTransferList1.Size = new System.Drawing.Size(720, 373);
+            this.uploadTransferList1.TabIndex = 0;
             // 
             // tabPage4
             // 
@@ -426,8 +460,18 @@ namespace BaiduCloudSync
             this.tabPage4.Text = "调试输出";
             this.tabPage4.UseVisualStyleBackColor = true;
             // 
+            // ctlDebugOutput1
+            // 
+            this.ctlDebugOutput1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.ctlDebugOutput1.Location = new System.Drawing.Point(3, 3);
+            this.ctlDebugOutput1.Name = "ctlDebugOutput1";
+            this.ctlDebugOutput1.Size = new System.Drawing.Size(720, 373);
+            this.ctlDebugOutput1.TabIndex = 0;
+            // 
             // tabPage5
             // 
+            this.tabPage5.Controls.Add(this.cAutoReupload);
+            this.tabPage5.Controls.Add(this.cIgnoreUploadFail);
             this.tabPage5.Controls.Add(this.groupBox1);
             this.tabPage5.Controls.Add(this.label6);
             this.tabPage5.Controls.Add(this.nDebugListCnt);
@@ -447,16 +491,45 @@ namespace BaiduCloudSync
             this.tabPage5.Text = "设置&使用说明";
             this.tabPage5.UseVisualStyleBackColor = true;
             // 
+            // groupBox1
+            // 
+            this.groupBox1.Controls.Add(this.bResetKey);
+            this.groupBox1.Controls.Add(this.label7);
+            this.groupBox1.Location = new System.Drawing.Point(391, 10);
+            this.groupBox1.Name = "groupBox1";
+            this.groupBox1.Size = new System.Drawing.Size(327, 148);
+            this.groupBox1.TabIndex = 3;
+            this.groupBox1.TabStop = false;
+            this.groupBox1.Text = "重置加密密钥";
+            // 
+            // bResetKey
+            // 
+            this.bResetKey.Location = new System.Drawing.Point(114, 94);
+            this.bResetKey.Name = "bResetKey";
+            this.bResetKey.Size = new System.Drawing.Size(95, 43);
+            this.bResetKey.TabIndex = 1;
+            this.bResetKey.Text = "重置加密密钥";
+            this.bResetKey.UseVisualStyleBackColor = true;
+            this.bResetKey.Click += new System.EventHandler(this.bResetKey_Click);
+            // 
+            // label7
+            // 
+            this.label7.AutoSize = true;
+            this.label7.Location = new System.Drawing.Point(10, 23);
+            this.label7.Name = "label7";
+            this.label7.Size = new System.Drawing.Size(257, 60);
+            this.label7.TabIndex = 0;
+            this.label7.Text = "请您读完这行字再按下按钮：\r\n该操作将会删除你所有的加密密钥\r\n（包括静态加密和动态加密）\r\n网盘上所有使用该密钥的加密文件都将无法解密\r\n确认重置加密密钥？\r\n" +
+    "";
+            // 
             // label6
             // 
             this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(218, 10);
+            this.label6.Location = new System.Drawing.Point(5, 150);
             this.label6.Name = "label6";
-            this.label6.Size = new System.Drawing.Size(167, 168);
+            this.label6.Size = new System.Drawing.Size(581, 216);
             this.label6.TabIndex = 2;
-            this.label6.Text = "简单的使用说明:\r\n以文件管理的右边栏为准：\r\n鼠标右击 显示操作菜单\r\n鼠标双击文件夹 进入该文件夹\r\n键盘快捷键\r\nBackspace: 返回上层目录\r\nEn" +
-    "ter: 进入文件夹\r\nCtrl+C: 复制\r\nCtrl+X: 剪切\r\nCtrl+V: 粘贴\r\n\r\n目前就这么多了\r\n上传的分块跟暂停还在坑着\r\n程序关闭时保存" +
-    "列表也在坑着";
+            this.label6.Text = resources.GetString("label6.Text");
             // 
             // nDebugListCnt
             // 
@@ -604,76 +677,27 @@ namespace BaiduCloudSync
             this.bAsyncCancel.Visible = false;
             this.bAsyncCancel.Click += new System.EventHandler(this.bAsyncCancel_Click);
             // 
-            // 上传加密文件ToolStripMenuItem
+            // cIgnoreUploadFail
             // 
-            this.上传加密文件ToolStripMenuItem.Name = "上传加密文件ToolStripMenuItem";
-            this.上传加密文件ToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
-            this.上传加密文件ToolStripMenuItem.Text = "上传加密文件";
-            this.上传加密文件ToolStripMenuItem.Click += new System.EventHandler(this.上传加密文件ToolStripMenuItem_Click);
+            this.cIgnoreUploadFail.AutoSize = true;
+            this.cIgnoreUploadFail.Location = new System.Drawing.Point(202, 10);
+            this.cIgnoreUploadFail.Name = "cIgnoreUploadFail";
+            this.cIgnoreUploadFail.Size = new System.Drawing.Size(144, 16);
+            this.cIgnoreUploadFail.TabIndex = 4;
+            this.cIgnoreUploadFail.Text = "忽略上传结果的不一致";
+            this.cIgnoreUploadFail.UseVisualStyleBackColor = true;
+            this.cIgnoreUploadFail.CheckedChanged += new System.EventHandler(this.cIgnoreUploadFail_CheckedChanged);
             // 
-            // 上传加密文件夹ToolStripMenuItem
+            // cAutoReupload
             // 
-            this.上传加密文件夹ToolStripMenuItem.Name = "上传加密文件夹ToolStripMenuItem";
-            this.上传加密文件夹ToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
-            this.上传加密文件夹ToolStripMenuItem.Text = "上传加密文件夹";
-            this.上传加密文件夹ToolStripMenuItem.Click += new System.EventHandler(this.上传加密文件夹ToolStripMenuItem_Click);
-            // 
-            // downloadTransferList1
-            // 
-            this.downloadTransferList1.BackColor = System.Drawing.SystemColors.Control;
-            this.downloadTransferList1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.downloadTransferList1.Location = new System.Drawing.Point(3, 3);
-            this.downloadTransferList1.Name = "downloadTransferList1";
-            this.downloadTransferList1.Size = new System.Drawing.Size(720, 373);
-            this.downloadTransferList1.TabIndex = 0;
-            // 
-            // uploadTransferList1
-            // 
-            this.uploadTransferList1.BackColor = System.Drawing.SystemColors.Control;
-            this.uploadTransferList1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uploadTransferList1.Location = new System.Drawing.Point(3, 3);
-            this.uploadTransferList1.Name = "uploadTransferList1";
-            this.uploadTransferList1.Size = new System.Drawing.Size(720, 373);
-            this.uploadTransferList1.TabIndex = 0;
-            // 
-            // ctlDebugOutput1
-            // 
-            this.ctlDebugOutput1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.ctlDebugOutput1.Location = new System.Drawing.Point(3, 3);
-            this.ctlDebugOutput1.Name = "ctlDebugOutput1";
-            this.ctlDebugOutput1.Size = new System.Drawing.Size(720, 373);
-            this.ctlDebugOutput1.TabIndex = 0;
-            // 
-            // groupBox1
-            // 
-            this.groupBox1.Controls.Add(this.bResetKey);
-            this.groupBox1.Controls.Add(this.label7);
-            this.groupBox1.Location = new System.Drawing.Point(391, 10);
-            this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(327, 148);
-            this.groupBox1.TabIndex = 3;
-            this.groupBox1.TabStop = false;
-            this.groupBox1.Text = "重置加密密钥";
-            // 
-            // label7
-            // 
-            this.label7.AutoSize = true;
-            this.label7.Location = new System.Drawing.Point(10, 23);
-            this.label7.Name = "label7";
-            this.label7.Size = new System.Drawing.Size(257, 60);
-            this.label7.TabIndex = 0;
-            this.label7.Text = "请您读完这行字再按下按钮：\r\n该操作将会删除你所有的加密密钥\r\n（包括静态加密和动态加密）\r\n网盘上所有使用该密钥的加密文件都将无法解密\r\n确认重置加密密钥？\r\n" +
-    "";
-            // 
-            // bResetKey
-            // 
-            this.bResetKey.Location = new System.Drawing.Point(114, 94);
-            this.bResetKey.Name = "bResetKey";
-            this.bResetKey.Size = new System.Drawing.Size(95, 43);
-            this.bResetKey.TabIndex = 1;
-            this.bResetKey.Text = "重置加密密钥";
-            this.bResetKey.UseVisualStyleBackColor = true;
-            this.bResetKey.Click += new System.EventHandler(this.bResetKey_Click);
+            this.cAutoReupload.AutoSize = true;
+            this.cAutoReupload.Location = new System.Drawing.Point(202, 34);
+            this.cAutoReupload.Name = "cAutoReupload";
+            this.cAutoReupload.Size = new System.Drawing.Size(144, 16);
+            this.cAutoReupload.TabIndex = 4;
+            this.cAutoReupload.Text = "自动重传不一致的文件";
+            this.cAutoReupload.UseVisualStyleBackColor = true;
+            this.cAutoReupload.CheckedChanged += new System.EventHandler(this.cAutoReupload_CheckedChanged);
             // 
             // frmMain
             // 
@@ -702,13 +726,13 @@ namespace BaiduCloudSync
             this.tabPage4.ResumeLayout(false);
             this.tabPage5.ResumeLayout(false);
             this.tabPage5.PerformLayout();
+            this.groupBox1.ResumeLayout(false);
+            this.groupBox1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.nDebugListCnt)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.nListCount)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.nDlThdCnt)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.nMaxUpload)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.nMaxDownload)).EndInit();
-            this.groupBox1.ResumeLayout(false);
-            this.groupBox1.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -775,6 +799,8 @@ namespace BaiduCloudSync
         private System.Windows.Forms.GroupBox groupBox1;
         private System.Windows.Forms.Button bResetKey;
         private System.Windows.Forms.Label label7;
+        private System.Windows.Forms.CheckBox cIgnoreUploadFail;
+        private System.Windows.Forms.CheckBox cAutoReupload;
     }
 }
 

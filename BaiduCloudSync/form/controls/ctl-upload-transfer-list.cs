@@ -269,6 +269,7 @@ namespace BaiduCloudSync
             {
                 var base_form = (Uploader)sender;
                 var index = _upload_list.FindIndex(o => o == base_form);
+                if (index == -1) return;
                 Invoke(new ThreadStart(delegate
                 {
                     _current_list_size--;
@@ -297,7 +298,7 @@ namespace BaiduCloudSync
                     _create_tasks();
                     UploadTransferList_Resize(this, new EventArgs());
 
-                    if (base_form.IsFinished && e.Code != Uploader.FailCode.SUCCESS)
+                    if (base_form.IsFinished && !StaticConfig.IGNORE_UPLOAD_ERROR && e.Code != Uploader.FailCode.SUCCESS)
                     {
                         string reason;
                         switch (e.Code)
@@ -316,7 +317,7 @@ namespace BaiduCloudSync
                                 break;
                         }
                         reason += "，是否重新上传";
-                        if (MessageBox.Show(this, reason, "文件上传错误", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                        if (StaticConfig.AUTO_REUPLOAD_WHEN_MD5_ERROR || MessageBox.Show(this, reason, "文件上传错误", MessageBoxButtons.YesNo) == DialogResult.Yes)
                         {
                             base_form.Reupload();
                             base_form.Ondup = BaiduPCS.ondup.overwrite;

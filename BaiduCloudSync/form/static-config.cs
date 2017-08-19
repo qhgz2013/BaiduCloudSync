@@ -32,6 +32,8 @@ namespace BaiduCloudSync
 
         public static int MAX_DEBUG_OUTPUT_COUNT = 200;
 
+        public static bool AUTO_REUPLOAD_WHEN_MD5_ERROR = true;
+        public static bool IGNORE_UPLOAD_ERROR = false;
         public static void LoadStaticConfig()
         {
             if (!Directory.Exists(".cache")) return;
@@ -50,7 +52,8 @@ namespace BaiduCloudSync
                     MAX_DOWNLOAD_THREAD = json.Value<int>("max-download-thread");
                     MAX_LIST_SIZE = json.Value<int>("max-list-size");
                     MAX_UPLOAD_PARALLEL_TASK_COUNT = json.Value<int>("max-upload-parallel-task-count");
-
+                    AUTO_REUPLOAD_WHEN_MD5_ERROR = json.Value<bool>("auto-reupload-when-md5-error");
+                    IGNORE_UPLOAD_ERROR = json.Value<bool>("ignore-upload-error");
                     //validation
                     MAX_DEBUG_OUTPUT_COUNT = Math.Min(MAX_DEBUG_OUTPUT_COUNT, 1000);
                     MAX_DOWNLOAD_PARALLEL_TASK_COUNT = Math.Min(MAX_DOWNLOAD_PARALLEL_TASK_COUNT, 50);
@@ -80,6 +83,8 @@ namespace BaiduCloudSync
             json.Add("max-download-thread", MAX_DOWNLOAD_THREAD);
             json.Add("max-list-size", MAX_LIST_SIZE);
             json.Add("max-upload-parallel-task-count", MAX_UPLOAD_PARALLEL_TASK_COUNT);
+            json.Add("auto-reupload-when-md5-error", AUTO_REUPLOAD_WHEN_MD5_ERROR);
+            json.Add("ignore-upload-error", IGNORE_UPLOAD_ERROR);
             var data = JsonConvert.SerializeObject(json);
             try
             {
