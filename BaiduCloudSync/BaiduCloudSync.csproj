@@ -79,6 +79,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="api\baidu-oauth.cs" />
+    <Compile Include="api\baidu-pcs-async.cs" />
     <Compile Include="api\baidu-pcs.cs" />
     <Compile Include="api\baidu-pcs-extend.cs" />
     <Compile Include="form\dialogs\frm-create-share.cs">

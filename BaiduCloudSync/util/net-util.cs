@@ -75,13 +75,16 @@ namespace BaiduCloudSync
 
             //默认保存cookie的文件名
             public const string DEFAULT_COOKIE_FILE_NAME = "cookie.dat";
+            //默认使用的cookie的key（用于分辨和使用不同cookie container而创立的）
+            public const string DEFAULT_COOKIE_GROUP = "default";
             //默认的TCP连接数
             public const int DEFAULT_TCP_CONNECTION = 1000;
             #endregion
 
             #region Cookie Segment
             //默认保存cookie的容器
-            public static CookieContainer DefaultCookieContainer = new CookieContainer();
+            public static Dictionary<string, CookieContainer> DefaultCookieContainer = new Dictionary<string, CookieContainer>();
+            private static ReaderWriterLock _slock = new ReaderWriterLock();
             /// <summary>
             /// 从文件中读取cookie
             /// </summary>
@@ -90,18 +93,23 @@ namespace BaiduCloudSync
             {
                 try
                 {
+                    _slock.AcquireWriterLock(Timeout.Infinite);
                     var fi = new FileInfo(file);
                     if (fi.Exists && fi.Length > 0)
                     {
                         var stream = fi.OpenRead();
                         var formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
-                        DefaultCookieContainer = (CookieContainer)formatter.Deserialize(stream);
+                        DefaultCookieContainer = (Dictionary<string, CookieContainer>)formatter.Deserialize(stream);
                         stream.Close();
                     }
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.Print("在读取cookie文件时捕获到异常:\n" + ex.ToString());
+                }
+                finally
+                {
+                    _slock.ReleaseWriterLock();
                 }
             }
 
@@ -113,6 +121,7 @@ namespace BaiduCloudSync
             {
                 try
                 {
+                    _slock.AcquireWriterLock(Timeout.Infinite);
                     var stream = File.Create(file);
                     var formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
                     formatter.Serialize(stream, DefaultCookieContainer);
@@ -121,6 +130,10 @@ namespace BaiduCloudSync
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.Print("在写入cookie文件时捕获到异常:\n" + ex.ToString());
+                }
+                finally
+                {
+                    _slock.ReleaseWriterLock();
                 }
             }
             #endregion
@@ -392,20 +405,94 @@ namespace BaiduCloudSync
             private static bool _enableTracing = false;
             private HttpWebRequest _http_request;
             private HttpWebResponse _http_response;
+            private ReaderWriterLock _lock;
+            private long _request_header_length;
+            private long _request_protocol_length;
+            private long _request_body_length;
+            private long _response_header_length;
+            private long _response_protocol_length;
+            private long _response_body_length;
+
+            #region properties
+            /// <summary>
+            /// HTTP请求
+            /// </summary>
             public HttpWebRequest HTTP_Request { get { return _http_request; } set { _http_request = value; } }
+            /// <summary>
+            /// HTTP响应
+            /// </summary>
             public HttpWebResponse HTTP_Response { get { return _http_response; } set { _http_response = value; } }
-            public Stream Stream { get; set; }
+            /// <summary>
+            /// 请求的数据流（仅限POST）
+            /// </summary>
+            public Stream RequestStream { get; set; }
+            /// <summary>
+            /// 响应的数据流
+            /// </summary>
+            public Stream ResponseStream { get; set; }
+            /// <summary>
+            /// 是否使用cookie
+            /// </summary>
             public bool UseCookie { get; set; }
+            /// <summary>
+            /// 网页代理
+            /// </summary>
             public WebProxy Proxy { get; set; }
+            /// <summary>
+            /// 连接超时（ms）
+            /// </summary>
             public int TimeOut { get; set; }
+            /// <summary>
+            /// 接受的数据压缩编码类型
+            /// </summary>
             public string AcceptEncoding { get; set; }
+            /// <summary>
+            /// 接受的语言类型
+            /// </summary>
             public string AcceptLanguage { get; set; }
+            /// <summary>
+            /// 接受的数据类型
+            /// </summary>
             public string Accept { get; set; }
+            /// <summary>
+            /// User Agent
+            /// </summary>
             public string UserAgent { get; set; }
+            /// <summary>
+            /// 发送的数据类型（仅限POST）
+            /// </summary>
             public string ContentType { get; set; }
+            /// <summary>
+            /// 错误重试次数
+            /// </summary>
             public int RetryTimes { get; set; }
+            /// <summary>
+            /// 错误重试延时（ms）
+            /// </summary>
             public int RetryDelay { get; set; }
+            /// <summary>
+            /// 读写超时事件（ms）
+            /// </summary>
             public int ReadWriteTimeOut { get; set; }
+            /// <summary>
+            /// 使用哪一个cookie
+            /// </summary>
+            public string CookieKey { get; set; }
+            public long RequestProtocolLength { get { return _request_protocol_length; } }
+            public long RequestHeaderLength { get { return _request_header_length; } }
+            public long RequestBodyLength { get { return _request_body_length; } }
+            public long ResponseProtocolLength { get { return _response_protocol_length; } }
+            public long ResponseHeaderLength { get { return _response_header_length; } }
+            public long ResponseBodyLength { get { return _response_body_length; } }
+            #endregion
+
+            #region cookie parser (instead of the origin method, which cause bugs)
+            /// <summary>
+            /// 解析Set Cookie的字符串
+            /// </summary>
+            /// <param name="header">Set Cookie的字符串值</param>
+            /// <param name="defaultDomain">默认域名</param>
+            /// <returns></returns>
             public static CookieCollection ParseCookie(string header, string defaultDomain)
             {
                 if (_enableTracing)
@@ -466,11 +553,13 @@ namespace BaiduCloudSync
                 }
                 return ret;
             }
+            //跳过空格字符
             private static void _skipChar(string header, ref int index)
             {
                 while (index < header.Length && header[index] == ' ')
                     index++;
             }
+            //解析cookie的数据，直到分隔符为止
             private static string _parseCookieValue(string header, ref int index, string propertyName)
             {
                 if (_enableTracing)
@@ -492,6 +581,7 @@ namespace BaiduCloudSync
                 value = value.Trim('"');
                 return value;
             }
+            //解析cookie的有效时长
             private static DateTime _parseCookieExpireTime(string str)
             {
                 if (_enableTracing)
@@ -541,7 +631,9 @@ namespace BaiduCloudSync
                 date = date.AddHours(hour).AddMinutes(minute).AddSeconds(second);
                 return date;
             }
+            #endregion
 
+            //从param中添加参数到webrequest中（因为其中一些参数不能直接通过header设置）
             private static void _add_param_to_request_header(Parameters param, ref HttpWebRequest request)
             {
                 if (param != null)
@@ -615,126 +707,34 @@ namespace BaiduCloudSync
                     }
                 }
             }
-            public void HttpGet(string url, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
-            {
-                if (_enableTracing)
-                {
-                    Tracer.GlobalTracer.TraceInfo("HTTP GET " + url);
-                }
-                int cur_times = 0;
-                do
-                {
-                    try
-                    {
-                        var post_url = url;
-                        if (urlParam != null) post_url += "?" + urlParam.BuildQueryString();
-
-                        HTTP_Request = (HttpWebRequest)WebRequest.Create(post_url);
-                        HTTP_Request.KeepAlive = true;
-                        HTTP_Request.ConnectionGroupName = "defaultConnectionGroup";
-                        _add_param_to_request_header(headerParam, ref _http_request);
-
-                        var keyList = HTTP_Request.Headers.AllKeys.ToList();
-                        if (!keyList.Contains(STR_ACCEPT)) HTTP_Request.Accept = Accept;
-                        if (!keyList.Contains(STR_ACCEPT_ENCODING)) HTTP_Request.Headers.Add(STR_ACCEPT_ENCODING, AcceptEncoding);
-                        if (!keyList.Contains(STR_ACCEPT_LANGUAGE)) HTTP_Request.Headers.Add(STR_ACCEPT_LANGUAGE, AcceptLanguage);
-                        if (!keyList.Contains(STR_USER_AGENT)) HTTP_Request.UserAgent = UserAgent;
-
-                        if (Proxy != null) HTTP_Request.Proxy = Proxy;
-                        if (UseCookie && !keyList.Contains(STR_COOKIE)) HTTP_Request.CookieContainer = DefaultCookieContainer;
-
-                        HTTP_Request.Method = DEFAULT_GET_METHOD;
-                        HTTP_Request.ReadWriteTimeout = ReadWriteTimeOut;
-                        HTTP_Request.Timeout = TimeOut;
-
-                        HTTP_Request.ContentLength = 0;
-
-                        if (range >= 0)
-                        {
-                            if (keyList.Contains(STR_RANGE))
-                            {
-                                //throw new InvalidOperationException("HTTP header has contained Range parameter");
-                                if (_enableTracing)
-                                    Tracer.GlobalTracer.TraceWarning("HTTP头已经包含Range信息，range参数将会忽略");
-                            }
-                            else
-                                HTTP_Request.AddRange(range);
-                        }
-
-                        HTTP_Response = (HttpWebResponse)HTTP_Request.GetResponse();
-
-                        DefaultCookieContainer.Add(ParseCookie(HTTP_Response.Headers[STR_SETCOOKIE], HTTP_Response.ResponseUri.Host));
-
-                        //if (HTTP_Response.StatusCode == HttpStatusCode.OK || HTTP_Response.StatusCode == HttpStatusCode.PartialContent)
-                        //{
-                        switch (HTTP_Response.ContentEncoding)
-                        {
-                            case STR_ACCEPT_ENCODING_GZIP:
-                                Stream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                break;
-                            case STR_ACCEPT_ENCODING_DEFLATE:
-                                Stream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                break;
-                            default:
-                                Stream = HTTP_Response.GetResponseStream();
-                                break;
-                        }
-                        //}
-                        break;
-                    }
-                    catch (ThreadAbortException ex) { throw ex; }
-                    catch (WebException ex)
-                    {
-                        if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
-                        cur_times++;
-
-                        if (ex.Response != null)
-                        {
-                            try
-                            {
-                                HTTP_Response = (HttpWebResponse)ex.Response;
-                                switch (HTTP_Response.ContentEncoding)
-                                {
-                                    case STR_ACCEPT_ENCODING_GZIP:
-                                        Stream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                        break;
-                                    case STR_ACCEPT_ENCODING_DEFLATE:
-                                        Stream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                        break;
-                                    default:
-                                        Stream = HTTP_Response.GetResponseStream();
-                                        break;
-                                }
-                            }
-                            catch (Exception)
-                            {
-                            }
-                        }
-                        if (RetryTimes >= 0 && cur_times > RetryTimes) throw ex;
-                        if (RetryDelay > 0) Thread.Sleep(RetryDelay);
-                    }
-                    catch (Exception ex)
-                    {
-                        if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
-                        cur_times++;
-                        if (RetryTimes >= 0 && cur_times > RetryTimes) throw ex;
-                        if (RetryDelay > 0) Thread.Sleep(RetryDelay);
-                    }
-                } while (true);
-            }
+            //异步请求的回调函数，代替IAsyncResult
             public delegate void HttpFinishedResponseCallback(NetStream ns, object state);
+            //传递参数的临时结构
             private struct _tmp_struct { public HttpFinishedResponseCallback cb; public object state; public _tmp_struct(HttpFinishedResponseCallback c, object s) { cb = c; state = s; } }
-            public void HttpGetAsync(string url, HttpFinishedResponseCallback callback, object state = null, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
+            /// <summary>
+            /// 异步发送HTTP get请求
+            /// </summary>
+            /// <param name="url">url</param>
+            /// <param name="callback">响应时的回调函数</param>
+            /// <param name="state">响应时的参数</param>
+            /// <param name="headerParam">请求头附加参数</param>
+            /// <param name="urlParam">请求url附加参数</param>
+            /// <param name="range">文件范围（该功能不一定支持）</param>
+            /// <returns></returns>
+            public IAsyncResult HttpGetAsync(string url, HttpFinishedResponseCallback callback, object state = null, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
             {
-                if (_enableTracing)
-                {
-                    Tracer.GlobalTracer.TraceInfo("HTTP GET " + url);
-                }
                 int cur_times = 0;
+                try { if (HTTP_Response != null) HTTP_Response.Close(); } finally { HTTP_Response = null; }
+                try { if (RequestStream != null) { RequestStream.Close(); RequestStream.Dispose(); } } finally { RequestStream = null; }
+                try { if (ResponseStream != null) { ResponseStream.Close(); ResponseStream.Dispose(); } } finally { ResponseStream = null; }
+                _response_body_length = 0;
+                _response_header_length = 0;
+                _response_protocol_length = 0;
                 do
                 {
                     try
                     {
+                        _lock.AcquireWriterLock(Timeout.Infinite);
                         var post_url = url;
                         if (urlParam != null) post_url += "?" + urlParam.BuildQueryString();
 
@@ -750,13 +750,16 @@ namespace BaiduCloudSync
                         if (!keyList.Contains(STR_USER_AGENT)) HTTP_Request.UserAgent = UserAgent;
 
                         HTTP_Request.Proxy = Proxy;
-                        if (UseCookie && !keyList.Contains(STR_COOKIE)) HTTP_Request.CookieContainer = DefaultCookieContainer;
+                        if (UseCookie && !keyList.Contains(STR_COOKIE))
+                        {
+                            if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
+                                DefaultCookieContainer.Add(CookieKey, new CookieContainer());
+                            HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
+                        }
 
                         HTTP_Request.Method = DEFAULT_GET_METHOD;
                         HTTP_Request.ReadWriteTimeout = ReadWriteTimeOut;
                         HTTP_Request.Timeout = TimeOut;
-
-                        //HTTP_Request.ContentLength = 0;
 
                         if (range >= 0)
                         {
@@ -769,10 +772,26 @@ namespace BaiduCloudSync
                                 HTTP_Request.AddRange(range);
                         }
 
-                        HTTP_Response = null;
-                        Stream = null;
-                        HTTP_Request.BeginGetResponse(_httpGetAsyncResponse, new _tmp_struct (callback, state));
-                        break;
+                        //length calculation
+                        _request_protocol_length = 0;
+                        _request_protocol_length += HTTP_Request.Method.Length; //"GET"
+                        _request_protocol_length += 1; //empty space
+                        _request_protocol_length += HTTP_Request.RequestUri.AbsoluteUri.Length; //uri
+                        _request_protocol_length += 6; // empty space + "HTTP/"
+                        _request_protocol_length += HTTP_Request.ProtocolVersion.ToString().Length; //"1.*"
+                        _request_body_length = 0;
+                        _request_header_length = 0;
+                        foreach (string item in HTTP_Request.Headers)
+                        {
+                            _request_header_length += item.Length; //header name
+                            _request_header_length += 2; // ":" + empty space
+                            _request_header_length += HTTP_Request.Headers[item].Length; //header value
+                        }
+                        //special statistics for host and connection
+                        _request_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
+                        _request_header_length += STR_CONNECTION.Length + 2 + (HTTP_Request.Connection == null ? STR_CONNECTION_KEEP_ALIVE.Length: HTTP_Request.Connection.Length);
+
+                        return HTTP_Request.BeginGetResponse(_httpAsyncResponse, new _tmp_struct(callback, state));
                     }
                     catch (ThreadAbortException) { throw; }
                     catch (Exception ex)
@@ -782,13 +801,17 @@ namespace BaiduCloudSync
                         if (RetryTimes >= 0 && cur_times > RetryTimes) throw ex;
                         if (RetryDelay > 0) Thread.Sleep(RetryDelay);
                     }
+                    finally
+                    {
+                        _lock.ReleaseWriterLock();
+                    }
                 } while (true);
             }
-            private void _httpGetAsyncResponse(IAsyncResult iar)
+            //请求的回调函数，用于更新类里面的成员和调用自定义的回调函数
+            private void _httpAsyncResponse(IAsyncResult iar)
             {
                 try
                 {
-
                     int cur_times = 0;
                     do
                     {
@@ -798,18 +821,39 @@ namespace BaiduCloudSync
                             HTTP_Response = (HttpWebResponse)HTTP_Request.EndGetResponse(iar);
                             if (HTTP_Response != null)
                             {
-                                DefaultCookieContainer.Add(ParseCookie(HTTP_Response.Headers[STR_SETCOOKIE], HTTP_Response.ResponseUri.Host));
+                                if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
+                                    DefaultCookieContainer.Add(CookieKey, new CookieContainer());
+                                HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
+
+                                //length calculation
+                                _response_protocol_length = 5; //"HTTP/"
+                                _request_protocol_length += HTTP_Response.ProtocolVersion.ToString().Length; //"1.*"
+                                _response_protocol_length += 1; //empty space
+                                _response_protocol_length += HTTP_Response.StatusCode.ToString().Length; //status code
+                                _response_protocol_length += 1; //empty space
+                                _response_protocol_length += HTTP_Response.StatusDescription.Length; //status string
+                                _response_header_length = 0;
+                                foreach (string item in HTTP_Response.Headers)
+                                {
+                                    _response_header_length += item.Length; //header name
+                                    _response_header_length += 2; // ":" + empty space
+                                    _response_header_length += HTTP_Request.Headers[item].Length; //header value
+                                }
+                                //special statistics for host and connection
+                                _response_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
+                                _response_header_length += STR_CONNECTION.Length + 2 + HTTP_Request.Connection.Length;
+                                _response_body_length = HTTP_Response.ContentLength;
 
                                 switch (HTTP_Response.ContentEncoding)
                                 {
                                     case STR_ACCEPT_ENCODING_GZIP:
-                                        Stream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                        ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
                                         break;
                                     case STR_ACCEPT_ENCODING_DEFLATE:
-                                        Stream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                        ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
                                         break;
                                     default:
-                                        Stream = HTTP_Response.GetResponseStream();
+                                        ResponseStream = HTTP_Response.GetResponseStream();
                                         break;
                                 }
                                 break;
@@ -830,17 +874,20 @@ namespace BaiduCloudSync
                                 try
                                 {
                                     HTTP_Response = (HttpWebResponse)ex.Response;
-                                    DefaultCookieContainer.Add(ParseCookie(HTTP_Response.Headers[STR_SETCOOKIE], HTTP_Response.ResponseUri.Host));
+                                    if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
+                                        DefaultCookieContainer.Add(CookieKey, new CookieContainer());
+                                    HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
+
                                     switch (HTTP_Response.ContentEncoding)
                                     {
                                         case STR_ACCEPT_ENCODING_GZIP:
-                                            Stream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                            ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
                                             break;
                                         case STR_ACCEPT_ENCODING_DEFLATE:
-                                            Stream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                            ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
                                             break;
                                         default:
-                                            Stream = HTTP_Response.GetResponseStream();
+                                            ResponseStream = HTTP_Response.GetResponseStream();
                                             break;
                                     }
                                 }
@@ -869,12 +916,23 @@ namespace BaiduCloudSync
                     }
                 }
             }
-            public void HttpHead(string url, Parameters headerParam = null, Parameters urlParam = null)
+            /// <summary>
+            /// 异步发送HTTP post请求
+            /// </summary>
+            /// <param name="url">url</param>
+            /// <param name="postLength">数据长度（必填，不能为负）</param>
+            /// <param name="callback">获取RequestStream时的回调函数</param>
+            /// <param name="state">获取RequestStream时的参数</param>
+            /// <param name="postContentType">要发送的数据类型</param>
+            /// <param name="headerParam">请求头附加参数</param>
+            /// <param name="urlParam">请求url附加参数</param>
+            /// <param name="range">文件范围（该功能不一定支持）</param>
+            /// <returns></returns>
+            public IAsyncResult HttpPostAsync(string url, long postLength, HttpFinishedResponseCallback callback, object state = null, string postContentType = DEFAULT_CONTENT_TYPE_BINARY, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
             {
-                if (_enableTracing)
-                {
-                    Tracer.GlobalTracer.TraceInfo("HTTP HEAD " + url);
-                }
+                try { if (HTTP_Response != null) HTTP_Response.Close(); } finally { HTTP_Response = null; }
+                try { if (RequestStream != null) { RequestStream.Close(); RequestStream.Dispose(); } } finally { RequestStream = null; }
+                try { if (ResponseStream != null) { ResponseStream.Close(); ResponseStream.Dispose(); } } finally { ResponseStream = null; }
                 int cur_times = 0;
                 do
                 {
@@ -886,8 +944,8 @@ namespace BaiduCloudSync
                         HTTP_Request = (HttpWebRequest)WebRequest.Create(post_url);
                         HTTP_Request.KeepAlive = true;
                         HTTP_Request.ConnectionGroupName = "defaultConnectionGroup";
-                        _add_param_to_request_header(headerParam, ref _http_request);
 
+                        _add_param_to_request_header(headerParam, ref _http_request);
                         var keyList = HTTP_Request.Headers.AllKeys.ToList();
                         if (!keyList.Contains(STR_ACCEPT)) HTTP_Request.Accept = Accept;
                         if (!keyList.Contains(STR_ACCEPT_ENCODING)) HTTP_Request.Headers.Add(STR_ACCEPT_ENCODING, AcceptEncoding);
@@ -895,99 +953,12 @@ namespace BaiduCloudSync
                         if (!keyList.Contains(STR_USER_AGENT)) HTTP_Request.UserAgent = UserAgent;
 
                         if (Proxy != null) HTTP_Request.Proxy = Proxy;
-                        if (UseCookie && !keyList.Contains(STR_COOKIE)) HTTP_Request.CookieContainer = DefaultCookieContainer;
-
-                        HTTP_Request.Method = DEFAULT_HEAD_METHOD;
-                        HTTP_Request.ReadWriteTimeout = ReadWriteTimeOut;
-                        HTTP_Request.Timeout = TimeOut;
-
-                        HTTP_Request.ContentLength = 0;
-
-                        HTTP_Response = (HttpWebResponse)HTTP_Request.GetResponse();
-
-                        DefaultCookieContainer.Add(ParseCookie(HTTP_Response.Headers[STR_SETCOOKIE], HTTP_Response.ResponseUri.Host));
-
-                        Stream = null;
-                        break;
-                    }
-                    catch (ThreadAbortException) { throw; }
-                    catch (WebException ex)
-                    {
-                        if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
-                        cur_times++;
-
-                        if (ex.Response != null)
+                        if (UseCookie && !keyList.Contains(STR_COOKIE))
                         {
-                            try
-                            {
-                                HTTP_Response = (HttpWebResponse)ex.Response;
-                                switch (HTTP_Response.ContentEncoding)
-                                {
-                                    case STR_ACCEPT_ENCODING_GZIP:
-                                        Stream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                        break;
-                                    case STR_ACCEPT_ENCODING_DEFLATE:
-                                        Stream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                        break;
-                                    default:
-                                        Stream = HTTP_Response.GetResponseStream();
-                                        break;
-                                }
-                            }
-                            catch (Exception)
-                            {
-                            }
+                            if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
+                                DefaultCookieContainer.Add(CookieKey, new CookieContainer());
+                            HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
                         }
-                        if (RetryTimes >= 0 && cur_times > RetryTimes) throw ex;
-                        if (RetryDelay > 0) Thread.Sleep(RetryDelay);
-                    }
-                    catch (Exception ex)
-                    {
-                        if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
-                        cur_times++;
-                        if (RetryTimes >= 0 && cur_times > RetryTimes) throw ex;
-                        if (RetryDelay > 0) Thread.Sleep(RetryDelay);
-                    }
-                } while (true);
-            }
-            public void HttpPost(string url, byte[] postData, string postContentType = DEFAULT_CONTENT_TYPE_BINARY, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
-            {
-                var stream = HttpPost(url, postData.Length, postContentType, headerParam, urlParam, range);
-                stream.Write(postData, 0, postData.Length);
-                stream.Close();
-                HttpPostClose();
-            }
-            public void HttpPost(string url, Parameters postParam, string postContentType = DEFAULT_CONTENT_TYPE_PARAM, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
-            {
-                HttpPost(url, Encoding.GetEncoding(DEFAULT_ENCODING).GetBytes(postParam.BuildQueryString()), postContentType, headerParam, urlParam, range);
-            }
-            public Stream HttpPost(string url, long postLength, string postContentType = DEFAULT_CONTENT_TYPE_BINARY, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
-            {
-                if (_enableTracing)
-                {
-                    Tracer.GlobalTracer.TraceInfo("HTTP POST " + url);
-                }
-                int cur_times = 0;
-                do
-                {
-                    try
-                    {
-                        var post_url = url;
-                        if (urlParam != null) post_url += "?" + urlParam.BuildQueryString();
-
-                        HTTP_Request = (HttpWebRequest)WebRequest.Create(post_url);
-                        HTTP_Request.KeepAlive = true;
-                        HTTP_Request.ConnectionGroupName = "defaultConnectionGroup";
-
-                        _add_param_to_request_header(headerParam, ref _http_request);
-                        var keyList = HTTP_Request.Headers.AllKeys.ToList();
-                        if (!keyList.Contains(STR_ACCEPT)) HTTP_Request.Accept = Accept;
-                        if (!keyList.Contains(STR_ACCEPT_ENCODING)) HTTP_Request.Headers.Add(STR_ACCEPT_ENCODING, AcceptEncoding);
-                        if (!keyList.Contains(STR_ACCEPT_LANGUAGE)) HTTP_Request.Headers.Add(STR_ACCEPT_LANGUAGE, AcceptLanguage);
-                        if (!keyList.Contains(STR_USER_AGENT)) HTTP_Request.UserAgent = UserAgent;
-
-                        if (Proxy != null) HTTP_Request.Proxy = Proxy;
-                        if (UseCookie && !keyList.Contains(STR_COOKIE)) HTTP_Request.CookieContainer = DefaultCookieContainer;
 
                         HTTP_Request.Method = DEFAULT_POST_METHOD;
                         HTTP_Request.ReadWriteTimeout = ReadWriteTimeOut;
@@ -1003,15 +974,33 @@ namespace BaiduCloudSync
                         {
                             if (keyList.Contains(STR_RANGE))
                             {
-                                //throw new InvalidOperationException("HTTP header has contained Range parameter");
                                 if (_enableTracing)
                                     Tracer.GlobalTracer.TraceWarning("HTTP头已经包含Range信息，range参数将会忽略");
                             }
                             else
                                 HTTP_Request.AddRange(range);
                         }
-                        return HTTP_Request.GetRequestStream();
 
+                        //length calculation
+                        _request_protocol_length = 0;
+                        _request_protocol_length += HTTP_Request.Method.Length; //"GET"
+                        _request_protocol_length += 1; //empty space
+                        _request_protocol_length += HTTP_Request.RequestUri.AbsoluteUri.Length; //uri
+                        _request_protocol_length += 6; // empty space + "HTTP/"
+                        _request_protocol_length += HTTP_Request.ProtocolVersion.ToString().Length; //"1.*"
+                        _request_body_length = postLength;
+                        _request_header_length = 0;
+                        foreach (string item in HTTP_Request.Headers)
+                        {
+                            _request_header_length += item.Length; //header name
+                            _request_header_length += 2; // ":" + empty space
+                            _request_header_length += HTTP_Request.Headers[item].Length; //header value
+                        }
+                        //special statistics for host and connection
+                        _request_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
+                        _request_header_length += STR_CONNECTION.Length + 2 + HTTP_Request.Connection.Length;
+
+                        return HTTP_Request.BeginGetRequestStream(_httpPostAsyncRequest, new _tmp_struct(callback, state));
                     }
                     catch (ThreadAbortException) { throw; }
                     catch (WebException ex)
@@ -1027,13 +1016,13 @@ namespace BaiduCloudSync
                                 switch (HTTP_Response.ContentEncoding)
                                 {
                                     case STR_ACCEPT_ENCODING_GZIP:
-                                        Stream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                        ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
                                         break;
                                     case STR_ACCEPT_ENCODING_DEFLATE:
-                                        Stream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                        ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
                                         break;
                                     default:
-                                        Stream = HTTP_Response.GetResponseStream();
+                                        ResponseStream = HTTP_Response.GetResponseStream();
                                         break;
                                 }
                             }
@@ -1053,18 +1042,94 @@ namespace BaiduCloudSync
                     }
                 } while (true);
             }
-            public void HttpPostClose()
+            //post时用于EndGetRequestStream的回调函数，用于更新类
+            private void _httpPostAsyncRequest(IAsyncResult iar)
             {
-                if (_enableTracing)
-                {
-                    Tracer.GlobalTracer.TraceInfo("HttpPostClose called");
-                }
-                if (HTTP_Request == null) return;
                 try
                 {
-                    var stream = HTTP_Request.GetRequestStream();
-                    if (stream.CanWrite)
-                        stream.Close();
+                    int cur_times = 0;
+                    do
+                    {
+                        try
+                        {
+                            if (HTTP_Request == null) break;
+                            RequestStream = HTTP_Request.EndGetRequestStream(iar);
+
+                        }
+                        catch (ThreadAbortException) { break; /* throw ex; */}
+                        catch (WebException ex)
+                        {
+                            if (ex.Status == WebExceptionStatus.RequestCanceled) break; // throw ex;
+
+                            if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
+                            cur_times++;
+                            if (RetryTimes >= 0 && cur_times > RetryTimes) break;// throw ex;
+                            if (RetryDelay > 0) Thread.Sleep(RetryDelay);
+
+                            if (ex.Response != null)
+                            {
+                                try
+                                {
+                                    HTTP_Response = (HttpWebResponse)ex.Response;
+                                    if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
+                                        DefaultCookieContainer.Add(CookieKey, new CookieContainer());
+                                    HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
+
+                                    switch (HTTP_Response.ContentEncoding)
+                                    {
+                                        case STR_ACCEPT_ENCODING_GZIP:
+                                            ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                            break;
+                                        case STR_ACCEPT_ENCODING_DEFLATE:
+                                            ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                            break;
+                                        default:
+                                            ResponseStream = HTTP_Response.GetResponseStream();
+                                            break;
+                                    }
+                                }
+                                catch (Exception) { }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
+                            cur_times++;
+                            if (RetryTimes >= 0 && cur_times > RetryTimes) break;//throw ex;
+                            if (RetryDelay > 0) Thread.Sleep(RetryDelay);
+                        }
+                    } while (true);
+                }
+                finally
+                {
+                    try
+                    {
+                        var data = (_tmp_struct)iar.AsyncState;
+                        data.cb.Invoke(this, data.state);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
+                    }
+                }
+            }
+            /// <summary>
+            /// 异步获取HTTP post响应
+            /// </summary>
+            /// <param name="callback">响应时的回调函数</param>
+            /// <param name="state">响应时的参数</param>
+            /// <returns></returns>
+            public IAsyncResult HttpPostResponseAsync(HttpFinishedResponseCallback callback, object state = null)
+            {
+                if (HTTP_Request == null) return null;
+                try
+                {
+                    if (RequestStream != null && RequestStream.CanWrite)
+                    {
+                        RequestStream.Close();
+                        RequestStream.Dispose();
+                        RequestStream = null;
+                    }
                 }
                 catch (Exception)
                 {
@@ -1073,28 +1138,10 @@ namespace BaiduCloudSync
                 int cur_times = 0;
                 do
                 {
+                    _lock.AcquireWriterLock(Timeout.Infinite);
                     try
                     {
-                        HTTP_Response = (HttpWebResponse)HTTP_Request.GetResponse();
-
-                        DefaultCookieContainer.Add(ParseCookie(HTTP_Response.Headers[STR_SETCOOKIE], HTTP_Response.ResponseUri.Host));
-
-                        //if (HTTP_Response.StatusCode == HttpStatusCode.OK || HTTP_Response.StatusCode == HttpStatusCode.PartialContent)
-                        //{
-                        switch (HTTP_Response.ContentEncoding)
-                        {
-                            case STR_ACCEPT_ENCODING_GZIP:
-                                Stream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                break;
-                            case STR_ACCEPT_ENCODING_DEFLATE:
-                                Stream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                break;
-                            default:
-                                Stream = HTTP_Response.GetResponseStream();
-                                break;
-                        }
-                        //}
-                        break;
+                        return HTTP_Request.BeginGetResponse(_httpAsyncResponse, new _tmp_struct(callback, state));
                     }
                     catch (ThreadAbortException) { throw; }
                     catch (WebException ex)
@@ -1110,13 +1157,13 @@ namespace BaiduCloudSync
                                 switch (HTTP_Response.ContentEncoding)
                                 {
                                     case STR_ACCEPT_ENCODING_GZIP:
-                                        Stream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                        ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
                                         break;
                                     case STR_ACCEPT_ENCODING_DEFLATE:
-                                        Stream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                        ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
                                         break;
                                     default:
-                                        Stream = HTTP_Response.GetResponseStream();
+                                        ResponseStream = HTTP_Response.GetResponseStream();
                                         break;
                                 }
                             }
@@ -1134,32 +1181,40 @@ namespace BaiduCloudSync
                         if (RetryTimes >= 0 && cur_times > RetryTimes) throw ex;
                         if (RetryDelay > 0) Thread.Sleep(RetryDelay);
                     }
+                    finally
+                    {
+                        _lock.ReleaseWriterLock();
+                    }
                 } while (true);
             }
+            /// <summary>
+            /// 关闭该数据流，释放所有使用的网络和内存资源
+            /// </summary>
             public void Close()
             {
-                if (HTTP_Request != null)
+                if (RequestStream != null)
                 {
                     try
                     {
-                        HTTP_Request.Abort();
+                        RequestStream.Close();
+                        RequestStream.Dispose();
                     }
                     catch (Exception)
                     {
                     }
-                    HTTP_Request = null;
+                    RequestStream = null;
                 }
-                if (Stream != null)
+                if (ResponseStream != null)
                 {
                     try
                     {
-                        Stream.Close();
-                        Stream.Dispose();
+                        ResponseStream.Close();
+                        ResponseStream.Dispose();
                     }
                     catch (Exception)
                     {
                     }
-                    Stream = null;
+                    ResponseStream = null;
                 }
                 if (HTTP_Response != null)
                 {
@@ -1172,20 +1227,41 @@ namespace BaiduCloudSync
                     }
                     HTTP_Response = null;
                 }
+                if (HTTP_Request != null)
+                {
+                    try
+                    {
+                        HTTP_Request.Abort();
+                    }
+                    catch (Exception)
+                    {
+                    }
+                    HTTP_Request = null;
+                }
             }
+            /// <summary>
+            /// 释放所有使用的网络和内存资源
+            /// </summary>
             public void Dispose()
             {
                 Close();
             }
+            /// <summary>
+            /// 从ResponseStream中读取所有数据并返回字符串（同步执行）
+            /// </summary>
+            /// <param name="encoding">可选编码类型，默认utf-8</param>
+            /// <returns></returns>
             public string ReadResponseString(Encoding encoding = null)
             {
                 if (encoding == null)
                     encoding = Encoding.GetEncoding(DEFAULT_ENCODING);
 
-                if (Stream == null || !Stream.CanRead) return string.Empty;
-                var sr = new StreamReader(Stream);
+                if (ResponseStream == null || !ResponseStream.CanRead) return string.Empty;
+                var sr = new StreamReader(ResponseStream);
                 var str = sr.ReadToEnd();
+                sr.Close();
                 sr.Dispose();
+                ResponseStream = null;
                 return str;
             }
             public NetStream()
@@ -1201,7 +1277,8 @@ namespace BaiduCloudSync
                 ContentType = DEFAULT_CONTENT_TYPE_BINARY;
                 RetryDelay = 0;
                 RetryTimes = 0;
-
+                CookieKey = DEFAULT_COOKIE_GROUP;
+                _lock = new ReaderWriterLock();
             }
         }
 
