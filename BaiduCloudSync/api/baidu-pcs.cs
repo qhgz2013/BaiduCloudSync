@@ -149,6 +149,7 @@ namespace BaiduCloudSync
                 __next_update_thread.Name = "网盘登陆数据刷新线程";
                 __next_update_thread.Start();
             }
+            catch (ThreadAbortException) { }
             catch (Exception ex)
             {
                 _trace.TraceError(ex.ToString());
@@ -903,7 +904,7 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public ObjectMetadata[] GetFileList(string path, FileOrder order = FileOrder.name, bool asc = true, int page = 1, int count = 1000)
         {
-            _trace.TraceInfo("BaiduPCS.GetFileList called: string path=" + path + ", FileOrder order=" + order + ", bool asc=" + asc);
+            _trace.TraceInfo("BaiduPCS.GetFileList called: string path=" + path + ", FileOrder order=" + order + ", bool asc=" + asc + ", int page=" + page + ", int count=" + count);
             var ret = new List<ObjectMetadata>();
             if (string.IsNullOrEmpty(path)) return null;
             var url = API_LIST_URL;

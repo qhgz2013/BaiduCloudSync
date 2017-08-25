@@ -533,8 +533,8 @@ namespace BaiduCloudSync
                         _open_stream.Close();
                         _open_stream = null;
                     }
-                    //if (File.Exists(_local_path + "_temp"))
-                    //    File.Delete(_local_path + "_temp");
+                    if (File.Exists(_local_path + "_temp"))
+                        File.Delete(_local_path + "_temp");
                 }
                 TaskCancelled?.Invoke(this, new EventArgs());
             }
