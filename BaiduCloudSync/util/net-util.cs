@@ -402,7 +402,7 @@ namespace BaiduCloudSync
                 ServicePointManager.MaxServicePointIdleTime = 2000;
                 ServicePointManager.SetTcpKeepAlive(false, 0, 0);
             }
-            private static bool _enableTracing = false;
+            private static bool _enableTracing = true;
             private HttpWebRequest _http_request;
             private HttpWebResponse _http_response;
             private ReaderWriterLock _lock;
@@ -413,6 +413,7 @@ namespace BaiduCloudSync
             private long _response_protocol_length;
             private long _response_body_length;
 
+            private Thread _sync_thread;
             #region properties
             /// <summary>
             /// HTTP请求
@@ -789,7 +790,7 @@ namespace BaiduCloudSync
                         }
                         //special statistics for host and connection
                         _request_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
-                        _request_header_length += STR_CONNECTION.Length + 2 + (HTTP_Request.Connection == null ? STR_CONNECTION_KEEP_ALIVE.Length: HTTP_Request.Connection.Length);
+                        _request_header_length += STR_CONNECTION.Length + 2 + (HTTP_Request.Connection == null ? STR_CONNECTION_KEEP_ALIVE.Length : HTTP_Request.Connection.Length);
 
                         return HTTP_Request.BeginGetResponse(_httpAsyncResponse, new _tmp_struct(callback, state));
                     }
@@ -813,6 +814,7 @@ namespace BaiduCloudSync
                 try
                 {
                     int cur_times = 0;
+                    _lock.AcquireWriterLock(Timeout.Infinite);
                     do
                     {
                         try
@@ -827,9 +829,9 @@ namespace BaiduCloudSync
 
                                 //length calculation
                                 _response_protocol_length = 5; //"HTTP/"
-                                _request_protocol_length += HTTP_Response.ProtocolVersion.ToString().Length; //"1.*"
+                                _response_protocol_length += HTTP_Response.ProtocolVersion.ToString().Length; //"1.*"
                                 _response_protocol_length += 1; //empty space
-                                _response_protocol_length += HTTP_Response.StatusCode.ToString().Length; //status code
+                                _response_protocol_length += ((int)HTTP_Response.StatusCode).ToString().Length; //status code
                                 _response_protocol_length += 1; //empty space
                                 _response_protocol_length += HTTP_Response.StatusDescription.Length; //status string
                                 _response_header_length = 0;
@@ -837,11 +839,11 @@ namespace BaiduCloudSync
                                 {
                                     _response_header_length += item.Length; //header name
                                     _response_header_length += 2; // ":" + empty space
-                                    _response_header_length += HTTP_Request.Headers[item].Length; //header value
+                                    _response_header_length += HTTP_Response.Headers[item].Length; //header value
                                 }
                                 //special statistics for host and connection
-                                _response_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
-                                _response_header_length += STR_CONNECTION.Length + 2 + HTTP_Request.Connection.Length;
+                                //_response_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
+                                //_response_header_length += STR_CONNECTION.Length + 2 + HTTP_Request.Connection.Length;
                                 _response_body_length = HTTP_Response.ContentLength;
 
                                 switch (HTTP_Response.ContentEncoding)
@@ -905,6 +907,7 @@ namespace BaiduCloudSync
                 }
                 finally
                 {
+                    _lock.ReleaseWriterLock();
                     try
                     {
                         var data = (_tmp_struct)iar.AsyncState;
@@ -916,6 +919,7 @@ namespace BaiduCloudSync
                     }
                 }
             }
+
             /// <summary>
             /// 异步发送HTTP post请求
             /// </summary>
@@ -998,7 +1002,7 @@ namespace BaiduCloudSync
                         }
                         //special statistics for host and connection
                         _request_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
-                        _request_header_length += STR_CONNECTION.Length + 2 + HTTP_Request.Connection.Length;
+                        _request_header_length += STR_CONNECTION.Length + 2 + (HTTP_Request.Connection == null ? STR_CONNECTION_KEEP_ALIVE.Length : HTTP_Request.Connection.Length);
 
                         return HTTP_Request.BeginGetRequestStream(_httpPostAsyncRequest, new _tmp_struct(callback, state));
                     }
@@ -1047,6 +1051,7 @@ namespace BaiduCloudSync
             {
                 try
                 {
+                    _lock.AcquireWriterLock(Timeout.Infinite);
                     int cur_times = 0;
                     do
                     {
@@ -1054,7 +1059,7 @@ namespace BaiduCloudSync
                         {
                             if (HTTP_Request == null) break;
                             RequestStream = HTTP_Request.EndGetRequestStream(iar);
-
+                            break;
                         }
                         catch (ThreadAbortException) { break; /* throw ex; */}
                         catch (WebException ex)
@@ -1102,6 +1107,7 @@ namespace BaiduCloudSync
                 }
                 finally
                 {
+                    _lock.ReleaseWriterLock();
                     try
                     {
                         var data = (_tmp_struct)iar.AsyncState;
@@ -1138,7 +1144,7 @@ namespace BaiduCloudSync
                 int cur_times = 0;
                 do
                 {
-                    _lock.AcquireWriterLock(Timeout.Infinite);
+                    //_lock.AcquireWriterLock(Timeout.Infinite);
                     try
                     {
                         return HTTP_Request.BeginGetResponse(_httpAsyncResponse, new _tmp_struct(callback, state));
@@ -1183,7 +1189,7 @@ namespace BaiduCloudSync
                     }
                     finally
                     {
-                        _lock.ReleaseWriterLock();
+                        //_lock.ReleaseWriterLock();
                     }
                 } while (true);
             }
@@ -1280,6 +1286,98 @@ namespace BaiduCloudSync
                 CookieKey = DEFAULT_COOKIE_GROUP;
                 _lock = new ReaderWriterLock();
             }
+
+            #region Abandoned sync method
+            /// <summary>
+            /// 同步发送HTTP get请求
+            /// </summary>
+            /// <param name="url">url</param>
+            /// <param name="headerParam">请求头附加参数</param>
+            /// <param name="urlParam">请求url附加参数</param>
+            /// <param name="range">文件范围（该功能不一定支持）</param>
+            public void HttpGet(string url, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
+            {
+                _sync_thread = Thread.CurrentThread;
+                var iar = HttpGetAsync(url, (ns, state) => { _sync_thread.Interrupt(); }, null, headerParam, urlParam, range);
+                try
+                {
+                    iar.AsyncWaitHandle.WaitOne();
+                    Thread.Sleep(Timeout.Infinite);
+                }
+                catch (ThreadInterruptedException) { }
+                catch (ThreadAbortException) { throw; }
+                catch (Exception) { throw; }
+            }
+            /// <summary>
+            /// 同步发送HTTP post请求
+            /// </summary>
+            /// <param name="url">url</param>
+            /// <param name="length">数据长度（必填，不能为负）</param>
+            /// <param name="contentType">要发送的数据类型</param>
+            /// <param name="headerParam">请求头附加参数</param>
+            /// <param name="urlParam">请求url附加参数</param>
+            /// <param name="range">文件范围（该功能不一定支持）</param>
+            /// <returns></returns>
+            public Stream HttpPost(string url, long length, string contentType = DEFAULT_CONTENT_TYPE_BINARY, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
+            {
+                _sync_thread = Thread.CurrentThread;
+                var iar = HttpPostAsync(url, length, (ns, state) => { _sync_thread.Interrupt(); }, null, contentType, headerParam, urlParam, range);
+                try
+                {
+                    iar.AsyncWaitHandle.WaitOne();
+                    Thread.Sleep(Timeout.Infinite);
+                }
+                catch (ThreadInterruptedException) { }
+                catch (ThreadAbortException) { throw; }
+                catch (Exception) { throw; }
+                return RequestStream;
+            }
+            /// <summary>
+            /// 同步获取HTTP post响应（结束HTTP post请求）
+            /// </summary>
+            public void HttpPostClose()
+            {
+                _sync_thread = Thread.CurrentThread;
+                var iar = HttpPostResponseAsync((ns, state) => { _sync_thread.Interrupt(); }, null);
+                try
+                {
+                    iar.AsyncWaitHandle.WaitOne();
+                    Thread.Sleep(Timeout.Infinite);
+                }
+                catch (ThreadInterruptedException) { }
+                catch (ThreadAbortException) { throw; }
+                catch (Exception) { throw; }
+            }
+            /// <summary>
+            /// 同步获取HTTP post响应
+            /// </summary>
+            /// <param name="url">url</param>
+            /// <param name="data">数据的字节数组</param>
+            /// <param name="contentType">要发送的数据类型</param>
+            /// <param name="headerParam">请求头附加参数</param>
+            /// <param name="urlParam">请求url附加参数</param>
+            /// <param name="range">文件范围（该功能不一定支持）</param>
+            public void HttpPost(string url, byte[] data, string contentType = DEFAULT_CONTENT_TYPE_BINARY, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
+            {
+                var stream = HttpPost(url, data.Length, contentType, headerParam, urlParam, range);
+                stream.Write(data, 0, data.Length);
+                stream.Close();
+                HttpPostClose();
+            }
+            /// <summary>
+            /// 同步获取HTTP post响应
+            /// </summary>
+            /// <param name="url">url</param>
+            /// <param name="postParam">要发送的数据</param>
+            /// <param name="contentType">要发送的数据类型</param>
+            /// <param name="headerParam">请求头附加参数</param>
+            /// <param name="urlParam">请求url附加参数</param>
+            /// <param name="range">文件范围（该功能不一定支持）</param>
+            public void HttpPost(string url, Parameters postParam, string contentType = DEFAULT_CONTENT_TYPE_PARAM, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
+            {
+                HttpPost(url, Encoding.GetEncoding(DEFAULT_ENCODING).GetBytes(postParam.BuildQueryString()), contentType, headerParam, urlParam, range);
+            }
+            #endregion
         }
 
 

@@ -50,7 +50,6 @@ namespace BaiduCloudSync
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_getapi called: void");
             try
             {
-                _http.Proxy = new WebProxy("http://127.0.0.1:8888");
                 _http.HttpGet(_BAIDU_ROOT_URL);
                 _http.Close();
             }
