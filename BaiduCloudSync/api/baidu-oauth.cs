@@ -258,7 +258,7 @@ namespace BaiduCloudSync
                 byte[] buf = new byte[4096];
                 do
                 {
-                    readcount = _http.Stream.Read(buf, 0, 4096);
+                    readcount = _http.ResponseStream.Read(buf, 0, 4096);
                     ss.Write(buf, 0, readcount);
                 } while (readcount != 0);
                 ss.Position = 0;
@@ -380,7 +380,9 @@ namespace BaiduCloudSync
         private static string _bduss, _baiduid, _stoken;
         private static void _init_login_data()
         {
-            var cc = NetStream.DefaultCookieContainer.GetCookies(new Uri("https://www.baidu.com/"));
+            //todo: 支持更改key
+            if (!NetStream.DefaultCookieContainer.ContainsKey("default")) return;
+            var cc = NetStream.DefaultCookieContainer["default"].GetCookies(new Uri("https://www.baidu.com/"));
             foreach (Cookie item in cc)
             {
                 switch (item.Name)

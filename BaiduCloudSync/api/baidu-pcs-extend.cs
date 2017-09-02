@@ -52,7 +52,7 @@ namespace BaiduCloudSync
                 var content_length = ns.HTTP_Response.ContentLength;
                 if (content_length < VALIDATE_SIZE) return new ObjectMetadata();
 
-                var stream_in = ns.Stream;
+                var stream_in = ns.ResponseStream;
 
                 long read_bytes = 0;
                 long total_bytes = 0;

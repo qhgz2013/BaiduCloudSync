@@ -250,7 +250,7 @@ namespace BaiduCloudSync
                 }
                 return;
             }
-            var istream = ns.Stream;
+            var istream = ns.ResponseStream;
             int nread = 0;
             var buffer = new byte[_BUFFER_SIZE];
             try
