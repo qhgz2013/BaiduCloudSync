@@ -753,9 +753,11 @@ namespace BaiduCloudSync
                         HTTP_Request.Proxy = Proxy;
                         if (UseCookie && !keyList.Contains(STR_COOKIE))
                         {
+                            _slock.AcquireWriterLock(Timeout.Infinite);
                             if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
                                 DefaultCookieContainer.Add(CookieKey, new CookieContainer());
                             HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
+                            _slock.ReleaseWriterLock();
                         }
 
                         HTTP_Request.Method = DEFAULT_GET_METHOD;
@@ -813,97 +815,89 @@ namespace BaiduCloudSync
             {
                 try
                 {
-                    int cur_times = 0;
                     _lock.AcquireWriterLock(Timeout.Infinite);
-                    do
+                    if (HTTP_Request == null) return;
+                    HTTP_Response = (HttpWebResponse)HTTP_Request.EndGetResponse(iar);
+                    if (HTTP_Response != null)
+                    {
+                        if (UseCookie)
+                        {
+                            _slock.AcquireWriterLock(Timeout.Infinite);
+                            if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
+                                DefaultCookieContainer.Add(CookieKey, new CookieContainer());
+                            DefaultCookieContainer[CookieKey].Add(ParseCookie(HTTP_Response.Headers[STR_COOKIE], HTTP_Response.ResponseUri.Host));
+                            _slock.ReleaseWriterLock();
+                        }
+                        //length calculation
+                        _response_protocol_length = 5; //"HTTP/"
+                        _response_protocol_length += HTTP_Response.ProtocolVersion.ToString().Length; //"1.*"
+                        _response_protocol_length += 1; //empty space
+                        _response_protocol_length += ((int)HTTP_Response.StatusCode).ToString().Length; //status code
+                        _response_protocol_length += 1; //empty space
+                        _response_protocol_length += HTTP_Response.StatusDescription.Length; //status string
+                        _response_header_length = 0;
+                        foreach (string item in HTTP_Response.Headers)
+                        {
+                            _response_header_length += item.Length; //header name
+                            _response_header_length += 2; // ":" + empty space
+                            _response_header_length += HTTP_Response.Headers[item].Length; //header value
+                        }
+                        //special statistics for host and connection
+                        //_response_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
+                        //_response_header_length += STR_CONNECTION.Length + 2 + HTTP_Request.Connection.Length;
+                        _response_body_length = HTTP_Response.ContentLength;
+
+                        switch (HTTP_Response.ContentEncoding)
+                        {
+                            case STR_ACCEPT_ENCODING_GZIP:
+                                ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                break;
+                            case STR_ACCEPT_ENCODING_DEFLATE:
+                                ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                break;
+                            default:
+                                ResponseStream = HTTP_Response.GetResponseStream();
+                                break;
+                        }
+                    }
+                }
+                catch (ThreadAbortException) { throw; }
+                catch (WebException ex)
+                {
+                    if (ex.Status == WebExceptionStatus.RequestCanceled) return;
+
+                    if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
+
+                    if (ex.Response != null)
                     {
                         try
                         {
-                            if (HTTP_Request == null) break;
-                            HTTP_Response = (HttpWebResponse)HTTP_Request.EndGetResponse(iar);
-                            if (HTTP_Response != null)
+                            _slock.AcquireWriterLock(Timeout.Infinite);
+                            HTTP_Response = (HttpWebResponse)ex.Response;
+                            if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
+                                DefaultCookieContainer.Add(CookieKey, new CookieContainer());
+                            HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
+                            _slock.ReleaseWriterLock();
+
+                            switch (HTTP_Response.ContentEncoding)
                             {
-                                if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
-                                    DefaultCookieContainer.Add(CookieKey, new CookieContainer());
-                                HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
-
-                                //length calculation
-                                _response_protocol_length = 5; //"HTTP/"
-                                _response_protocol_length += HTTP_Response.ProtocolVersion.ToString().Length; //"1.*"
-                                _response_protocol_length += 1; //empty space
-                                _response_protocol_length += ((int)HTTP_Response.StatusCode).ToString().Length; //status code
-                                _response_protocol_length += 1; //empty space
-                                _response_protocol_length += HTTP_Response.StatusDescription.Length; //status string
-                                _response_header_length = 0;
-                                foreach (string item in HTTP_Response.Headers)
-                                {
-                                    _response_header_length += item.Length; //header name
-                                    _response_header_length += 2; // ":" + empty space
-                                    _response_header_length += HTTP_Response.Headers[item].Length; //header value
-                                }
-                                //special statistics for host and connection
-                                //_response_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
-                                //_response_header_length += STR_CONNECTION.Length + 2 + HTTP_Request.Connection.Length;
-                                _response_body_length = HTTP_Response.ContentLength;
-
-                                switch (HTTP_Response.ContentEncoding)
-                                {
-                                    case STR_ACCEPT_ENCODING_GZIP:
-                                        ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                        break;
-                                    case STR_ACCEPT_ENCODING_DEFLATE:
-                                        ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                        break;
-                                    default:
-                                        ResponseStream = HTTP_Response.GetResponseStream();
-                                        break;
-                                }
-                                break;
+                                case STR_ACCEPT_ENCODING_GZIP:
+                                    ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                    break;
+                                case STR_ACCEPT_ENCODING_DEFLATE:
+                                    ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                    break;
+                                default:
+                                    ResponseStream = HTTP_Response.GetResponseStream();
+                                    break;
                             }
                         }
-                        catch (ThreadAbortException) { break; /* throw ex; */}
-                        catch (WebException ex)
-                        {
-                            if (ex.Status == WebExceptionStatus.RequestCanceled) break; // throw ex;
-
-                            if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
-                            cur_times++;
-                            if (RetryTimes >= 0 && cur_times > RetryTimes) break;// throw ex;
-                            if (RetryDelay > 0) Thread.Sleep(RetryDelay);
-
-                            if (ex.Response != null)
-                            {
-                                try
-                                {
-                                    HTTP_Response = (HttpWebResponse)ex.Response;
-                                    if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
-                                        DefaultCookieContainer.Add(CookieKey, new CookieContainer());
-                                    HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
-
-                                    switch (HTTP_Response.ContentEncoding)
-                                    {
-                                        case STR_ACCEPT_ENCODING_GZIP:
-                                            ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                            break;
-                                        case STR_ACCEPT_ENCODING_DEFLATE:
-                                            ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                            break;
-                                        default:
-                                            ResponseStream = HTTP_Response.GetResponseStream();
-                                            break;
-                                    }
-                                }
-                                catch (Exception) { }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
-                            cur_times++;
-                            if (RetryTimes >= 0 && cur_times > RetryTimes) break;//throw ex;
-                            if (RetryDelay > 0) Thread.Sleep(RetryDelay);
-                        }
-                    } while (true);
+                        catch (Exception) { }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
                 }
                 finally
                 {
@@ -959,9 +953,11 @@ namespace BaiduCloudSync
                         if (Proxy != null) HTTP_Request.Proxy = Proxy;
                         if (UseCookie && !keyList.Contains(STR_COOKIE))
                         {
+                            _slock.AcquireWriterLock(Timeout.Infinite);
                             if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
                                 DefaultCookieContainer.Add(CookieKey, new CookieContainer());
                             HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
+                            _slock.ReleaseWriterLock();
                         }
 
                         HTTP_Request.Method = DEFAULT_POST_METHOD;
@@ -1052,58 +1048,41 @@ namespace BaiduCloudSync
                 try
                 {
                     _lock.AcquireWriterLock(Timeout.Infinite);
-                    int cur_times = 0;
-                    do
+                    if (HTTP_Request == null) return;
+                    RequestStream = HTTP_Request.EndGetRequestStream(iar);
+                }
+                catch (ThreadAbortException) { }
+                catch (WebException ex)
+                {
+                    if (ex.Status == WebExceptionStatus.RequestCanceled) return; // throw ex;
+
+                    if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
+                    if (ex.Response != null)
                     {
                         try
                         {
-                            if (HTTP_Request == null) break;
-                            RequestStream = HTTP_Request.EndGetRequestStream(iar);
-                            break;
-                        }
-                        catch (ThreadAbortException) { break; /* throw ex; */}
-                        catch (WebException ex)
-                        {
-                            if (ex.Status == WebExceptionStatus.RequestCanceled) break; // throw ex;
+                            HTTP_Response = (HttpWebResponse)ex.Response;
+                            _slock.AcquireWriterLock(Timeout.Infinite);
+                            if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
+                                DefaultCookieContainer.Add(CookieKey, new CookieContainer());
+                            HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
+                            _slock.ReleaseWriterLock();
 
-                            if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
-                            cur_times++;
-                            if (RetryTimes >= 0 && cur_times > RetryTimes) break;// throw ex;
-                            if (RetryDelay > 0) Thread.Sleep(RetryDelay);
-
-                            if (ex.Response != null)
+                            switch (HTTP_Response.ContentEncoding)
                             {
-                                try
-                                {
-                                    HTTP_Response = (HttpWebResponse)ex.Response;
-                                    if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
-                                        DefaultCookieContainer.Add(CookieKey, new CookieContainer());
-                                    HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
-
-                                    switch (HTTP_Response.ContentEncoding)
-                                    {
-                                        case STR_ACCEPT_ENCODING_GZIP:
-                                            ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                            break;
-                                        case STR_ACCEPT_ENCODING_DEFLATE:
-                                            ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
-                                            break;
-                                        default:
-                                            ResponseStream = HTTP_Response.GetResponseStream();
-                                            break;
-                                    }
-                                }
-                                catch (Exception) { }
+                                case STR_ACCEPT_ENCODING_GZIP:
+                                    ResponseStream = new System.IO.Compression.GZipStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                    break;
+                                case STR_ACCEPT_ENCODING_DEFLATE:
+                                    ResponseStream = new System.IO.Compression.DeflateStream(HTTP_Response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                                    break;
+                                default:
+                                    ResponseStream = HTTP_Response.GetResponseStream();
+                                    break;
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
-                            cur_times++;
-                            if (RetryTimes >= 0 && cur_times > RetryTimes) break;//throw ex;
-                            if (RetryDelay > 0) Thread.Sleep(RetryDelay);
-                        }
-                    } while (true);
+                        catch (Exception) { }
+                    }
                 }
                 finally
                 {

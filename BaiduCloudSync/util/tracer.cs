@@ -7,6 +7,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.IO;
+using System.Text;
 
 namespace BaiduCloudSync
 {
@@ -71,13 +72,39 @@ namespace BaiduCloudSync
             write_trace(_default_trace_fmt, get_current_time(), "Error", get_current_thread_id(), get_current_thread_name(), info);
             ErrorTraced?.Invoke(info);
         }
+        public void TraceError(Exception ex)
+        {
+            TraceError(ex.ToString());
+        }
 
         public void Dispose()
         {
             ((IDisposable)_writer).Dispose();
         }
 
+        public void TraceFunctionEntry()
+        {
+            var method = new StackTrace().GetFrame(1).GetMethod();
 
+            var method_space = method.DeclaringType.Name;
+            var method_name = method.Name;
+
+            var sb = new StringBuilder();
+            sb.AppendFormat("{0}.{1} called: ", method_space, method_name);
+            var param = method.GetParameters();
+            if (param.Length == 0)
+            {
+                sb.Append("void");
+            }
+            else
+            {
+                foreach (var item in param)
+                {
+                    sb.AppendFormat("{0} {1}", item.ParameterType.Name, item.Name);
+                    if (item != param[param.Length - 1]) sb.Append(",");
+                }
+            }
+        }
         public static Tracer GlobalTracer = new Tracer("global-trace.log");
     }
 
