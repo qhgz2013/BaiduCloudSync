@@ -104,6 +104,7 @@ namespace BaiduCloudSync
                     if (item != param[param.Length - 1]) sb.Append(",");
                 }
             }
+            TraceInfo(sb.ToString());
         }
         public static Tracer GlobalTracer = new Tracer("global-trace.log");
     }

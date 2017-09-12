@@ -828,6 +828,7 @@ namespace BaiduCloudSync
                             DefaultCookieContainer[CookieKey].Add(ParseCookie(HTTP_Response.Headers[STR_COOKIE], HTTP_Response.ResponseUri.Host));
                             _slock.ReleaseWriterLock();
                         }
+
                         //length calculation
                         _response_protocol_length = 5; //"HTTP/"
                         _response_protocol_length += HTTP_Response.ProtocolVersion.ToString().Length; //"1.*"
@@ -1339,6 +1340,11 @@ namespace BaiduCloudSync
             public void HttpPost(string url, byte[] data, string contentType = DEFAULT_CONTENT_TYPE_BINARY, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
             {
                 var stream = HttpPost(url, data.Length, contentType, headerParam, urlParam, range);
+                if (stream == null)
+                {
+                    Close();
+                    return;
+                }
                 stream.Write(data, 0, data.Length);
                 stream.Close();
                 HttpPostClose();
