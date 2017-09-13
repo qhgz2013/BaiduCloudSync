@@ -18,21 +18,8 @@ namespace BaiduCloudSync
     /// </summary>
     public class BaiduOAuth
     {
-        private static NetStream _http;
-        static BaiduOAuth()
-        {
-            _http = new NetStream();
-            _http.RetryDelay = 1000;
-            _http.RetryTimes = 3;
-            _username = "";
-            _password = "";
-            _token = "";
-            _verifycode = "";
-            _codestring = "";
-            _vcodetype = "";
-        }
 
-
+        #region constants
         private const string _OAUTH_GETAPI_URL = "https://passport.baidu.com/v2/api/?getapi";
         private const string _OAUTH_LOGINCHECK_URL = "https://passport.baidu.com/v2/api/?logincheck";
         private const string _OAUTH_LOGIN_URL = "https://passport.baidu.com/v2/api/?login";
@@ -40,12 +27,15 @@ namespace BaiduCloudSync
         private const string _OAUTH_CHECKVCODE_URL = "https://passport.baidu.com/v2/?checkvcode";
         private const string _OAUTH_REGET_CODESTR_URL = "https://passport.baidu.com/v2/?reggetcodestr";
         private const string _BAIDU_ROOT_URL = "https://www.baidu.com/";
+        #endregion
+
+        #region private functions
         /// <summary>
         /// 获取api信息
         /// </summary>
         /// <returns>api token</returns>
         /// <remarks>throwable</remarks>
-        private static JObject _oauth_getapi()
+        private JObject _oauth_getapi()
         {
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_getapi called: void");
             try
@@ -95,7 +85,7 @@ namespace BaiduCloudSync
         /// <param name="username">用户名</param>
         /// <returns></returns>
         /// <remarks>throwable</remarks>
-        private static JObject _oauth_logincheck(string token, string username)
+        private JObject _oauth_logincheck(string token, string username)
         {
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_logincheck called: token=" + token + ", username=" + username);
             var param = new Parameters();
@@ -134,7 +124,7 @@ namespace BaiduCloudSync
         /// 生成guid
         /// </summary>
         /// <returns></returns>
-        private static string _get_guid()
+        private string _get_guid()
         {
             return Guid.NewGuid().ToString().ToUpper();
         }
@@ -142,7 +132,7 @@ namespace BaiduCloudSync
         /// 获取当前的时间戳
         /// </summary>
         /// <returns></returns>
-        private static long _get_unixtime()
+        private long _get_unixtime()
         {
             return Convert.ToInt64(util.ToUnixTimestamp(DateTime.Now) * 1000);
         }
@@ -151,7 +141,7 @@ namespace BaiduCloudSync
         /// </summary>
         /// <param name="strIn">输入的字符串</param>
         /// <returns></returns>
-        private static string _escape_callback_function(string strIn)
+        private string _escape_callback_function(string strIn)
         {
             return Regex.Match(strIn, @"^bd__cbs__([0-9a-zA-Z]+)\((?<json>.*)\)\s*$").Result("${json}");
         }
@@ -165,7 +155,7 @@ namespace BaiduCloudSync
         /// <param name="verifycode">验证码的值</param>
         /// <returns></returns>
         /// <remarks>throwable</remarks>
-        private static string _oauth_login(string token, string username, string password, string codestring = "", string verifycode = "")
+        private string _oauth_login(string token, string username, string password, string codestring = "", string verifycode = "")
         {
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_login called: token=" + token + ", username=" + username + ", password=*, codestring=" + codestring + ", verifycode=" + verifycode);
             var param = new Parameters();
@@ -244,7 +234,7 @@ namespace BaiduCloudSync
         /// <param name="codestring">验证码的code</param>
         /// <returns></returns>
         /// <remarks>throwable</remarks>
-        private static Image _oauth_genimage(string codestring)
+        private Image _oauth_genimage(string codestring)
         {
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_genimage called: codestring=" + codestring);
             try
@@ -281,7 +271,7 @@ namespace BaiduCloudSync
         /// <param name="verifycode">验证码值</param>
         /// <returns></returns>
         /// <remarks>throwable</remarks>
-        private static JObject _oauth_checkvcode(string token, string codestring, string verifycode)
+        private JObject _oauth_checkvcode(string token, string codestring, string verifycode)
         {
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_checkvcode called: token=" + token + ", codestring=" + codestring + ", verifycode=" + verifycode);
             var param = new Parameters();
@@ -320,7 +310,7 @@ namespace BaiduCloudSync
         /// <param name="token">token</param>
         /// <param name="vcodetype"></param>
         /// <returns></returns>
-        private static JObject _reget_codestring(string token, string vcodetype)
+        private JObject _reget_codestring(string token, string vcodetype)
         {
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth._reget_codestring called: token=" + token + ", vcodetype=" + vcodetype);
             var param = new Parameters();
@@ -347,42 +337,86 @@ namespace BaiduCloudSync
             }
 
         }
+        /// <summary>
+        /// 获取当前用户的名称
+        /// </summary>
+        /// <returns></returns>
+        private string _get_user_nickname()
+        {
+            throw new NotImplementedException();
+        }
+        #endregion
+
+
+        #region login variables
         //用户名和明文密码
-        private static string _username, _password;
+        private string _username, _password;
         //token 验证码code跟验证码
-        private static string _token, _codestring, _verifycode;
+        private string _token, _codestring, _verifycode;
         //vcodetype...不知道怎么形容好
-        private static string _vcodetype;
+        private string _vcodetype;
+        private string _nickname;
+        /// <summary>
+        /// 用户名称
+        /// </summary>
+        public string NickName { get { return _nickname; } }
+
+        private NetStream _http;
+        //分辨多用户的标识key
+        private string _cookie_identifier;
+        public string CookieIdentifier { get { return _cookie_identifier; } }
+        public BaiduOAuth(string cookieKey = null)
+        {
+            _http = new NetStream();
+            //由表单边界格式生成cookie
+            _cookie_identifier = string.IsNullOrEmpty(cookieKey) ? util.GenerateFormDataBoundary() : cookieKey;
+            _http.CookieKey = _cookie_identifier;
+            _http.RetryDelay = 1000;
+            _http.RetryTimes = 3;
+            _username = "";
+            _password = "";
+            _token = "";
+            _verifycode = "";
+            _codestring = "";
+            _vcodetype = "";
+        }
+
+        #endregion
+
+        #region event callback
         public delegate void LoginEventHandler();
         /// <summary>
         /// 登陆成功
         /// </summary>
-        public static event LoginEventHandler LoginSucceeded;
+        public event LoginEventHandler LoginSucceeded;
         /// <summary>
         /// 登陆失败
         /// </summary>
-        public static event LoginEventHandler LoginFailed;
+        public event LoginEventHandler LoginFailed;
         /// <summary>
         /// 登陆需验证码
         /// </summary>
-        public static event LoginEventHandler LoginCaptchaRequired;
+        public event LoginEventHandler LoginCaptchaRequired;
         /// <summary>
         /// 登陆过程发生异常错误
         /// </summary>
-        public static event LoginEventHandler LoginExceptionRaised;
+        public event LoginEventHandler LoginExceptionRaised;
         /// <summary>
         /// 登陆失败的原因
         /// </summary>
-        private static string _failed_reason;
-        public static string GetLastFailedReason { get { return _failed_reason; } }
-        private static int _failed_code;
-        public static int GetLastFailedCode { get { return _failed_code; } }
-        private static string _bduss, _baiduid, _stoken;
-        private static void _init_login_data()
+        private string _failed_reason;
+        public string GetLastFailedReason { get { return _failed_reason; } }
+        private int _failed_code;
+        public int GetLastFailedCode { get { return _failed_code; } }
+        #endregion
+
+        #region authentication variables (from cookie)
+        private string _bduss, _baiduid, _stoken;
+        private void _init_login_data()
         {
             //todo: 支持更改key
-            if (!NetStream.DefaultCookieContainer.ContainsKey("default")) return;
-            var cc = NetStream.DefaultCookieContainer["default"].GetCookies(new Uri("https://www.baidu.com/"));
+            if (!NetStream.DefaultCookieContainer.ContainsKey(_cookie_identifier)) return;
+            var cc = NetStream.DefaultCookieContainer[_cookie_identifier].GetCookies(new Uri("https://www.baidu.com/"));
             foreach (Cookie item in cc)
             {
                 switch (item.Name)
@@ -401,7 +435,7 @@ namespace BaiduCloudSync
                 }
             }
         }
-        public static string bduss
+        public string bduss
         {
             get
             {
@@ -409,7 +443,7 @@ namespace BaiduCloudSync
                 return _bduss;
             }
         }
-        public static string baiduid
+        public string baiduid
         {
             get
             {
@@ -417,7 +451,7 @@ namespace BaiduCloudSync
                 return _baiduid;
             }
         }
-        public static string stoken
+        public string stoken
         {
             get
             {
@@ -425,6 +459,10 @@ namespace BaiduCloudSync
                 return _stoken;
             }
         }
+        #endregion
+
+
+        #region public functions
         /// <summary>
         /// 登陆到百度
         /// </summary>
@@ -432,7 +470,7 @@ namespace BaiduCloudSync
         /// <param name="password">密码</param>
         /// <returns>返回登陆是否成功</returns>
         /// <remarks>no throw, return false if failed</remarks>
-        public static bool Login(string username, string password)
+        public bool Login(string username, string password)
         {
 
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth.Login called: username=" + username + ", password=*");
@@ -502,7 +540,7 @@ namespace BaiduCloudSync
         /// </summary>
         /// <returns>验证码图片</returns>
         /// <remarks>no throw, return 1x1 bitmap if failed</remarks>
-        public static Image GetCaptcha()
+        public Image GetCaptcha()
         {
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth.GetCaptcha called: void");
             try
@@ -521,18 +559,18 @@ namespace BaiduCloudSync
         /// 设置验证码的值
         /// </summary>
         /// <param name="verifycode">新的验证码</param>
-        public static void SetVerifyCode(string verifycode)
+        public void SetVerifyCode(string verifycode)
         {
             _verifycode = verifycode;
         }
-        public static string VerifyCode { get { return _verifycode; } set { _verifycode = value; } }
+        public string VerifyCode { get { return _verifycode; } set { _verifycode = value; } }
         /// <summary>
         /// 检查验证码是否输入正确
         /// </summary>
         /// <param name="verifycode">验证码</param>
         /// <returns>验证码是否正确</returns>
         /// <remarks>no throw, return false if failed</remarks>
-        public static bool CheckVCode(string verifycode)
+        public bool CheckVCode(string verifycode)
         {
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth.CheckVCode called: verifycode=" + verifycode);
             if (string.IsNullOrEmpty(verifycode)) return false;
@@ -565,7 +603,7 @@ namespace BaiduCloudSync
         /// </summary>
         /// <returns>新的验证码</returns>
         /// <remarks>no throw, return 1x1 bitmap if failed</remarks>
-        public static Image RefreshCaptcha()
+        public Image RefreshCaptcha()
         {
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth.RefreshCaptcha called: void");
             try
@@ -582,6 +620,7 @@ namespace BaiduCloudSync
                 return new Bitmap(1, 1);
             }
         }
-        
+
+        #endregion
     }
 }

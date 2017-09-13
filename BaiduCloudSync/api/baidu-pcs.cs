@@ -69,7 +69,6 @@ namespace BaiduCloudSync
         #endregion
 
 
-
         #region Login Data
         private Thread __next_update_thread;
         //登陆的一些参数，由抓包得来
@@ -80,6 +79,7 @@ namespace BaiduCloudSync
             try
             {
                 var ns = new NetStream();
+                ns.CookieKey = _auth.CookieIdentifier;
                 ns.HttpGet(pan_root_url);
 
                 var str = ns.ReadResponseString();
@@ -216,6 +216,13 @@ namespace BaiduCloudSync
                     _init_login_data();
                 return __timestamp;
             }
+        }
+
+        private BaiduOAuth _auth;
+        public BaiduPCS(BaiduOAuth auth)
+        {
+            _auth = auth;
+            if (auth == null) throw new ArgumentNullException("auth");
         }
         #endregion
 
@@ -420,42 +427,23 @@ namespace BaiduCloudSync
         /// 获取网盘大小，失败时返回0B used/0B total
         /// </summary>
         /// <returns>网盘大小</returns>
-        /// <remarks>no throw, return 0B/0B if failed</remarks>
+        /// <remarks></remarks>
         public Quota GetQuota()
         {
             _trace.TraceInfo("BaiduPCS.GetQuota called: void");
-            var ret = new Quota();
-
-            var param = new Parameters();
-            param.Add("checkexpire", 1);
-            param.Add("app_id", APPID);
-            param.Add("bdstoken", _bdstoken);
-            param.Add("logid", _get_logid());
-
-            var ns = new NetStream();
+            var sync_thread = Thread.CurrentThread;
+            Quota ret = new Quota();
+            GetQuotaAsync((suc, data) =>
+            {
+                ret = data;
+                sync_thread.Interrupt();
+            });
             try
             {
-                ns.HttpGet(API_QUOTA_URL, headerParam: _get_xhr_param(), urlParam: param);
-                var response = ns.ReadResponseString();
-                ns.Close();
-
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                ret.InUsed = json.Value<ulong>("used");
-                ret.Total = json.Value<ulong>("total");
-
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION) throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
+            catch (ThreadInterruptedException) { }
+            catch (Exception) { throw; }
             return ret;
         }
 
@@ -479,56 +467,20 @@ namespace BaiduCloudSync
         public bool DeletePath(IEnumerable<string> paths)
         {
             _trace.TraceInfo("BaiduPCS.DeletePath called: IEnumerable<string> paths=[count=" + paths.Count() + "]");
-
-            var querystr = new Parameters();
-            querystr.Add("opera", "delete");
-            //querystr.Add("async", 2);
-            querystr.Add("channel", "chunlei");
-            querystr.Add("web", 1);
-            querystr.Add("app_id", APPID);
-            querystr.Add("bdstoken", _bdstoken);
-            querystr.Add("logid", _get_logid());
-            querystr.Add("clienttype", 0);
-
-            var postParam = new Parameters();
-            var postJson = new JArray();
-
-            bool empty = true;
-
-            foreach (var item in paths)
+            var sync_thread = Thread.CurrentThread;
+            bool ret = false;
+            DeletePathAsync(paths, (suc, data) =>
             {
-                empty = false;
-                if (string.IsNullOrEmpty(item)) return false;
-                postJson.Add(item);
-            }
-
-            if (empty) return true;
-
-            postParam.Add("filelist", JsonConvert.SerializeObject(postJson));
-
-            var ns = new NetStream();
+                ret = data;
+                sync_thread.Interrupt();
+            });
             try
             {
-                ns.HttpPost(API_FILEMANAGER_URL, postParam, headerParam: _get_xhr_param(), urlParam: querystr);
-                var response = ns.ReadResponseString();
-                ns.Close();
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                return true;
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            return false;
+            catch (ThreadInterruptedException) { }
+            catch (Exception) { throw; }
+            return ret;
         }
         /// <summary>
         /// 移动单个文件
@@ -597,6 +549,7 @@ namespace BaiduCloudSync
             post_param.Add("filelist", JsonConvert.SerializeObject(postArray));
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             JArray data_array = null;
             try
             {
@@ -702,6 +655,7 @@ namespace BaiduCloudSync
             post_param.Add("filelist", JsonConvert.SerializeObject(postArray));
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             JArray data_array = null;
             try
             {
@@ -797,6 +751,7 @@ namespace BaiduCloudSync
             post_param.Add("filelist", JsonConvert.SerializeObject(postArray));
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             JArray data_array = null;
             try
             {
@@ -861,6 +816,7 @@ namespace BaiduCloudSync
             query_param.Add("clienttype", 0);
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             try
             {
                 ns.HttpPost(API_CREATE_URL, post_param, headerParam: header_param, urlParam: query_param);
@@ -921,6 +877,7 @@ namespace BaiduCloudSync
             param.Add("page", page);
             param.Add("num", count);
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             try
             {
                 ns.HttpGet(url, headerParam: _get_xhr_param(), urlParam: param);
@@ -1081,6 +1038,7 @@ namespace BaiduCloudSync
             param.Add("ondup", ondup);
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             try
             {
                 ns.HttpPost(PCS_FILE_URL, new byte[] { }, "text/html", headerParam: _get_xhr_param(), urlParam: param);
@@ -1149,9 +1107,10 @@ namespace BaiduCloudSync
             param.Add("path", path);
             param.Add("ondup", ondup);
             param.Add("logid", _get_logid());
-            param.Add("BDUSS", BaiduOAuth.bduss);
+            param.Add("BDUSS", _auth.bduss);
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             var boundary = util.GenerateFormDataBoundary();
 
             var formdata_param = new Parameters();
@@ -1221,6 +1180,7 @@ namespace BaiduCloudSync
             if (string.IsNullOrEmpty(path) || block_count == 0) return ret;
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             var query_param = new Parameters();
 
             query_param.Add("channel", "chunlei");
@@ -1283,7 +1243,7 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.UploadSliceRaw called: Stream stream_in=" + stream_in.ToString() + ", string uploadid=" + uploadid + ", int sequence=" + sequence + ", UploadStatusCallback callback=" + callback.ToString());
             if (string.IsNullOrEmpty(uploadid) || string.IsNullOrEmpty(path) || !stream_in.CanRead) return string.Empty;
-            if (string.IsNullOrEmpty(BaiduOAuth.bduss)) return string.Empty;
+            if (string.IsNullOrEmpty(_auth.bduss)) return string.Empty;
 
             var query_param = new Parameters();
             query_param.Add("method", "upload");
@@ -1291,13 +1251,14 @@ namespace BaiduCloudSync
             query_param.Add("channel", "chunlei");
             query_param.Add("clienttype", 1);
             query_param.Add("web", 1);
-            query_param.Add("BDUSS", BaiduOAuth.bduss);
+            query_param.Add("BDUSS", _auth.bduss);
             query_param.Add("logid", _get_logid());
             query_param.Add("path", path);
             query_param.Add("uploadid", uploadid);
             query_param.Add("partseq", sequence);
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             var boundary = util.GenerateFormDataBoundary();
 
             var formdata_param = new Parameters();
@@ -1411,6 +1372,7 @@ namespace BaiduCloudSync
             post_param.Add("block_list", JsonConvert.SerializeObject(blist));
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             try
             {
                 ns.HttpPost(API_CREATE_URL, post_param, headerParam: _get_xhr_param(), urlParam: query_param);
@@ -1483,6 +1445,7 @@ namespace BaiduCloudSync
 
             var param = new Parameters();
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
 
             param.Add("sign", _sign2);
             param.Add("timestamp", _timestamp);
@@ -1538,6 +1501,7 @@ namespace BaiduCloudSync
             if (string.IsNullOrEmpty(path)) return ret_list.ToArray();
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             var param = new Parameters();
             param.Add("method", "locatedownload");
             param.Add("app_id", APPID);
@@ -1632,6 +1596,7 @@ namespace BaiduCloudSync
 
             if (expireTime != 0 && expireTime != 1 && expireTime != 7) return ret;
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             var xhr_param = _get_xhr_param();
             var query_param = new Parameters();
             query_param.Add("channel", "chunlei");
@@ -1694,6 +1659,7 @@ namespace BaiduCloudSync
             if (expireTime != 0 && expireTime != 1 && expireTime != 7) return ret;
             if (password == null || password.Length != 4) return ret;
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             var xhr_param = _get_xhr_param();
             var query_param = new Parameters();
             query_param.Add("channel", "chunlei");
@@ -1759,6 +1725,7 @@ namespace BaiduCloudSync
         public void CancelShare(IEnumerable<ulong> share_ids)
         {
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             var xhr_param = _get_xhr_param();
             var query_param = new Parameters();
             query_param.Add("channel", "chunlei");
@@ -1890,6 +1857,7 @@ namespace BaiduCloudSync
             query_param.Add("logid", _get_logid());
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             try
             {
                 ns.HttpGet(API_SHARE_RECORD_URL, xhr_param, query_param);
@@ -1961,6 +1929,7 @@ namespace BaiduCloudSync
             post_param.Add("action", "fm_self");
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             ns.HttpPost(url, post_param, headerParam: _get_xhr_param(), urlParam: query_param);
             var rep = ns.ReadResponseString();
             ns.Close();

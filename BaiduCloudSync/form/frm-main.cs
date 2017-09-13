@@ -22,10 +22,14 @@ namespace BaiduCloudSync
         //目录: /abc/def/dir/
         //文件: /abc/def/file
         //目录后面一定要加"/" !!!
+        private BaiduOAuth _auth;
         public frmMain()
         {
             InitializeComponent();
-            _pcsAPI = new BaiduPCS();
+            //_auth = new BaiduOAuth("default");
+            if (NetUtils.NetStream.DefaultCookieContainer.Keys.Count > 0)
+                _auth = new BaiduOAuth(NetUtils.NetStream.DefaultCookieContainer.Keys.First());
+            _pcsAPI = new BaiduPCS(_auth);
             _file_list = new FileListCacher(_pcsAPI);
             _local_file_list = new LocalFileCacher();
             StaticConfig.LoadStaticConfig();
@@ -59,9 +63,9 @@ namespace BaiduCloudSync
             cAutoReupload.CheckedChanged += cAutoReupload_CheckedChanged;
 
             //login required
-            if (string.IsNullOrEmpty(BaiduOAuth.bduss))
+            if (string.IsNullOrEmpty(_auth.bduss))
             {
-                frmLogin frm = new frmLogin();
+                frmLogin frm = new frmLogin(_auth);
                 frm.ShowDialog(this);
 
                 if (!frm.LoginSucceeded)
@@ -103,40 +107,44 @@ namespace BaiduCloudSync
         //external dependency: pQuota (ProgressBar), lQuota (Label)
 
         private object __quota_thread_lock = new object();
-        private Thread __quota_thread = null;
+        private bool __quota_fetching = false;
         //刷新网盘配额: 允许非主线程调用
         private void _update_quota()
         {
             lock (__quota_thread_lock)
             {
-                if (__quota_thread != null) return;
-                __quota_thread = new Thread(() =>
+                if (__quota_fetching) return;
+                __quota_fetching = true;
+                try
                 {
-                    Quota quota = new Quota();
-                    try
+                    _pcsAPI.GetQuotaAsync((suc, quota) =>
                     {
-                        quota = _pcsAPI.GetQuota();
-                    }
-                    catch (ErrnoException ex)
-                    {
-                        MessageBox.Show(this, "错误代号 " + ex.Errno + ": 未知错误", "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        return;
-                    }
-                    catch (Exception) { }
-                    //呼叫主线程更新数据
-                    Invoke(new NoArgSTA(delegate
-                    {
-
-                        pQuota.Minimum = 0;
-                        pQuota.Maximum = 10000;
-                        pQuota.Value = quota.Total != 0 ? (int)(quota.InUsed * 10000.0 / quota.Total): 0;
-                        lQuota.Text = "可用: " + util.FormatBytes(quota.Total - quota.InUsed) + ", 总: " + util.FormatBytes(quota.Total) + " (" + (100 - pQuota.Value / 100.0).ToString("0.00") + "%)";
-                    }));
-                    __quota_thread = null;
-                });
-                __quota_thread.IsBackground = true;
-                __quota_thread.Name = "Quota Fetch Thread";
-                __quota_thread.Start();
+                        try
+                        {
+                            Invoke(new ThreadStart(delegate
+                            {
+                                if (suc)
+                                {
+                                    pQuota.Minimum = 0;
+                                    pQuota.Maximum = 10000;
+                                    pQuota.Value = quota.Total != 0 ? (int)(quota.InUsed * 10000.0 / quota.Total) : 0;
+                                    lQuota.Text = "可用: " + util.FormatBytes(quota.Total - quota.InUsed) + ", 总: " + util.FormatBytes(quota.Total) + " (" + (100 - pQuota.Value / 100.0).ToString("0.00") + "%)";
+                                }
+                                else
+                                    lQuota.Text = "获取失败，请刷新尝试";
+                            }));
+                        }
+                        finally
+                        {
+                            lock (__quota_thread_lock)
+                                __quota_fetching = false;
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("获取网盘大小出错:\r\n" + ex.ToString());
+                }
             }
         }
         #endregion

@@ -42,6 +42,7 @@ namespace BaiduCloudSync
             try
             {
                 var ns = new NetStream();
+                ns.CookieKey = _auth.CookieIdentifier;
                 //下载文件的验证段数据并进行MD5验算
                 var bytes = new byte[BUFFER_SIZE];
                 var md5_calc = new System.Security.Cryptography.MD5CryptoServiceProvider();
@@ -131,6 +132,7 @@ namespace BaiduCloudSync
             if (string.IsNullOrEmpty(url)) return new ObjectMetadata();
 
             var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
             try
             {
                 ns.HttpGet(url);

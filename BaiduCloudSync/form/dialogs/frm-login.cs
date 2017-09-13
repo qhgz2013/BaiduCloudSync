@@ -12,9 +12,12 @@ namespace BaiduCloudSync
 {
     public partial class frmLogin : Form
     {
-        public frmLogin()
+        private BaiduOAuth _auth;
+        public frmLogin(BaiduOAuth auth)
         {
             InitializeComponent();
+            _auth = auth;
+            if (auth == null) throw new ArgumentNullException("auth");
         }
         private Thread _bgThread;
         private void button1_Click(object sender, EventArgs e)
@@ -33,17 +36,17 @@ namespace BaiduCloudSync
             _bgThread = new Thread(
                 (object arg) =>
                 {
-                    suc = BaiduOAuth.Login(textBox1.Text, textBox2.Text);
+                    suc = _auth.Login(textBox1.Text, textBox2.Text);
                     _bgThread = null;
                 });
             _bgThread.Start();
         }
         private void frmLogin_Load(object sender, EventArgs e)
         {
-            BaiduOAuth.LoginFailed += on_login_failed;
-            BaiduOAuth.LoginSucceeded += on_login_succeeded;
-            BaiduOAuth.LoginCaptchaRequired += on_captcha_required;
-            BaiduOAuth.LoginExceptionRaised += on_login_exception_raised;
+            _auth.LoginFailed += on_login_failed;
+            _auth.LoginSucceeded += on_login_succeeded;
+            _auth.LoginCaptchaRequired += on_captcha_required;
+            _auth.LoginExceptionRaised += on_login_exception_raised;
         }
 
         private void on_login_exception_raised()
@@ -51,7 +54,7 @@ namespace BaiduCloudSync
             this.Invoke(new ThreadStart(delegate
             {
                 button1.Enabled = true;
-                MessageBox.Show(this, "哇的一下，错误就来了，请稍后再来试试吧:\r\n" + BaiduOAuth.GetLastFailedReason, "Emmmmmm....", MessageBoxButtons.OK);
+                MessageBox.Show(this, "哇的一下，错误就来了，请稍后再来试试吧:\r\n" + _auth.GetLastFailedReason, "Emmmmmm....", MessageBoxButtons.OK);
             }));
         }
         private void on_login_failed()
@@ -59,8 +62,8 @@ namespace BaiduCloudSync
             this.Invoke(new ThreadStart(delegate
             {
                 button1.Enabled = true;
-                if (BaiduOAuth.GetLastFailedCode != 257)
-                    MessageBox.Show(this, "登陆失败啦！！:\n" + BaiduOAuth.GetLastFailedReason, "纳……纳尼？", MessageBoxButtons.OK);
+                if (_auth.GetLastFailedCode != 257)
+                    MessageBox.Show(this, "登陆失败啦！！:\n" + _auth.GetLastFailedReason, "纳……纳尼？", MessageBoxButtons.OK);
             }));
         }
         private bool suc = false;
@@ -88,7 +91,7 @@ namespace BaiduCloudSync
             ThreadPool.QueueUserWorkItem(
                 (object arg) =>
                 {
-                    Image img = (pictureBox1.Image == null) ? BaiduOAuth.GetCaptcha() : BaiduOAuth.RefreshCaptcha();
+                    Image img = (pictureBox1.Image == null) ? _auth.GetCaptcha() : _auth.RefreshCaptcha();
                     if (captcha_id == async_id)
                     {
                         this.Invoke(new ThreadStart(
@@ -115,7 +118,7 @@ namespace BaiduCloudSync
             ThreadPool.QueueUserWorkItem(
                 (object arg) =>
                 {
-                    bool valid = BaiduOAuth.CheckVCode(textBox3.Text);
+                    bool valid = _auth.CheckVCode(textBox3.Text);
                     if (captcha_check_id == async_id)
                     {
                         this.Invoke(new ThreadStart(
@@ -178,10 +181,10 @@ namespace BaiduCloudSync
 
         private void frmLogin_FormClosing(object sender, FormClosingEventArgs e)
         {
-            BaiduOAuth.LoginCaptchaRequired -= on_captcha_required;
-            BaiduOAuth.LoginExceptionRaised -= on_login_exception_raised;
-            BaiduOAuth.LoginFailed -= on_login_failed;
-            BaiduOAuth.LoginSucceeded -= on_login_succeeded;
+            _auth.LoginCaptchaRequired -= on_captcha_required;
+            _auth.LoginExceptionRaised -= on_login_exception_raised;
+            _auth.LoginFailed -= on_login_failed;
+            _auth.LoginSucceeded -= on_login_succeeded;
         }
     }
 }
