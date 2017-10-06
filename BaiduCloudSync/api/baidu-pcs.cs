@@ -62,8 +62,6 @@ namespace BaiduCloudSync
         private const int BUFFER_SIZE = 2048;
         //文件验证段：前256KB字节
         private const long VALIDATE_SIZE = 262144;
-        //errno出错时是否传递异常
-        private const bool TRANSFER_ERRNO_EXCEPTION = true;
         //默认上传分段的大小
         private const int UPLOAD_SLICE_SIZE = 4194304;
         #endregion
@@ -443,7 +441,7 @@ namespace BaiduCloudSync
                 Thread.Sleep(Timeout.Infinite);
             }
             catch (ThreadInterruptedException) { }
-            catch (Exception) { throw; }
+            catch (Exception ex) { throw ex; }
             return ret;
         }
 
@@ -479,7 +477,7 @@ namespace BaiduCloudSync
                 Thread.Sleep(Timeout.Infinite);
             }
             catch (ThreadInterruptedException) { }
-            catch (Exception) { throw; }
+            catch (Exception ex) { throw ex; }
             return ret;
         }
         /// <summary>
@@ -488,13 +486,11 @@ namespace BaiduCloudSync
         /// <param name="source">原文件路径</param>
         /// <param name="destination">目标文件路径</param>
         /// <param name="ondup">同名覆盖方式</param>
-        /// <returns>返回文件路径（失败时返回empty string）</returns>
-        public string MovePath(string source, string destination, ondup ondup = ondup.overwrite)
+        /// <returns>返回是否成功</returns>
+        public bool MovePath(string source, string destination, ondup ondup = ondup.overwrite)
         {
             _trace.TraceInfo("BaiduPCS.MovePath called: string source=" + source + ", string destination=" + destination + ", ondup ondup=" + ondup);
-            var enum_string = MovePath(new string[] { source }, new string[] { destination }, ondup);
-            if (enum_string == null || enum_string.Length == 0) return string.Empty;
-            else return enum_string[0];
+            return MovePath(new string[] { source }, new string[] { destination }, ondup);
         }
         /// <summary>
         /// 移动多个文件
@@ -502,90 +498,24 @@ namespace BaiduCloudSync
         /// <param name="source">原文件路径</param>
         /// <param name="destination">目标文件路径</param>
         /// <param name="ondup">同名覆盖方式</param>
-        /// <returns>返回多个文件路径（失败时返回null）</returns>
-        public string[] MovePath(IEnumerable<string> source, IEnumerable<string> destination, ondup ondup = ondup.overwrite)
+        /// <returns>返回是否成功</returns>
+        public bool MovePath(IEnumerable<string> source, IEnumerable<string> destination, ondup ondup = ondup.overwrite)
         {
-            var ret = new List<string>();
-
-            var src_count = source.Count();
-            var dst_count = destination.Count();
-            _trace.TraceInfo("BaiduPCS.MovePath called: IEnumerable<string> source=[count=" + src_count + "], IEnumerable<string> destination=[count=" + dst_count + "], ondup ondup=" + ondup);
-            if (src_count != dst_count)
+            _trace.TraceInfo("BaiduPCS.MovePath called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], ondup ondup=" + ondup);
+            var sync_thread = Thread.CurrentThread;
+            bool ret = false;
+            MovePathAsync(source, destination, (suc, data) =>
             {
-                _trace.TraceError("source count is not equal to destination count");
-                return null;
-            }
-
-            var postArray = new JArray();
-            foreach (var item in source)
-            {
-                var obj = new JObject();
-                if (string.IsNullOrEmpty(item)) return null;
-                obj.Add("path", item);
-                postArray.Add(obj);
-            }
-            int index = 0;
-            foreach (var item in destination)
-            {
-                var val_to_edit = postArray[index++] as JObject;
-                var seperator_index = item.LastIndexOf('/');
-                if (seperator_index == -1) return null;
-                var parent_path = item.Substring(0, seperator_index);
-                if (string.IsNullOrEmpty(parent_path)) return null;
-                var file_name = item.Substring(seperator_index + 1);
-                if (string.IsNullOrEmpty(file_name)) return null;
-                val_to_edit.Add("dest", parent_path);
-                val_to_edit.Add("newname", file_name);
-                val_to_edit.Add("ondup", ondup.ToString());
-            }
-
-            var param = new Parameters();
-            param.Add("opera", "move");
-            param.Add("app_id", APPID);
-            param.Add("bdstoken", _bdstoken);
-            param.Add("logid", _get_logid());
-
-            var post_param = new Parameters();
-            post_param.Add("filelist", JsonConvert.SerializeObject(postArray));
-
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
-            JArray data_array = null;
+                ret = data;
+                sync_thread.Interrupt();
+            }, ondup);
             try
             {
-                ns.HttpPost(API_FILEMANAGER_URL, post_param, headerParam: _get_xhr_param(), urlParam: param);
-
-                var response = ns.ReadResponseString();
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                data_array = json.Value<JArray>("info");
-                //could not use "yield return" in try...catch segment
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            finally
-            {
-                ns.Close();
-            }
-
-            if (data_array != null)
-            {
-                foreach (var item in data_array)
-                {
-                    ret.Add(item.Value<string>("path"));
-                }
-            }
-            return ret.ToArray();
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
+            return ret;
         }
 
         /// <summary>
@@ -594,13 +524,11 @@ namespace BaiduCloudSync
         /// <param name="source">原文件路径</param>
         /// <param name="destination">目标文件路径</param>
         /// <param name="ondup">同名覆盖方式</param>
-        /// <returns>返回文件路径（失败时返回empty string）</returns>
-        public string CopyPath(string source, string destination, ondup ondup = ondup.overwrite)
+        /// <returns>返回是否成功</returns>
+        public bool CopyPath(string source, string destination, ondup ondup = ondup.overwrite)
         {
             _trace.TraceInfo("BaiduPCS.CopyPath called: string source=" + source + ", string destination=" + destination + ", ondup ondup=" + ondup);
-            var enum_string = CopyPath(new string[] { source }, new string[] { destination }, ondup);
-            if (enum_string == null || enum_string.Length == 0) return string.Empty;
-            else return enum_string[0];
+            return CopyPath(new string[] { source }, new string[] { destination }, ondup);
         }
         /// <summary>
         /// 复制多个文件
@@ -608,185 +536,59 @@ namespace BaiduCloudSync
         /// <param name="source">原文件路径</param>
         /// <param name="destination">目标文件路径</param>
         /// <param name="ondup">同名覆盖方式</param>
-        /// <returns>返回多个文件路径（失败时返回null）</returns>
-        public string[] CopyPath(IEnumerable<string> source, IEnumerable<string> destination, ondup ondup = ondup.overwrite)
+        /// <returns>返回是否成功</returns>
+        public bool CopyPath(IEnumerable<string> source, IEnumerable<string> destination, ondup ondup = ondup.overwrite)
         {
-            var ret = new List<string>();
-
-            var src_count = source.Count();
-            var dst_count = destination.Count();
-            _trace.TraceInfo("BaiduPCS.CopyPath called: IEnumerable<string> source=[count=" + src_count + "], IEnumerable<string> destination=[count=" + dst_count + "], ondup ondup=" + ondup);
-            if (src_count != dst_count)
+            _trace.TraceInfo("BaiduPCS.CopyPath called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], ondup ondup=" + ondup);
+            var sync_thread = Thread.CurrentThread;
+            bool ret = false;
+            CopyPathAsync(source, destination, (suc, data) =>
             {
-                _trace.TraceError("source count is not equal to destination count");
-                return null;
-            }
-
-            var postArray = new JArray();
-            foreach (var item in source)
-            {
-                var obj = new JObject();
-                if (string.IsNullOrEmpty(item)) return null;
-                obj.Add("path", item);
-                postArray.Add(obj);
-            }
-            int index = 0;
-            foreach (var item in destination)
-            {
-                var val_to_edit = postArray[index++] as JObject;
-                var seperator_index = item.LastIndexOf('/');
-                if (seperator_index == -1) return null;
-                var parent_path = item.Substring(0, seperator_index);
-                if (string.IsNullOrEmpty(parent_path)) return null;
-                var file_name = item.Substring(seperator_index + 1);
-                if (string.IsNullOrEmpty(file_name)) return null;
-                val_to_edit.Add("dest", parent_path);
-                val_to_edit.Add("newname", file_name);
-                val_to_edit.Add("ondup", ondup.ToString());
-            }
-
-            var param = new Parameters();
-            param.Add("opera", "copy");
-            param.Add("app_id", APPID);
-            param.Add("bdstoken", _bdstoken);
-            param.Add("logid", _get_logid());
-
-            var post_param = new Parameters();
-            post_param.Add("filelist", JsonConvert.SerializeObject(postArray));
-
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
-            JArray data_array = null;
+                ret = data;
+                sync_thread.Interrupt();
+            }, ondup);
             try
             {
-                ns.HttpPost(API_FILEMANAGER_URL, post_param, headerParam: _get_xhr_param(), urlParam: param);
-
-                var response = ns.ReadResponseString();
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                data_array = json.Value<JArray>("info");
-                //could not use "yield return" in try...catch segment
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            finally
-            {
-                ns.Close();
-            }
-
-            if (data_array != null)
-            {
-                foreach (var item in data_array)
-                {
-                    ret.Add(item.Value<string>("path"));
-                }
-            }
-            return ret.ToArray();
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
+            return ret;
         }
         /// <summary>
         /// 重命名单个文件
         /// </summary>
         /// <param name="source">原文件路径</param>
         /// <param name="new_name">新文件名</param>
-        /// <returns>成功则返回路径，失败则返回empty string</returns>
-        public string Rename(string source, string new_name)
+        /// <returns>返回是否成功</returns>
+        public bool Rename(string source, string new_name)
         {
             _trace.TraceInfo("BaiduPCS.Rename called: string source=" + source + ", string new_name=" + new_name);
-            var enum_string = Rename(new string[] { source }, new string[] { new_name });
-            if (enum_string == null || enum_string.Length == 0) return string.Empty;
-            else return enum_string[0];
+            return Rename(new string[] { source }, new string[] { new_name });
         }
         /// <summary>
         /// 重命名多个文件
         /// </summary>
         /// <param name="source">原文件路径</param>
         /// <param name="new_name">新文件名</param>
-        /// <returns>成功则返回路径，失败则返回null</returns>
-        public string[] Rename(IEnumerable<string> source, IEnumerable<string> new_name)
+        /// <returns>返回是否成功</returns>
+        public bool Rename(IEnumerable<string> source, IEnumerable<string> new_name)
         {
-            var ret = new List<string>();
-
-            var src_count = source.Count();
-            var dst_count = new_name.Count();
-            _trace.TraceInfo("BaiduPCS.Rename called: IEnumerable<string> source=[count=" + src_count + "], IEnumerable<string> new_name=[count=" + dst_count + "]");
-            if (src_count != dst_count)
+            _trace.TraceInfo("BaiduPCS.Rename called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> new_name=[count=" + new_name.Count() + "]");
+            var sync_thread = Thread.CurrentThread;
+            bool ret = false;
+            RenameAsync(source, new_name, (suc, data) =>
             {
-                _trace.TraceError("source count is not equal to new_name count");
-                return null;
-            }
-
-            var postArray = new JArray();
-            foreach (var item in source)
-            {
-                var obj = new JObject();
-                if (string.IsNullOrEmpty(item)) return null;
-                obj.Add("path", item);
-                postArray.Add(obj);
-            }
-            int index = 0;
-            foreach (var item in new_name)
-            {
-                var val_to_edit = postArray[index++] as JObject;
-                if (string.IsNullOrEmpty(item)) return null;
-                val_to_edit.Add("newname", item);
-            }
-
-            var param = new Parameters();
-            param.Add("opera", "rename");
-            param.Add("app_id", APPID);
-            param.Add("bdstoken", _bdstoken);
-            param.Add("logid", _get_logid());
-
-            var post_param = new Parameters();
-            post_param.Add("filelist", JsonConvert.SerializeObject(postArray));
-
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
-            JArray data_array = null;
+                ret = data;
+                sync_thread.Interrupt();
+            });
             try
             {
-                ns.HttpPost(API_FILEMANAGER_URL, post_param, headerParam: _get_xhr_param(), urlParam: param);
-
-                var response = ns.ReadResponseString();
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                data_array = json.Value<JArray>("info");
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            finally
-            {
-                ns.Close();
-            }
-
-            if (data_array != null)
-            {
-                foreach (var item in data_array)
-                {
-                    ret.Add(item.Value<string>("path"));
-                }
-            }
-            return ret.ToArray();
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
+            return ret;
         }
         /// <summary>
         /// 新建文件夹
@@ -795,57 +597,20 @@ namespace BaiduCloudSync
         /// <returns>文件夹信息，失败时返回的fs_id=0</returns>
         public ObjectMetadata CreateDirectory(string path)
         {
-            var ret = new ObjectMetadata();
             _trace.TraceInfo("BaiduPCS.CreateDirectory called: string path=" + path);
-            if (string.IsNullOrEmpty(path)) return ret;
-
-            var header_param = _get_xhr_param();
-
-            var post_param = new Parameters();
-            post_param.Add("path", path);
-            post_param.Add("isdir", 1);
-            post_param.Add("block_list", "[]");
-
-            var query_param = new Parameters();
-            query_param.Add("a", "commit");
-            query_param.Add("channel", "chunlei");
-            query_param.Add("web", 1);
-            query_param.Add("app_id", APPID);
-            query_param.Add("bdstoken", _bdstoken);
-            query_param.Add("logid", _get_logid());
-            query_param.Add("clienttype", 0);
-
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
+            var sync_thread = Thread.CurrentThread;
+            ObjectMetadata ret = new ObjectMetadata();
+            CreateDirectoryAsync(path, (suc, data) =>
+            {
+                ret = data;
+                sync_thread.Interrupt();
+            });
             try
             {
-                ns.HttpPost(API_CREATE_URL, post_param, headerParam: header_param, urlParam: query_param);
-
-                var response = ns.ReadResponseString();
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                ret.FS_ID = json.Value<ulong>("fs_id");
-                ret.Path = json.Value<string>("path");
-                ret.ServerCTime = json.Value<ulong>("ctime");
-                ret.ServerMTime = json.Value<ulong>("mtime");
-                ret.ServerFileName = ret.Path.Substring(ret.Path.LastIndexOf('/') + 1);
-                ret.IsDir = json.Value<uint>("isdir") != 0;
-                ret.MD5 = string.Empty;
-
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
             return ret;
         }
 
@@ -861,54 +626,20 @@ namespace BaiduCloudSync
         public ObjectMetadata[] GetFileList(string path, FileOrder order = FileOrder.name, bool asc = true, int page = 1, int count = 1000)
         {
             _trace.TraceInfo("BaiduPCS.GetFileList called: string path=" + path + ", FileOrder order=" + order + ", bool asc=" + asc + ", int page=" + page + ", int count=" + count);
-            var ret = new List<ObjectMetadata>();
-            if (string.IsNullOrEmpty(path)) return null;
-            var url = API_LIST_URL;
-            var param = new Parameters();
-            param.Add("dir", path);
-            param.Add("bdstoken", _bdstoken);
-            param.Add("logid", _get_logid());
-            param.Add("order", order);
-            param.Add("desc", asc ? 0 : 1);
-            param.Add("app_id", APPID);
-            param.Add("channel", "chunlei");
-            param.Add("web", 1);
-            param.Add("clienttype", 0);
-            param.Add("page", page);
-            param.Add("num", count);
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
+            ObjectMetadata[] ret = null;
+            var sync_thread = Thread.CurrentThread;
+            GetFileListAsync(path, (suc, data) =>
+            {
+                ret = data;
+                sync_thread.Interrupt();
+            }, order, asc, page, count);
             try
             {
-                ns.HttpGet(url, headerParam: _get_xhr_param(), urlParam: param);
-                var response_str = ns.ReadResponseString();
-                ns.Close();
-
-                _trace.TraceInfo(response_str);
-
-                var json = JsonConvert.DeserializeObject(response_str) as JObject;
-                if (Math.Abs(json.Value<int>("errno")) == 9) return new ObjectMetadata[0]; //directory not exists
-                _check_error(json);
-
-                var list = json.Value<JArray>("list");
-                foreach (JObject item in list)
-                {
-                    ret.Add(_read_json_meta(item));
-                }
-                return ret.ToArray();
-
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            return null;
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
+            return ret;
         }
         #endregion
 
@@ -1063,8 +794,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                //    throw;
             }
             catch (WebException ex)
             {
@@ -1155,8 +886,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                //    throw;
             }
             catch (Exception ex)
             {
@@ -1221,8 +952,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                //    throw;
             }
             catch (Exception ex)
             {
@@ -1323,8 +1054,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                    //throw;
             }
             catch (Exception ex)
             {
@@ -1396,8 +1127,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                //    throw;
             }
             catch (Exception ex)
             {
@@ -1480,8 +1211,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                //    throw;
             }
             catch (Exception ex)
             {
@@ -1529,8 +1260,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(ex.ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                //    throw;
             }
             catch (Exception ex)
             {
@@ -1637,8 +1368,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(new Exception("创建分享失败", ex).ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                //    throw;
             }
             catch (Exception ex)
             {
@@ -1700,8 +1431,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(new Exception("创建私密分享错误", ex).ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                //    throw;
             }
             catch (Exception ex)
             {
@@ -1757,8 +1488,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(new Exception("取消分享失败", ex).ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                //    throw;
             }
             catch (Exception ex)
             {
@@ -1901,8 +1632,8 @@ namespace BaiduCloudSync
             catch (ErrnoException ex)
             {
                 _trace.TraceError(new Exception("获取分享列表时发生错误", ex).ToString());
-                if (TRANSFER_ERRNO_EXCEPTION)
-                    throw;
+                //if (TRANSFER_ERRNO_EXCEPTION)
+                //    throw;
             }
             catch (Exception ex)
             {

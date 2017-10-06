@@ -1243,7 +1243,7 @@ namespace BaiduCloudSync
                     encoding = Encoding.GetEncoding(DEFAULT_ENCODING);
 
                 if (ResponseStream == null || !ResponseStream.CanRead) return string.Empty;
-                var sr = new StreamReader(ResponseStream);
+                var sr = new StreamReader(ResponseStream, encoding);
                 var str = sr.ReadToEnd();
                 sr.Close();
                 sr.Dispose();

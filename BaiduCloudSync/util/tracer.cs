@@ -101,7 +101,7 @@ namespace BaiduCloudSync
                 foreach (var item in param)
                 {
                     sb.AppendFormat("{0} {1}", item.ParameterType.Name, item.Name);
-                    if (item != param[param.Length - 1]) sb.Append(",");
+                    if (item != param[param.Length - 1]) sb.Append(" ,");
                 }
             }
             TraceInfo(sb.ToString());

@@ -1225,13 +1225,13 @@ namespace BaiduCloudSync
                         Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "重命名错误：目标文件已存在，请删除该文件或者刷新来解决", "犯错了", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
                         return;
                     }
-                    string data = null;
+                    bool data = false;
                     try { data = _pcsAPI.Rename(path, frm.FileName); }
                     catch (ErrnoException ex)
                     {
                         Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "重命名出错: 错误代码: " + ex.Errno, "又是错误，崩溃了", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
                     }
-                    if (string.IsNullOrEmpty(data))
+                    if (!data)
                     {
                         Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "重命名失败", "又是错误，崩溃了", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
                     }
@@ -1338,26 +1338,26 @@ namespace BaiduCloudSync
                 {
                     if (_is_copy)
                     {
-                        string[] paths = null;
-                        try { paths = _pcsAPI.CopyPath(src_list, dest_list); }
+                        bool suc = false;
+                        try { suc = _pcsAPI.CopyPath(src_list, dest_list); }
                         catch (ErrnoException ex)
                         {
                             Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "复制文件出错: 错误代码: " + ex.Errno, "错误了……", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
                         }
-                        if (paths == null || paths.Length != src_list.Count)
+                        if (!suc)
                         {
                             Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "复制文件出错", "错误了……", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
                         }
                     }
                     else
                     {
-                        string[] paths = null;
-                        try { paths = _pcsAPI.MovePath(src_list, dest_list); }
+                        bool suc = false;
+                        try { suc = _pcsAPI.MovePath(src_list, dest_list); }
                         catch (ErrnoException ex)
                         {
                             Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "移动文件出错: 错误代码: " + ex.Errno, "错误了……", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
                         }
-                        if (paths == null || paths.Length != src_list.Count)
+                        if (!suc)
                         {
                             Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "移动文件出错", "错误了……", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
                         }
