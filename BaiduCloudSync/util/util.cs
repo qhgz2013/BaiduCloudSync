@@ -23,7 +23,13 @@ namespace BaiduCloudSync
             do
             {
                 int c = sin.Read(bytes, readed, count - readed);
-                if (c == 0) break;
+                if (c == 0)
+                {
+                    var new_byte = new byte[readed];
+                    Array.Copy(bytes, new_byte, readed);
+                    bytes = new_byte;
+                    break;
+                }
                 readed += c;
             } while (readed != count);
             return bytes;

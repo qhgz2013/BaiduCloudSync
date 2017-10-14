@@ -30,33 +30,33 @@ namespace BaiduCloudSync
         //https://pcs.baidu.com/rest/2.0/pcs/superfile2
         public const string PCS_SUPERFILE_URL = PCS_ROOT_URL + "superfile2";
 
-        //http://pan.baidu.com/
-        public const string API_HOST = "http://pan.baidu.com/";
-        //http://pan.baidu.com/api/
+        //https://pan.baidu.com/
+        public const string API_HOST = "https://pan.baidu.com/";
+        //https://pan.baidu.com/api/
         public const string API_ROOT_URL = API_HOST + "api/";
-        //http://pan.baidu.com/api/list
+        //https://pan.baidu.com/api/list
         public const string API_LIST_URL = API_ROOT_URL + "list";
-        //http://pan.baidu.com/api/quota
+        //https://pan.baidu.com/api/quota
         public const string API_QUOTA_URL = API_ROOT_URL + "quota";
-        //http://pan.baidu.com/api/filemanager
+        //https://pan.baidu.com/api/filemanager
         public const string API_FILEMANAGER_URL = API_ROOT_URL + "filemanager";
-        //http://pan.baidu.com/api/download
+        //https://pan.baidu.com/api/download
         public const string API_DOWNLOAD_URL = API_ROOT_URL + "download";
-        //http://pan.baidu.com/api/create
+        //https://pan.baidu.com/api/create
         public const string API_CREATE_URL = API_ROOT_URL + "create";
-        //http://pan.baidu.com/api/precreate
+        //https://pan.baidu.com/api/precreate
         public const string API_PRECREATE_URL = API_ROOT_URL + "precreate";
-        //http://pan.baidu.com/share/
+        //https://pan.baidu.com/share/
         public const string API_SHARE_URL = API_HOST + "share/";
-        //http://pan.baidu.com/share/set
+        //https://pan.baidu.com/share/set
         public const string API_SHARE_SET_URL = API_SHARE_URL + "set";
-        //http://pan.baidu.com/share/cancel
+        //https://pan.baidu.com/share/cancel
         public const string API_SHARE_CANCEL_URL = API_SHARE_URL + "cancel";
-        //http://pan.baidu.com/share/record
+        //https://pan.baidu.com/share/record
         public const string API_SHARE_RECORD_URL = API_SHARE_URL + "record";
 
-        //http://pan.baidu.com/disk/home
-        public const string BAIDU_NETDISK_URL = "http://pan.baidu.com/disk/home";
+        //https://pan.baidu.com/disk/home
+        public const string BAIDU_NETDISK_URL = "https://pan.baidu.com/disk/home";
 
         //默认数据流缓存区大小
         private const int BUFFER_SIZE = 2048;
@@ -645,6 +645,8 @@ namespace BaiduCloudSync
 
 
         #region Upload
+
+        #region functions being removed (no longer support in async/sync mode)
         public delegate void UploadStatusCallback(string path, string local_path, long current, long length);
         public struct RapidUploadInterface
         {
@@ -742,8 +744,10 @@ namespace BaiduCloudSync
             var arg = GetRapidUploadArguments(local_path, callback);
             return RapidUploadRaw(path, arg.content_length, arg.content_md5, arg.content_crc32, arg.slice_md5, ondup);
         }
+        #endregion
+
         /// <summary>
-        /// 秒传文件，失败时返回fs_id为0，MD5为null，没有找到文件时MD5="404"
+        /// 秒传文件，失败时返回fs_id为0
         /// </summary>
         /// <param name="path">路径</param>
         /// <param name="content_length">文件大小</param>
@@ -756,65 +760,19 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.RapidUploadRaw called: string path=" + path + ", ulong content_length=" + content_length + ", string content_md5=" + content_md5 + ", string content_crc=" + content_crc + ", string slice_md5=" + slice_md5 + ", ondup ondup=" + ondup);
 
+            var sync_thread = Thread.CurrentThread;
             ObjectMetadata ret = new ObjectMetadata();
-            var param = new Parameters();
-
-            param.Add("method", "rapidupload");
-            param.Add("app_id", APPID);
-            param.Add("path", path);
-            param.Add("content-length", content_length);
-            param.Add("content-md5", content_md5);
-            param.Add("slice-md5", slice_md5);
-            param.Add("content-crc32", content_crc);
-            param.Add("ondup", ondup);
-
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
+            RapidUploadAsync(path, content_length, content_md5, content_crc, slice_md5, (suc, data) =>
+            {
+                ret = data;
+                sync_thread.Interrupt();
+            }, ondup);
             try
             {
-                ns.HttpPost(PCS_FILE_URL, new byte[] { }, "text/html", headerParam: _get_xhr_param(), urlParam: param);
-
-                var response = ns.ReadResponseString();
-                ns.Close();
-
-                _trace.TraceInfo(response);
-
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                //todo: parsing json data
-                ret.Path = json.Value<string>("path");
-                ret.Size = json.Value<ulong>("size");
-                ret.ServerCTime = json.Value<ulong>("ctime");
-                ret.ServerMTime = json.Value<ulong>("mtime");
-                ret.MD5 = json.Value<string>("md5");
-                ret.FS_ID = json.Value<ulong>("fs_id");
-                ret.IsDir = json.Value<int>("isdir") != 0;
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                //if (TRANSFER_ERRNO_EXCEPTION)
-                //    throw;
-            }
-            catch (WebException ex)
-            {
-                if (ex.Response != null)
-                {
-                    var http_resp = (HttpWebResponse)ex.Response;
-                    if (http_resp.StatusCode == HttpStatusCode.NotFound)
-                    {
-                        ret.MD5 = "404";
-                    }
-                    else
-                        _trace.TraceError(ex.ToString());
-                }
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
             return ret;
         }
         /// <summary>
@@ -830,71 +788,36 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.UploadRaw called: Stream stream_in=" + stream_in.ToString() + ", ulong content_length=" + content_length + ", string path=" + path + ", ondup ondup=" + ondup + ", UploadStatusCallback callback=" + callback?.ToString());
 
-            var ret = new ObjectMetadata();
-            if (!stream_in.CanRead || string.IsNullOrEmpty(path)) return ret;
-            var param = new Parameters();
-            param.Add("method", "upload");
-            param.Add("app_id", APPID);
-            param.Add("path", path);
-            param.Add("ondup", ondup);
-            param.Add("logid", _get_logid());
-            param.Add("BDUSS", _auth.bduss);
+            ObjectMetadata ret = new ObjectMetadata();
+            var sync_thread = Thread.CurrentThread;
+            Guid task_id;
+            UploadBeginAsync(content_length, path, (suc, id, data) =>
+            {
+                task_id = id;
+                var buffer = new byte[BUFFER_SIZE];
+                long total = 0;
+                int cur = 0;
+                do
+                {
+                    cur = stream_in.Read(buffer, 0, BUFFER_SIZE);
+                    data.Write(buffer, 0, cur);
+                    total += cur;
+                    callback?.Invoke(path, null, total, (long)content_length);
+                } while (cur > 0);
 
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
-            var boundary = util.GenerateFormDataBoundary();
-
-            var formdata_param = new Parameters();
-            formdata_param.Add("Content-Disposition", "form-data; name=\"uploadedfile\"; filename=\"" + path + "\"");
-            formdata_param.Add("Content-Type", "application/octet-stream");
-            formdata_param.Add("Content-Transfer-Encoding", "binary");
-
-            var head = util.GenerateFormDataObject(boundary, formdata_param);
-            var foot = util.GenerateFormDataEnding(boundary);
-
-            var head_bytes = Encoding.UTF8.GetBytes(head);
-            var foot_bytes = Encoding.UTF8.GetBytes(foot);
-
-            long total_length = head_bytes.Length + foot_bytes.Length + (long)content_length;
+                UploadEndAsync(id, (suc2, data2) =>
+                {
+                    ret = data2;
+                    sync_thread.Interrupt();
+                });
+            }, ondup);
 
             try
             {
-                var stream_out = ns.HttpPost(PCS_FILE_URL, total_length, "multipart/form-data; boundary=" + boundary, headerParam: _get_xhr_param(), urlParam: param);
-                stream_out.Write(head_bytes, 0, head_bytes.Length);
-
-                long total_read = 0, current_read = 0;
-                var buffer = new byte[BUFFER_SIZE];
-                do
-                {
-                    current_read = stream_in.Read(buffer, 0, BUFFER_SIZE);
-                    stream_out.Write(buffer, 0, (int)current_read);
-                    total_read += current_read;
-                    callback?.Invoke(path, string.Empty, total_read, (long)content_length);
-                } while (current_read != 0);
-
-                stream_out.Write(foot_bytes, 0, foot_bytes.Length);
-
-                ns.HttpPostClose();
-                var response = ns.ReadResponseString();
-                ns.Close();
-
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                ret = _read_json_meta(json);
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                //if (TRANSFER_ERRNO_EXCEPTION)
-                //    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            stream_in.Close();
-            stream_in.Dispose();
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
             return ret;
         }
 
@@ -908,57 +831,22 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.PreCreateFile called: string path=" + path + ", int block_count=" + block_count);
             var ret = new PreCreateResult();
-            if (string.IsNullOrEmpty(path) || block_count == 0) return ret;
 
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
-            var query_param = new Parameters();
-
-            query_param.Add("channel", "chunlei");
-            query_param.Add("web", 1);
-            query_param.Add("app_id", APPID);
-            query_param.Add("bdstoken", _bdstoken);
-            query_param.Add("logid", _get_logid());
-            query_param.Add("clienttype", 0);
-
-            var post_data = new Parameters();
-            post_data.Add("path", path);
-            post_data.Add("autoinit", 1);
-            var block_array = new JArray();
-            var rnd = new Random();
-            var rnd_md5 = new byte[16]; //这里直接随机就ok了，反正也没什么卵用
-            for (int i = 0; i < block_count; i++)
+            var sync_thread = Thread.CurrentThread;
+            PreCreateFileAsync(path, block_count, (suc, block_count2, uploadid) =>
             {
-                rnd.NextBytes(rnd_md5);
-                var str_md5 = util.Hex(rnd_md5);
-                block_array.Add(str_md5);
-            }
-            post_data.Add("block_list", JsonConvert.SerializeObject(block_array));
+                ret.BlockCount = block_count2;
+                ret.ReturnType = 0;
+                ret.UploadId = uploadid;
+                sync_thread.Interrupt();
+            });
 
             try
             {
-                ns.HttpPost(API_PRECREATE_URL, post_data, headerParam: _get_xhr_param(), urlParam: query_param);
-                var response = ns.ReadResponseString();
-                ns.Close();
-
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                ret.BlockCount = json.Value<JArray>("block_list").Count;
-                ret.ReturnType = json.Value<int>("return_type");
-                ret.UploadId = json.Value<string>("uploadid");
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                //if (TRANSFER_ERRNO_EXCEPTION)
-                //    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
             return ret;
         }
         /// <summary>
@@ -973,103 +861,45 @@ namespace BaiduCloudSync
         public string UploadSliceRaw(Stream stream_in, string path, string uploadid, int sequence, UploadStatusCallback callback = null)
         {
             _trace.TraceInfo("BaiduPCS.UploadSliceRaw called: Stream stream_in=" + stream_in.ToString() + ", string uploadid=" + uploadid + ", int sequence=" + sequence + ", UploadStatusCallback callback=" + callback.ToString());
-            if (string.IsNullOrEmpty(uploadid) || string.IsNullOrEmpty(path) || !stream_in.CanRead) return string.Empty;
-            if (string.IsNullOrEmpty(_auth.bduss)) return string.Empty;
 
-            var query_param = new Parameters();
-            query_param.Add("method", "upload");
-            query_param.Add("app_id", APPID);
-            query_param.Add("channel", "chunlei");
-            query_param.Add("clienttype", 1);
-            query_param.Add("web", 1);
-            query_param.Add("BDUSS", _auth.bduss);
-            query_param.Add("logid", _get_logid());
-            query_param.Add("path", path);
-            query_param.Add("uploadid", uploadid);
-            query_param.Add("partseq", sequence);
+            string ret = null;
+            var sync_thread = Thread.CurrentThread;
+            Guid task_id;
+            var upload_data = util.ReadBytes(stream_in, UPLOAD_SLICE_SIZE);
+            var memory_buffer = new MemoryStream(upload_data);
+            upload_data = null;
 
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
-            var boundary = util.GenerateFormDataBoundary();
-
-            var formdata_param = new Parameters();
-            formdata_param.Add("Content-Disposition", "form-data; name=\"file\"; filename=\"blob\"");
-            formdata_param.Add("Content-Type", "application/octet-stream");
-
-            var head = util.GenerateFormDataObject(boundary, formdata_param);
-            var foot = util.GenerateFormDataEnding(boundary);
-
-            var head_bytes = Encoding.UTF8.GetBytes(head);
-            var foot_bytes = Encoding.UTF8.GetBytes(foot);
-
-            var temp_ms = new MemoryStream();
-            var buffer = new byte[BUFFER_SIZE];
-            //load to memory stream
-            try
+            UploadSliceBeginAsync((ulong)memory_buffer.Length, path, uploadid, sequence, (suc, id, data) =>
             {
-                int nread = 0, totalread = 0;
+                task_id = id;
+                var buffer = new byte[BUFFER_SIZE];
+                long total = 0;
+                int cur = 0;
                 do
                 {
-                    int length = Math.Min(BUFFER_SIZE, UPLOAD_SLICE_SIZE - totalread);
-                    nread = stream_in.Read(buffer, 0, length);
-                    temp_ms.Write(buffer, 0, nread);
-                    totalread += length;
-                } while (nread != 0);
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-                return string.Empty;
-            }
-            temp_ms.Seek(0, SeekOrigin.Begin);
+                    cur = memory_buffer.Read(buffer, 0, BUFFER_SIZE);
+                    data.Write(buffer, 0, cur);
+                    total += cur;
+                    callback?.Invoke(path, null, total, (long)memory_buffer.Length);
+                } while (cur > 0);
 
-            long total_length = head_bytes.Length + foot_bytes.Length + temp_ms.Length;
+                UploadSliceEndAsync(id, (suc2, data2) =>
+                {
+                    ret = data2;
+                    sync_thread.Interrupt();
+                });
+            });
 
             try
             {
-                var stream_out = ns.HttpPost(PCS_SUPERFILE_URL, total_length, "multipart/form-data; boundary=" + boundary, headerParam: _get_xhr_param(), urlParam: query_param);
-                stream_out.Write(head_bytes, 0, head_bytes.Length);
-
-                long total_read = 0, current_read = 0;
-                do
-                {
-                    current_read = temp_ms.Read(buffer, 0, BUFFER_SIZE);
-                    stream_out.Write(buffer, 0, (int)current_read);
-                    total_read += current_read;
-                    callback?.Invoke(path, string.Empty, total_read, temp_ms.Length);
-                } while (current_read != 0);
-
-                stream_out.Write(foot_bytes, 0, foot_bytes.Length);
-
-                ns.HttpPostClose();
-                var response = ns.ReadResponseString();
-                ns.Close();
-
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                return json.Value<string>("md5");
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                //if (TRANSFER_ERRNO_EXCEPTION)
-                    //throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            finally
-            {
-                temp_ms.Close();
-            }
-            return string.Empty;
-
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
+            return ret;
         }
         /// <summary>
-        /// 合并分段数据（注意：返回的MD5值有很大几率是错误的）
+        /// 合并分段数据（注意：分段数大于1时返回的MD5值有很大几率是错误的）
         /// </summary>
         /// <param name="path">文件路径</param>
         /// <param name="uploadid">上传id</param>
@@ -1079,61 +909,19 @@ namespace BaiduCloudSync
         public ObjectMetadata CreateSuperFile(string path, string uploadid, IEnumerable<string> block_list, ulong file_size)
         {
             _trace.TraceInfo("BaiduPCS.CreateSuperFile called: string path=" + path + ", string uploadid=" + uploadid + ", Ienumerable<string> block_list=[count=" + block_list.Count() + "]");
-            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(uploadid) || block_list == null) return new ObjectMetadata();
-            var ret = new ObjectMetadata();
-
-            var query_param = new Parameters();
-            query_param.Add("isdir", 0);
-            query_param.Add("channel", "chunlei");
-            query_param.Add("web", 1);
-            query_param.Add("app_id", APPID);
-            query_param.Add("bdstoken", _bdstoken);
-            query_param.Add("logid", _get_logid());
-            query_param.Add("clienttype", 0);
-
-            var post_param = new Parameters();
-            post_param.Add("path", path);
-            post_param.Add("size", file_size);
-            post_param.Add("uploadid", uploadid);
-            var blist = new JArray();
-            foreach (var item in block_list)
+            ObjectMetadata ret = new ObjectMetadata();
+            var sync_thread = Thread.CurrentThread;
+            CreateSuperFileAsync(path, uploadid, block_list, file_size, (suc, data) =>
             {
-                blist.Add(item);
-            }
-            post_param.Add("block_list", JsonConvert.SerializeObject(blist));
-
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
+                ret = data;
+                sync_thread.Interrupt();
+            });
             try
             {
-                ns.HttpPost(API_CREATE_URL, post_param, headerParam: _get_xhr_param(), urlParam: query_param);
-                var response = ns.ReadResponseString();
-                ns.Close();
-
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                ret.ServerCTime = json.Value<ulong>("ctime");
-                ret.ServerMTime = json.Value<ulong>("mtime");
-                ret.FS_ID = json.Value<ulong>("fs_id");
-                ret.IsDir = json.Value<int>("isdir") != 0;
-                ret.MD5 = json.Value<string>("md5");
-                ret.Path = json.Value<string>("path");
-                ret.Size = json.Value<ulong>("size");
-
-                ret.ServerFileName = ret.Path.Split('/').Last();
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                //if (TRANSFER_ERRNO_EXCEPTION)
-                //    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
             return ret;
         }
         #endregion
@@ -1141,7 +929,7 @@ namespace BaiduCloudSync
 
         #region Download
         /// <summary>
-        /// PCS API for download，返回的只是带参数的url地址
+        /// PCS API for download，返回的只是带参数的url地址（不用发送任何http请求）
         /// </summary>
         /// <param name="path">文件路径</param>
         /// <param name="over_https">是否使用https</param>
@@ -1172,53 +960,24 @@ namespace BaiduCloudSync
         public string GetDownloadLink(ulong fs_id, bool over_https = true)
         {
             _trace.TraceInfo("BaiduPCS.GetDownloadLink called: ulong fs_id=" + fs_id + ", bool over_https=" + over_https);
-            if (fs_id == 0) return string.Empty;
 
-            var param = new Parameters();
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
-
-            param.Add("sign", _sign2);
-            param.Add("timestamp", _timestamp);
-            param.Add("fidlist", "[" + fs_id + "]");
-            param.Add("type", "dlink");
-            param.Add("channel", "chunlei");
-            param.Add("web", "1");
-            param.Add("app_id", APPID);
-            param.Add("bdstoken", _bdstoken);
-            param.Add("logid", _get_logid());
-            param.Add("clienttype", "0");
+            var sync_thread = Thread.CurrentThread;
+            string[] ret = null;
+            GetDownloadLinkAsync(fs_id, (suc, data) => 
+            {
+                ret = data;
+                sync_thread.Interrupt();
+            }, over_https);
 
             try
             {
-                var url = API_DOWNLOAD_URL;
-                ns.HttpGet(url, _get_xhr_param(), param);
-
-                var response = ns.ReadResponseString();
-                ns.Close();
-
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                var dlink_array = json.Value<JArray>("dlink");
-                var dlink = (dlink_array[0] as JObject).Value<string>("dlink");
-
-                if (dlink.StartsWith("http") && over_https) dlink = "https" + dlink.Substring(4);
-
-                return dlink;
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                //if (TRANSFER_ERRNO_EXCEPTION)
-                //    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            return string.Empty;
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
+
+            if (ret == null) return string.Empty;
+            return ret[0];
         }
         /// <summary>
         /// 获取多源的下载url，失败时返回的Array元素为0
@@ -1228,46 +987,24 @@ namespace BaiduCloudSync
         public string[] GetLocateDownloadLink(string path)
         {
             _trace.TraceInfo("BaiduPCS.GetLocateDownloadLink called: string path=" + path);
-            var ret_list = new List<string>();
-            if (string.IsNullOrEmpty(path)) return ret_list.ToArray();
-
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
-            var param = new Parameters();
-            param.Add("method", "locatedownload");
-            param.Add("app_id", APPID);
-            param.Add("ver", "4.0");
-            param.Add("path", path);
+            
+            var sync_thread = Thread.CurrentThread;
+            string[] ret = null;
+            GetLocateDownloadLinkAsync(path, (suc, data) =>
+            {
+                ret = data;
+                sync_thread.Interrupt();
+            });
 
             try
             {
-                var url = PCS_FILE_URL;
-                ns.HttpPost(url, new byte[] { }, "text/html", _get_xhr_param(), param);
-
-                var response = ns.ReadResponseString();
-                ns.Close();
-
-                _trace.TraceInfo(response);
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                _check_error(json);
-
-                var download_urls = json.Value<JArray>("urls");
-                foreach (JObject item in download_urls)
-                {
-                    ret_list.Add(item.Value<string>("url"));
-                }
+                Thread.Sleep(Timeout.Infinite);
             }
-            catch (ErrnoException ex)
-            {
-                _trace.TraceError(ex.ToString());
-                //if (TRANSFER_ERRNO_EXCEPTION)
-                //    throw;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            return ret_list.ToArray();
+            catch (ThreadInterruptedException) { }
+            catch (Exception ex) { throw ex; }
+
+            if (ret == null) return new string[0];
+            return ret;
         }
         #endregion
 

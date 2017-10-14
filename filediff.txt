@@ -1,0 +1,36 @@
+GET https://pan.baidu.com/api/filediff
+
+QueryString:
+cursor: "null" or {$cursor}
+channel: "chunlei"
+web: "1"
+app_id: "250528"
+bdstoken: {$bdstoken}
+logid: {$logid}
+clienttype: "0"
+
+Return: json
+|- cursor {$nextcursor}
+|- entries
+|  |- /xxx.rar
+|  |  |- category "6"
+|  |  |- extent_int3 "0"
+|  |  |- extent_tinyint1 "0"
+|  |  |- fs_id {$fs_id}
+|  |  |- isdelete "0"
+|  |  |- isdir "0"
+|  |  |- local_ctime {$local_ctime} (unixtimestamp)
+|  |  |- local_mtime {$local_mtime} (unixtimestamp)
+|  |  |- md5 {$md5} (hex string)
+|  |  |- path {$path} (/xxx.rar)
+|  |  |- revision "0"
+|  |  |- server_ctime {$server_ctime} (unixtimestamp)
+|  |  |- server_filename {$server_filename} (xxx.rar)
+|  |  |- server_mtime {$server_mtime} (unixtimestamp)
+|  |  |- share "0"
+|  |  |- size {$size} (byte)
+|  |- ... (other data)
+|- errno "0"
+|- has_more "True"
+|- request_id
+|- reset "True"

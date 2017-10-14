@@ -1,0 +1,13 @@
+﻿代码重构规划:
+
+1.  HTTP全部请求支持异步调用，同步调用改为线程阻塞式 【finished】
+2.  修改cookie保存机制，支持多cookie请求 【finished】
+3.  修改cookie解析机制，排除重复和session cookie的保存
+4.  修改百度登陆的oauth类，支持多账号（多实例化） 【finished】
+5.  修改pcs api类，支持异步请求（同步调用改为线程阻塞式）
+6.  降低类耦合度：pcs api直接传入oauth类，修改auth到pcs api的token接入
+7.  实现网盘文件的本地sql保存，增加filediff的api接入
+8.  统一本地文件的io状态接口，实现到ui的显示
+9.  实现pem的标准解析 (see: https://msdn.microsoft.com/en-us/library/windows/desktop/bb648645(v=vs.85).aspx)
+10. 建立非窗体的命令解析界面
+11. 多账号网盘RAID
