@@ -148,7 +148,6 @@
     <Compile Include="form\static-config.cs" />
     <Compile Include="util\icon-extractor.cs" />
     <Compile Include="util\local-file-cacher.cs" />
-    <Compile Include="util\nbt-class.cs" />
     <Compile Include="util\secure\common-file-encrypt.cs" />
     <Compile Include="util\secure\crc32.cs" />
     <Compile Include="util\secure\crypt-aes.cs" />

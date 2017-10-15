@@ -35,11 +35,7 @@ namespace BaiduCloudSync
             StaticConfig.LoadStaticConfig();
 
             //test code for upload
-            var data = new byte[163840];
-            var rnd = new Random();
-            rnd.NextBytes(data);
-            var ms = new MemoryStream(data);
-            _pcsAPI.UploadRaw(ms, (ulong)data.Length, "/testdata.dat", ondup.overwrite, (a, b, c, d) => { });
+            //TestBench.TestPCS_API(_pcsAPI);
         }
         private void Form1_Load(object sender, EventArgs e)
         {

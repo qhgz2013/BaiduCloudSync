@@ -402,7 +402,7 @@ namespace BaiduCloudSync
                 ServicePointManager.MaxServicePointIdleTime = 2000;
                 ServicePointManager.SetTcpKeepAlive(false, 0, 0);
             }
-            private static bool _enableTracing = true;
+            private static bool _enableTracing = false;
             private HttpWebRequest _http_request;
             private HttpWebResponse _http_response;
             private ReaderWriterLock _lock;
@@ -750,7 +750,7 @@ namespace BaiduCloudSync
                         if (!keyList.Contains(STR_ACCEPT_LANGUAGE)) HTTP_Request.Headers.Add(STR_ACCEPT_LANGUAGE, AcceptLanguage);
                         if (!keyList.Contains(STR_USER_AGENT)) HTTP_Request.UserAgent = UserAgent;
 
-                        HTTP_Request.Proxy = Proxy;
+                        if (Proxy != null) HTTP_Request.Proxy = Proxy;
                         if (UseCookie && !keyList.Contains(STR_COOKIE))
                         {
                             _slock.AcquireWriterLock(Timeout.Infinite);
@@ -877,7 +877,7 @@ namespace BaiduCloudSync
                             HTTP_Response = (HttpWebResponse)ex.Response;
                             if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
                                 DefaultCookieContainer.Add(CookieKey, new CookieContainer());
-                            HTTP_Request.CookieContainer = DefaultCookieContainer[CookieKey];
+                            DefaultCookieContainer[CookieKey].Add(ParseCookie(HTTP_Response.Headers[STR_COOKIE], HTTP_Response.ResponseUri.Host));
                             _slock.ReleaseWriterLock();
 
                             switch (HTTP_Response.ContentEncoding)

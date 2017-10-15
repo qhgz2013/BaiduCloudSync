@@ -42,6 +42,15 @@ namespace BaiduCloudSync
         /// <param name="result">多个文件/文件夹信息</param>
         public delegate void MultiObjectMetaCallback(bool success, ObjectMetadata[] result);
         /// <summary>
+        /// 文件差异比较的回调函数
+        /// </summary>
+        /// <param name="success">是否成功</param>
+        /// <param name="has_more">是否需要继续请求</param>
+        /// <param name="reset">是否重置</param>
+        /// <param name="next_cursor">下一个游标位置</param>
+        /// <param name="result">多个文件/文件夹信息</param>
+        public delegate void FileDiffCallback(bool success, bool has_more, bool reset, string next_cursor, ObjectMetadata[] result);
+        /// <summary>
         /// 异步上传文件的回调函数原型
         /// </summary>
         /// <param name="success">是否成功</param>
@@ -73,6 +82,12 @@ namespace BaiduCloudSync
         /// <param name="success"></param>
         /// <param name="result"></param>
         public delegate void ShareMetaCallback(bool success, ShareData result);
+        /// <summary>
+        /// 获取分享详细信息的回调函数原型
+        /// </summary>
+        /// <param name="success"></param>
+        /// <param name="result"></param>
+        public delegate void ShareMultiMetaCallback(bool success, ShareRecord[] result);
         #endregion
 
         #region file/directory operation
@@ -168,7 +183,7 @@ namespace BaiduCloudSync
                 foreach (var item in paths)
                 {
                     empty = false;
-                    if (string.IsNullOrEmpty(item)) return;
+                    if (string.IsNullOrEmpty(item)) throw new ArgumentNullException("path");
                     postJson.Add(item);
                 }
 
@@ -567,7 +582,7 @@ namespace BaiduCloudSync
         /// <param name="callback">回调函数</param>
         public void CreateDirectoryAsync(string path, ObjectMetaCallback callback)
         {
-            _trace.TraceInfo("BaiduPCS.CreateDirectory called: string path=" + path + ", ObjectMetaCallback callback=" + callback.ToString());
+            _trace.TraceInfo("BaiduPCS.CreateDirectoryAsync called: string path=" + path + ", ObjectMetaCallback callback=" + callback.ToString());
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
 
             var post_param = new Parameters();
@@ -715,6 +730,68 @@ namespace BaiduCloudSync
             {
                 _trace.TraceError(ex.ToString());
                 ns.Close();
+            }
+        }
+        /// <summary>
+        /// 异步获取文件差异
+        /// </summary>
+        /// <param name="cursor">游标位置</param>
+        /// <param name="callback">回调函数</param>
+        public void GetFileDiffAsync(string cursor, FileDiffCallback callback)
+        {
+            if (string.IsNullOrEmpty(cursor)) cursor = "null";
+            _trace.TraceInfo("BaiduPCS.GetFileDiffAsync called: string cursor=" + cursor + "FileDiffCallback callback=" + callback.ToString());
+
+            var param = new Parameters();
+            param.Add("cursor", cursor);
+            param.Add("channel", "chunlei");
+            param.Add("web", 1);
+            param.Add("app_id", APPID);
+            param.Add("bdstoken", _bdstoken);
+            param.Add("logid", _get_logid());
+            param.Add("clienttype", 0);
+
+            var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
+            try
+            {
+                ns.HttpGetAsync(API_FILEDIFF_URL, (sender, e) =>
+                {
+                    //GetResponseStream
+                    try
+                    {
+                        var response = sender.ReadResponseString();
+                        _trace.TraceInfo(response);
+                        var json = JsonConvert.DeserializeObject(response) as JObject;
+                        _check_error(json);
+
+                        var next_cursor = json.Value<string>("cursor");
+                        var entries = json.Value<JObject>("entries");
+                        var has_more = json.Value<bool>("has_more");
+                        var reset = json.Value<bool>("reset");
+                        var ret_filelist = new List<ObjectMetadata>();
+                        foreach (JProperty item in entries.Children())
+                        {
+                            ret_filelist.Add(_read_json_meta((JObject)item.Value));
+                        }
+                        callback?.Invoke(true, has_more, reset, next_cursor, ret_filelist.ToArray());
+                    }
+                    catch (Exception ex)
+                    {
+                        _trace.TraceError(ex);
+                        callback?.Invoke(false, false, false, null, null);
+                    }
+                    finally
+                    {
+                        sender.Close();
+                    }
+                }, null, _get_xhr_param(), param);
+            }
+            catch (Exception ex)
+            {
+                _trace.TraceError(ex);
+                ns.Close();
+                throw ex;
             }
         }
         #endregion
@@ -981,7 +1058,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.PreCreateFileAsync called: string path=" + path + ", int block_count=" + block_count + ", PreCreateCallback callback=" + callback.ToString());
 
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
-            if (block_count == 0) throw new IndexOutOfRangeException("block_count必须为大于0的正整数");
+            //if (block_count == 0) throw new IndexOutOfRangeException("block_count必须为大于0的正整数");
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
@@ -1039,6 +1116,7 @@ namespace BaiduCloudSync
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
+                                callback?.Invoke(false, 0, null);
                             }
                             finally
                             {
@@ -1095,9 +1173,7 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.UploadSliceBeginAync called: ulong content_length=" + content_length + ", string path=" + path + ", string uploadid=" + uploadid + ", int sequence=" + sequence + ", SliceUploadCallback callback=" + callback.ToString());
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
-            if (sequence <= 0) throw new IndexOutOfRangeException("序号超出范围");
             if (string.IsNullOrEmpty(uploadid)) throw new ArgumentNullException("uploadid");
-            if (content_length <= 0 || content_length > UPLOAD_SLICE_SIZE) throw new ArgumentException("长度必须为正整数且不能大于常数UPLOAD_SLICE_SIZE");
 
             var query_param = new Parameters();
             query_param.Add("method", "upload");
@@ -1287,6 +1363,8 @@ namespace BaiduCloudSync
                                 ret.Path = json.Value<string>("path");
                                 ret.Size = json.Value<ulong>("size");
                                 ret.ServerFileName = ret.Path.Split('/').Last();
+
+                                callback?.Invoke(true, ret);
                             }
                             catch (Exception ex)
                             {
@@ -1383,9 +1461,15 @@ namespace BaiduCloudSync
                         _check_error(json);
 
                         var dlink_array = json.Value<JArray>("dlink");
+                        if (dlink_array.Count == 0)
+                        {
+                            callback?.Invoke(true, null);
+                            return;
+                        }
                         var dlink = (dlink_array[0] as JObject).Value<string>("dlink");
 
-                        if (dlink.StartsWith("http") && over_https) dlink = "https" + dlink.Substring(4);
+                        if (dlink.StartsWith("https") && !over_https) dlink = "http" + dlink.Substring(5);
+                        else if (dlink.StartsWith("http") && !dlink.StartsWith("https") && over_https) dlink = "https" + dlink.Substring(4);
 
                         callback?.Invoke(true, new string[] { dlink });
                     }
@@ -1465,6 +1549,7 @@ namespace BaiduCloudSync
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
+                        sender.Close();
                         callback?.Invoke(false, null);
                     }
                 }, null, "text/html", _get_xhr_param(), param);
@@ -1481,7 +1566,356 @@ namespace BaiduCloudSync
 
         #region sharing
 
+        /// <summary>
+        /// 异步创建单文件（夹）公开分享
+        /// </summary>
+        /// <param name="fs_id">FS ID</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="expire_time">有效时间（可选：1-1天，7-7天，0-永久）</param>
+        public void CreatePublicShareAsync(ulong fs_id, ShareMetaCallback callback, int expire_time = 0)
+        {
+            _trace.TraceInfo("BaiduPCS.CreatePublicShareAsync called: ulong fs_id=" + fs_id + ", ShareMetaCallback callback=" + callback.ToString() + ", int expire_time=" + expire_time);
+            CreatePublicShareAsync(new ulong[] { fs_id }, callback, expire_time);
+        }
+        /// <summary>
+        /// 异步创建多文件（夹）公开分享
+        /// </summary>
+        /// <param name="fs_id">FS ID</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="expire_time">有效时间（可选：1-1天，7-7天，0-永久）</param>
+        public void CreatePublicShareAsync(IEnumerable<ulong> fs_ids, ShareMetaCallback callback, int expire_time = 0)
+        {
+            _trace.TraceInfo("BaiduPCS.CreatePublicShareAsync called: IEnumerable<ulong> fs_ids=[count=" + fs_ids.Count() + "], ShareMetaCallback callback=" + callback.ToString() + ", int expire_time=" + expire_time);
 
+            if (expire_time != 0 && expire_time != 1 && expire_time != 7) throw new ArgumentOutOfRangeException("expire_time数值只能为0，1或7");
+            var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
+            var xhr_param = _get_xhr_param();
+            var query_param = new Parameters();
+            query_param.Add("channel", "chunlei");
+            query_param.Add("clienttype", 0);
+            query_param.Add("web", 1);
+            query_param.Add("app_id", APPID);
+            query_param.Add("bdstoken", _bdstoken);
+            query_param.Add("logid", _get_logid());
+
+            var post_param = new Parameters();
+            var fid_list = new JArray();
+            foreach (var item in fs_ids)
+            {
+                fid_list.Add(item);
+            }
+            post_param.Add("fid_list", JsonConvert.SerializeObject(fid_list));
+            post_param.Add("schannel", 0);
+            post_param.Add("channel_list", "[]");
+            post_param.Add("period", expire_time);
+
+            var post_data = Encoding.UTF8.GetBytes(post_param.BuildQueryString());
+            try
+            {
+                ns.HttpPostAsync(API_SHARE_SET_URL, post_data.Length, (sender, e) =>
+                {
+                    try
+                    {
+                        sender.RequestStream.Write(post_data, 0, post_data.Length);
+                        sender.HttpPostResponseAsync((sender2, e2) =>
+                        {
+                            try
+                            {
+                                var response = ns.ReadResponseString();
+                                _trace.TraceInfo(response);
+                                var json = JsonConvert.DeserializeObject(response) as JObject;
+                                _check_error(json);
+
+                                var ret = new ShareData();
+                                ret.CreateTime = json.Value<ulong>("ctime");
+                                ret.ExpiredType = json.Value<int>("expireType");
+                                ret.Link = json.Value<string>("link");
+                                ret.Premis = json.Value<bool>("premis");
+                                ret.ShareID = json.Value<ulong>("shareid");
+                                ret.ShortURL = json.Value<string>("shorturl");
+                                callback?.Invoke(true, ret);
+                            }
+                            catch (Exception ex)
+                            {
+                                _trace.TraceError(ex);
+                                callback?.Invoke(false, new ShareData());
+                            }
+                            finally
+                            {
+                                sender2.Close();
+                            }
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _trace.TraceError(ex);
+                        sender.Close();
+                        callback?.Invoke(false, new ShareData());
+                    }
+                }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), query_param);
+            }
+            catch (Exception ex)
+            {
+                _trace.TraceError(ex);
+                ns.Close();
+                throw ex;
+            }
+        }
+
+        /// <summary>
+        /// 异步创建单文件（夹）加密分享
+        /// </summary>
+        /// <param name="fs_id">FS ID</param>
+        /// <param name="password">分享密码</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="expire_time">有效时间（可选：1-1天，7-7天，0-永久）</param>
+        public void CreatePrivateShareAsync(ulong fs_id, string password, ShareMetaCallback callback, int expire_time = 0)
+        {
+            _trace.TraceInfo("BaiduPCS.CreatePrivateShareAsync called: ulong fs_id=" + fs_id + ", string password=" + password + ", ShareMetaCallback callback=" + callback.ToString() + ", int expire_time=" + expire_time);
+            CreatePrivateShareAsync(new ulong[] { fs_id }, password, callback, expire_time);
+        }
+        /// <summary>
+        /// 异步创建多文件（夹）加密分享
+        /// </summary>
+        /// <param name="fs_id">FS ID</param>
+        /// <param name="password">分享密码</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="expire_time">有效时间（可选：1-1天，7-7天，0-永久）</param>
+        public void CreatePrivateShareAsync(IEnumerable<ulong> fs_ids, string password, ShareMetaCallback callback, int expire_time = 0)
+        {
+            _trace.TraceInfo("BaiduPCS.CreatePrivateShareAsync called: IEnumerable<ulong> fs_ids=[count=" + fs_ids.Count() + "], string password=" + password + ", ShareMetaCallback callback=" + callback.ToString() + ", int expire_time=" + expire_time);
+
+            if (expire_time != 0 && expire_time != 1 && expire_time != 7) throw new ArgumentOutOfRangeException("expire_time数值只能为0，1或7");
+            var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
+            var xhr_param = _get_xhr_param();
+            var query_param = new Parameters();
+            query_param.Add("channel", "chunlei");
+            query_param.Add("clienttype", 0);
+            query_param.Add("web", 1);
+            query_param.Add("app_id", APPID);
+            query_param.Add("bdstoken", _bdstoken);
+            query_param.Add("logid", _get_logid());
+
+            var post_param = new Parameters();
+            var fid_list = new JArray();
+            foreach (var item in fs_ids)
+            {
+                fid_list.Add(item);
+            }
+            post_param.Add("fid_list", JsonConvert.SerializeObject(fid_list));
+            post_param.Add("schannel", 4);
+            post_param.Add("channel_list", "[]");
+            post_param.Add("period", expire_time);
+            post_param.Add("pwd", password);
+
+            var post_data = Encoding.UTF8.GetBytes(post_param.BuildQueryString());
+            try
+            {
+                ns.HttpPostAsync(API_SHARE_SET_URL, post_data.Length, (sender, e) =>
+                {
+                    try
+                    {
+                        sender.RequestStream.Write(post_data, 0, post_data.Length);
+                        sender.HttpPostResponseAsync((sender2, e2) =>
+                        {
+                            try
+                            {
+                                var response = ns.ReadResponseString();
+                                _trace.TraceInfo(response);
+                                var json = JsonConvert.DeserializeObject(response) as JObject;
+                                _check_error(json);
+
+                                var ret = new ShareData();
+                                ret.CreateTime = json.Value<ulong>("ctime");
+                                ret.ExpiredType = json.Value<int>("expireType");
+                                ret.Link = json.Value<string>("link");
+                                ret.Premis = json.Value<bool>("premis");
+                                ret.ShareID = json.Value<ulong>("shareid");
+                                ret.ShortURL = json.Value<string>("shorturl");
+                                callback?.Invoke(true, ret);
+                            }
+                            catch (Exception ex)
+                            {
+                                _trace.TraceError(ex);
+                                callback?.Invoke(false, new ShareData());
+                            }
+                            finally
+                            {
+                                sender2.Close();
+                            }
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _trace.TraceError(ex);
+                        sender.Close();
+                        callback?.Invoke(false, new ShareData());
+                    }
+                }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), query_param);
+            }
+            catch (Exception ex)
+            {
+                _trace.TraceError(ex);
+                ns.Close();
+                throw ex;
+            }
+        }
+        /// <summary>
+        /// 异步取消分享
+        /// </summary>
+        /// <param name="share_id">Share ID</param>
+        /// <param name="callback">回调函数</param>
+        public void CancelShareAsync(ulong share_id, OperationCallback callback)
+        {
+            _trace.TraceInfo("BaiduPCS.CancelShareAsync called: ulong share_id=" + share_id + ", OperationCallback callback=" + callback.ToString());
+            CancelShareAsync(new ulong[] { share_id }, callback);
+        }
+        /// <summary>
+        /// 异步取消多个分享
+        /// </summary>
+        /// <param name="share_ids">Share ID</param>
+        /// <param name="callback">回调函数</param>
+        public void CancelShareAsync(IEnumerable<ulong> share_ids, OperationCallback callback)
+        {
+            _trace.TraceInfo("BaiduPCS.CancelShareAsync called: IEnumerable<ulong> share_ids=[count=" + share_ids.Count() + "], OperationCallback callback=" + callback.ToString());
+            var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
+            var xhr_param = _get_xhr_param();
+            var query_param = new Parameters();
+            query_param.Add("channel", "chunlei");
+            query_param.Add("clienttype", 0);
+            query_param.Add("web", 1);
+            query_param.Add("bdstoken", _bdstoken);
+            query_param.Add("app_id", APPID);
+            query_param.Add("logid", _get_logid());
+
+            var post_body = new Parameters();
+            var shareid_list = new JArray();
+            foreach (var item in share_ids)
+            {
+                shareid_list.Add(item);
+            }
+            post_body.Add("shareid_list", JsonConvert.SerializeObject(shareid_list));
+
+            var post_data = Encoding.UTF8.GetBytes(post_body.BuildQueryString());
+            try
+            {
+                ns.HttpPostAsync(API_SHARE_CANCEL_URL, post_data.Length, (sender, e) =>
+                {
+                    try
+                    {
+                        ns.RequestStream.Write(post_data, 0, post_data.Length);
+                        ns.HttpPostResponseAsync((sender2, e2) =>
+                        {
+                            var response = ns.ReadResponseString();
+                            _trace.TraceInfo(response);
+                            var json = JsonConvert.DeserializeObject(response) as JObject;
+                            _check_error(json);
+
+                            callback?.Invoke(true, true);
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _trace.TraceError(ex);
+                        sender.Close();
+                        callback?.Invoke(false, false);
+                    }
+                }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), query_param);
+            }
+            catch (Exception ex)
+            {
+                _trace.TraceError(ex);
+                ns.Close();
+                throw ex;
+            }
+        }
+
+        public void GetShareRecordsAsync(ShareMultiMetaCallback callback)
+        {
+            _trace.TraceInfo("BaiduPCS.GetShareRecordsAsync called: ShareMultiMetaCallback callback=" + callback.ToString());
+            //todo:支持多页&多排序
+            var page = 1;
+
+            var xhr_param = _get_xhr_param();
+            var query_param = new Parameters();
+            query_param.Add("channel", "chunlei");
+            query_param.Add("clienttype", 0);
+            query_param.Add("web", 1);
+            query_param.Add("page", page);
+            query_param.Add("order", "ctime");
+            query_param.Add("desc", 1);
+            query_param.Add("_", (ulong)util.ToUnixTimestamp(DateTime.Now) * 1000);
+            query_param.Add("bdstoken", _bdstoken);
+            query_param.Add("app_id", APPID);
+            query_param.Add("logid", _get_logid());
+
+            var ns = new NetStream();
+            ns.CookieKey = _auth.CookieIdentifier;
+            try
+            {
+                ns.HttpGetAsync(API_SHARE_RECORD_URL, (sender, e) =>
+                {
+                    try
+                    {
+                        var response = sender.ReadResponseString();
+                        _trace.TraceInfo(response);
+                        var json = JsonConvert.DeserializeObject(response) as JObject;
+                        _check_error(json);
+
+                        var ret = new List<ShareRecord>();
+
+                        var nextpage = json.Value<int>("nextpage");
+                        if (nextpage != 0)
+                        {
+                            _trace.TraceWarning("检测到分享列表存在多页，但目前仍不支持");
+                        }
+
+                        var list = json.Value<JArray>("list");
+                        foreach (JObject item in list)
+                        {
+                            var record = new ShareRecord();
+                            record.CreateTime = item.Value<ulong>("ctime");
+                            record.DownloadCount = item.Value<uint>("dCnt");
+                            record.ExpiredType = item.Value<int>("expiredType");
+                            record.FS_IDs = new List<ulong>();
+                            foreach (var item2 in item.Value<JArray>("fsIds"))
+                            {
+                                record.FS_IDs.Add((ulong)item2);
+                            }
+                            record.IsPublic = item.Value<int>("public") != 0;
+                            record.Password = item.Value<string>("passwd");
+                            record.ShareID = item.Value<ulong>("shareId");
+                            record.ShortURL = item.Value<string>("shortlink");
+                            record.Status = item.Value<int>("status");
+                            record.TransferCount = item.Value<uint>("tCnt");
+                            record.TypicalPath = item.Value<string>("typicalPath");
+                            record.ViewCount = item.Value<uint>("vCnt");
+
+                            ret.Add(record);
+                        }
+                        callback?.Invoke(true, ret.ToArray());
+                    }
+                    catch (Exception ex)
+                    {
+                        _trace.TraceError(ex);
+                        callback?.Invoke(false, null);
+                    }
+                    finally
+                    {
+                        sender.Close();
+                    }
+                }, null, _get_xhr_param(), query_param);
+            }
+            catch (Exception ex)
+            {
+                _trace.TraceError(ex);
+                ns.Close();
+                throw ex;
+            }
+        }
         #endregion
     } //end class
 } //end namespace
