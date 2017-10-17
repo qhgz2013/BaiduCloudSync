@@ -16,8 +16,6 @@ namespace BaiduCloudSync
     //todo: 优化授权代码 + 网盘定期刷新模块
     public partial class BaiduPCS
     {
-
-
         #region static & const vars
         public static uint APPID = 250528;
         private static Tracer _trace = Tracer.GlobalTracer;
@@ -66,158 +64,11 @@ namespace BaiduCloudSync
         public const long VALIDATE_SIZE = 262144;
         //默认上传分段的大小
         public const int UPLOAD_SLICE_SIZE = 4194304;
+
+        public delegate void UploadStatusCallback(string path, string local_path, long current, long length);
         #endregion
 
-
-        #region Login Data
-        private Thread __next_update_thread;
-        //登陆的一些参数，由抓包得来
-        private void _init_login_data()
-        {
-            _trace.TraceInfo("BaiduPCS._init_login_data called: void");
-            const string pan_root_url = "http://pan.baidu.com/disk/home";
-            try
-            {
-                var ns = new NetStream();
-                ns.CookieKey = _auth.CookieIdentifier;
-                ns.HttpGet(pan_root_url);
-
-                var str = ns.ReadResponseString();
-                ns.Close();
-
-                //_trace.TraceInfo(str);
-
-                var match = Regex.Match(str, "\"bdstoken\":\"(\\w+)\"");
-                if (match.Success) __bdstoken = match.Result("$1");
-                match = Regex.Match(str, "\"sign1\":\"(\\w+)\"");
-                if (match.Success) __sign1 = match.Result("$1");
-                match = Regex.Match(str, "\"sign3\":\"(\\w+)\"");
-                if (match.Success) __sign3 = match.Result("$1");
-                match = Regex.Match(str, "\"timestamp\":(\\d+)");
-                if (match.Success) __timestamp = match.Result("$1");
-
-                //calculate for sign2
-                var j = Encoding.UTF8.GetBytes(__sign3);
-                var r = Encoding.UTF8.GetBytes(__sign1);
-                byte[] a = new byte[256], p = new byte[256];
-                var o = new byte[r.Length];
-                int v = j.Length;
-                for (int q = 0; q < 256; q++)
-                {
-                    a[q] = j[q % v];
-                    p[q] = (byte)q;
-                }
-                int u = 0;
-                for (int q = 0; q < 256; q++)
-                {
-                    u = (u + p[q] + a[q]) % 256;
-                    byte t = p[q];
-                    p[q] = p[u];
-                    p[u] = t;
-                }
-                int i = 0;
-                u = 0;
-                for (int q = 0; q < r.Length; q++)
-                {
-                    i = (i + 1) % 256;
-                    u = (u + p[i]) % 256;
-                    byte t = p[i];
-                    p[i] = p[u];
-                    p[u] = t;
-                    byte k = p[(p[i] + p[u]) % 256];
-                    o[q] = (byte)(r[q] ^ k);
-                }
-                __sign2 = Convert.ToBase64String(o);
-
-                _trace.TraceInfo("Initialization complete.\r\nbdstoken=" + __bdstoken + "\r\nsign1=" + __sign1 + "\r\nsign2=" + __sign2 + "\r\nsign3=" + __sign3 + "\r\ntimestamp=" + __timestamp);
-                //test
-                TestFunc();
-
-                //next update thread
-                if (__next_update_thread != null)
-                {
-                    try { var thd = __next_update_thread; __next_update_thread = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch { }
-                }
-                __next_update_thread = new Thread(() =>
-                {
-                    var ts = TimeSpan.FromHours(1);
-                    Thread.Sleep(ts);
-                    _init_login_data();
-                    __next_update_thread = null;
-                });
-                __next_update_thread.IsBackground = true;
-                __next_update_thread.Name = "网盘登陆数据刷新线程";
-                __next_update_thread.Start();
-            }
-            catch (ThreadAbortException) { }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-                //next update thread (exception raised mode)
-                if (__next_update_thread != null)
-                {
-                    try { var thd = __next_update_thread; __next_update_thread = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch { }
-                }
-                __next_update_thread = new Thread(() =>
-                {
-                    var ts = TimeSpan.FromSeconds(15);
-                    Thread.Sleep(ts);
-                    _init_login_data();
-                    __next_update_thread = null;
-                });
-                __next_update_thread.IsBackground = true;
-                __next_update_thread.Name = "网盘登陆数据刷新线程";
-                __next_update_thread.Start();
-                __next_update_thread.Join();
-            }
-        }
-        private string __bdstoken, __sign1, __sign2, __sign3, __timestamp;
-        private string _bdstoken
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(__bdstoken))
-                    _init_login_data();
-                return __bdstoken;
-            }
-        }
-        private string _sign1
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(__sign1))
-                    _init_login_data();
-                return __sign1;
-            }
-        }
-        private string _sign2
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(__sign2))
-                    _init_login_data();
-                return __sign2;
-            }
-        }
-        private string _sign3
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(__sign3))
-                    _init_login_data();
-                return __sign3;
-            }
-        }
-        private string _timestamp
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(__timestamp))
-                    _init_login_data();
-                return __timestamp;
-            }
-        }
-
+        #region auth
         private BaiduOAuth _auth;
         public BaiduPCS(BaiduOAuth auth)
         {
@@ -685,107 +536,7 @@ namespace BaiduCloudSync
 
 
         #region Upload
-
-        #region functions being removed (no longer support in async/sync mode)
-        public delegate void UploadStatusCallback(string path, string local_path, long current, long length);
-        public struct RapidUploadInterface
-        {
-            public ulong content_length;
-            public string content_md5;
-            public string content_crc32;
-            public string slice_md5;
-        }
-        /// <summary>
-        /// 从本地文件中获取秒传文件的参数
-        /// </summary>
-        /// <param name="local_path">文件路径</param>
-        /// <param name="callback">读取进度回调函数</param>
-        /// <returns></returns>
-        public RapidUploadInterface GetRapidUploadArguments(string local_path, UploadStatusCallback callback = null)
-        {
-            _trace.TraceInfo("BaiduPCS.GetRapidUploadArguments called: string local_path=" + local_path + ", UploadStatusCallback callback=" + callback?.ToString());
-            var ret = new RapidUploadInterface();
-
-            var file_info = new FileInfo(local_path);
-            if (!file_info.Exists)
-            {
-                //throw new FileNotFoundException("无法找到文件 " + local_path);
-                return ret;
-            }
-
-            var content_length = file_info.Length;
-            var stream_in = file_info.OpenRead();
-
-            var crc_calc = new Crc32();
-            var md5_calc = new System.Security.Cryptography.MD5CryptoServiceProvider();
-            var slice_md5_calc = new System.Security.Cryptography.MD5CryptoServiceProvider();
-
-            long readed_bytes = 0;
-            int cur_read = 0;
-            var buffer = new byte[BUFFER_SIZE];
-            var temp_buffer = new byte[BUFFER_SIZE];
-
-            do
-            {
-                cur_read = stream_in.Read(buffer, 0, BUFFER_SIZE);
-
-                crc_calc.Append(buffer, 0, cur_read);
-                if (readed_bytes + cur_read <= VALIDATE_SIZE)
-                {
-                    slice_md5_calc.TransformBlock(buffer, 0, cur_read, temp_buffer, 0);
-                }
-                else if (readed_bytes <= VALIDATE_SIZE)
-                {
-                    slice_md5_calc.TransformBlock(buffer, 0, (int)(VALIDATE_SIZE - readed_bytes), temp_buffer, 0);
-                }
-                md5_calc.TransformBlock(buffer, 0, cur_read, temp_buffer, 0);
-
-                readed_bytes += cur_read;
-                callback?.Invoke(string.Empty, local_path, readed_bytes, content_length);
-            } while (cur_read > 0);
-
-            stream_in.Close();
-            stream_in.Dispose();
-            md5_calc.TransformFinalBlock(buffer, 0, 0);
-            slice_md5_calc.TransformFinalBlock(buffer, 0, 0);
-
-            var content_md5 = util.Hex(md5_calc.Hash);
-            var content_crc = crc_calc.GetCrc32().ToString("X2").ToLower();
-            var slice_md5 = util.Hex(slice_md5_calc.Hash);
-
-            ret.content_crc32 = content_crc;
-            ret.content_length = (ulong)content_length;
-            ret.content_md5 = content_md5;
-            ret.slice_md5 = slice_md5;
-
-            if (content_length < VALIDATE_SIZE)
-            {
-                _trace.TraceWarning("File size too small, could not use RapidUpload method");
-                ret.slice_md5 = string.Empty;
-            }
-            return ret;
-        }
-        /// <summary>
-        /// 秒传文件，使用本地路径计算，失败时返回fs_id为0，MD5为null，没有找到文件时MD5="404"
-        /// </summary>
-        /// <param name="path">网盘的文件路径</param>
-        /// <param name="local_path">本地文件的路径</param>
-        /// <param name="ondup">同名覆盖方式</param>
-        /// <param name="callback">读取进度回调函数</param>
-        /// <returns>成功时返回文件信息，失败时返回fs_id和MD5都为0</returns>
-        public ObjectMetadata RapidUpload(string path, string local_path, ondup ondup = ondup.overwrite, UploadStatusCallback callback = null)
-        {
-            _trace.TraceInfo("BaiduPCS.RapidUpload called: string path=" + path + ", string local_path=" + local_path + ", ondup ondup=" + ondup + ", UploadStatusCallback callback=" + callback?.ToString());
-            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(local_path))
-            {
-                //throw new ArgumentNullException("path");
-                return new ObjectMetadata();
-            }
-            var arg = GetRapidUploadArguments(local_path, callback);
-            return RapidUploadRaw(path, arg.content_length, arg.content_md5, arg.content_crc32, arg.slice_md5, ondup);
-        }
-        #endregion
-
+        
         /// <summary>
         /// 秒传文件，失败时返回fs_id为0
         /// </summary>
@@ -1287,27 +1038,6 @@ namespace BaiduCloudSync
 
         #endregion
 
-        private void TestFunc()
-        {
-            var url = "http://pan.baidu.com/api/report/user";
-            var query_param = new Parameters();
-            query_param.Add("channel", "chunlei");
-            query_param.Add("web", 1);
-            query_param.Add("app_id", APPID);
-            query_param.Add("bdstoken", _bdstoken);
-            query_param.Add("logid", _get_logid());
-            query_param.Add("clienttype", 0);
-
-            var post_param = new Parameters();
-            post_param.Add("timestamp", (long)util.ToUnixTimestamp(DateTime.Now));
-            post_param.Add("action", "fm_self");
-
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
-            ns.HttpPost(url, post_param, headerParam: _get_xhr_param(), urlParam: query_param);
-            var rep = ns.ReadResponseString();
-            ns.Close();
-        }
     }
     public class ErrnoException : Exception
     {

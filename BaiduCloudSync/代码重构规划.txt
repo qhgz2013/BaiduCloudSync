@@ -11,3 +11,5 @@
 9.  实现pem的标准解析 (see: https://msdn.microsoft.com/en-us/library/windows/desktop/bb648645(v=vs.85).aspx)
 10. 建立非窗体的命令解析界面
 11. 多账号网盘RAID
+
+转移auth: pcs api (auth) -> oauth

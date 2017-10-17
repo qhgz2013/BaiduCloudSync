@@ -9,6 +9,7 @@ using System.Drawing;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Net;
+using System.Threading;
 
 namespace BaiduCloudSync
 {
@@ -23,12 +24,14 @@ namespace BaiduCloudSync
         private const string _OAUTH_GETAPI_URL = "https://passport.baidu.com/v2/api/?getapi";
         private const string _OAUTH_LOGINCHECK_URL = "https://passport.baidu.com/v2/api/?logincheck";
         private const string _OAUTH_LOGIN_URL = "https://passport.baidu.com/v2/api/?login";
-        private const string _OAUTH_CAPTCHA_URL = "http://passport.baidu.com/cgi-bin/genimage";
+        private const string _OAUTH_CAPTCHA_URL = "https://passport.baidu.com/cgi-bin/genimage";
         private const string _OAUTH_CHECKVCODE_URL = "https://passport.baidu.com/v2/?checkvcode";
         private const string _OAUTH_REGET_CODESTR_URL = "https://passport.baidu.com/v2/?reggetcodestr";
         private const string _BAIDU_ROOT_URL = "https://www.baidu.com/";
+        private const string _PAN_ROOT_URL = "https://pan.baidu.com/";
         #endregion
-
+        
+        #region login request
         #region private functions
         /// <summary>
         /// 获取api信息
@@ -337,16 +340,7 @@ namespace BaiduCloudSync
             }
 
         }
-        /// <summary>
-        /// 获取当前用户的名称
-        /// </summary>
-        /// <returns></returns>
-        private string _get_user_nickname()
-        {
-            throw new NotImplementedException();
-        }
         #endregion
-
 
         #region login variables
         //用户名和明文密码
@@ -355,11 +349,6 @@ namespace BaiduCloudSync
         private string _token, _codestring, _verifycode;
         //vcodetype...不知道怎么形容好
         private string _vcodetype;
-        private string _nickname;
-        /// <summary>
-        /// 用户名称
-        /// </summary>
-        public string NickName { get { return _nickname; } }
 
         private NetStream _http;
         //分辨多用户的标识key
@@ -383,86 +372,7 @@ namespace BaiduCloudSync
 
         #endregion
 
-        #region event callback
-        public delegate void LoginEventHandler();
-        /// <summary>
-        /// 登陆成功
-        /// </summary>
-        public event LoginEventHandler LoginSucceeded;
-        /// <summary>
-        /// 登陆失败
-        /// </summary>
-        public event LoginEventHandler LoginFailed;
-        /// <summary>
-        /// 登陆需验证码
-        /// </summary>
-        public event LoginEventHandler LoginCaptchaRequired;
-        /// <summary>
-        /// 登陆过程发生异常错误
-        /// </summary>
-        public event LoginEventHandler LoginExceptionRaised;
-        /// <summary>
-        /// 登陆失败的原因
-        /// </summary>
-        private string _failed_reason;
-        public string GetLastFailedReason { get { return _failed_reason; } }
-        private int _failed_code;
-        public int GetLastFailedCode { get { return _failed_code; } }
-        #endregion
-
-        #region authentication variables (from cookie)
-        private string _bduss, _baiduid, _stoken;
-        private void _init_login_data()
-        {
-            //todo: 支持更改key
-            if (!NetStream.DefaultCookieContainer.ContainsKey(_cookie_identifier)) return;
-            var cc = NetStream.DefaultCookieContainer[_cookie_identifier].GetCookies(new Uri("https://www.baidu.com/"));
-            foreach (Cookie item in cc)
-            {
-                switch (item.Name)
-                {
-                    case "BDUSS":
-                        _bduss = item.Value;
-                        break;
-                    case "BAIDUID":
-                        _baiduid = item.Value;
-                        break;
-                    case "STOKEN":
-                        _stoken = item.Value;
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
-        public string bduss
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(_bduss)) _init_login_data();
-                return _bduss;
-            }
-        }
-        public string baiduid
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(_baiduid)) _init_login_data();
-                return _baiduid;
-            }
-        }
-        public string stoken
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(_stoken)) _init_login_data();
-                return _stoken;
-            }
-        }
-        #endregion
-
-
-        #region public functions
+        #region public login functions
         /// <summary>
         /// 登陆到百度
         /// </summary>
@@ -621,6 +531,283 @@ namespace BaiduCloudSync
             }
         }
 
+        #endregion
+
+        #endregion
+
+        #region event callback
+        public delegate void LoginEventHandler();
+        /// <summary>
+        /// 登陆成功
+        /// </summary>
+        public event LoginEventHandler LoginSucceeded;
+        /// <summary>
+        /// 登陆失败
+        /// </summary>
+        public event LoginEventHandler LoginFailed;
+        /// <summary>
+        /// 登陆需验证码
+        /// </summary>
+        public event LoginEventHandler LoginCaptchaRequired;
+        /// <summary>
+        /// 登陆过程发生异常错误
+        /// </summary>
+        public event LoginEventHandler LoginExceptionRaised;
+        /// <summary>
+        /// 登陆失败的原因
+        /// </summary>
+        private string _failed_reason;
+        public string GetLastFailedReason { get { return _failed_reason; } }
+        private int _failed_code;
+        public int GetLastFailedCode { get { return _failed_code; } }
+        #endregion
+
+        #region authentication variables (from cookie)
+        private string _bduss, _baiduid, _stoken;
+        private void _init_login_data()
+        {
+            //todo: 支持更改key
+            if (!NetStream.DefaultCookieContainer.ContainsKey(_cookie_identifier)) return;
+            var cc = NetStream.DefaultCookieContainer[_cookie_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
+            foreach (Cookie item in cc)
+            {
+                switch (item.Name)
+                {
+                    case "BDUSS":
+                        _bduss = item.Value;
+                        break;
+                    case "BAIDUID":
+                        _baiduid = item.Value;
+                        break;
+                    case "STOKEN":
+                        _stoken = item.Value;
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+        public string bduss
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_bduss)) _init_login_data();
+                return _bduss;
+            }
+        }
+        public string baiduid
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_baiduid)) _init_login_data();
+                return _baiduid;
+            }
+        }
+        public string stoken
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_stoken)) _init_login_data();
+                return _stoken;
+            }
+        }
+        #endregion
+
+        #region account info
+        private string _nickname;
+        /// <summary>
+        /// 用户名称
+        /// </summary>
+        public string NickName { get { if (string.IsNullOrEmpty(_nickname)) _init_user_nickname(); return _nickname; } }
+
+        /// <summary>
+        /// 获取当前用户的名称
+        /// </summary>
+        /// <returns></returns>
+        private void _init_user_nickname()
+        {
+            try
+            {
+                _http.HttpGet(_BAIDU_ROOT_URL);
+                var response_data = _http.ReadResponseString();
+                var reg = Regex.Match(response_data, "bds.comm.user\\s*=\\s*\"(?<user>[^\"])\";");
+                if (reg.Success)
+                    _nickname = reg.Result("${user}");
+                _http.Close();
+            }
+            catch (Exception ex)
+            {
+                Tracer.GlobalTracer.TraceError(ex);
+            }
+        }
+        #endregion
+
+        #region pcs api auth
+        private Thread __next_update_thread;
+        //登陆的一些参数，由抓包得来
+        private void _init_pcs_auth_data()
+        {
+            Tracer.GlobalTracer.TraceInfo("BaiduOAuth._init_pcs_auth_data called: void");
+            try
+            {
+                _http.HttpGet(_PAN_ROOT_URL);
+
+                var str = _http.ReadResponseString();
+                _http.Close();
+
+                //_trace.TraceInfo(str);
+
+                var match = Regex.Match(str, "\"bdstoken\":\"(\\w+)\"");
+                if (match.Success) _bdstoken = match.Result("$1");
+                match = Regex.Match(str, "\"sign1\":\"(\\w+)\"");
+                if (match.Success) _sign1 = match.Result("$1");
+                match = Regex.Match(str, "\"sign3\":\"(\\w+)\"");
+                if (match.Success) _sign3 = match.Result("$1");
+                match = Regex.Match(str, "\"timestamp\":(\\d+)");
+                if (match.Success) _timestamp = match.Result("$1");
+
+                //calculate for sign2
+                var j = Encoding.UTF8.GetBytes(_sign3);
+                var r = Encoding.UTF8.GetBytes(_sign1);
+                byte[] a = new byte[256], p = new byte[256];
+                var o = new byte[r.Length];
+                int v = j.Length;
+                for (int q = 0; q < 256; q++)
+                {
+                    a[q] = j[q % v];
+                    p[q] = (byte)q;
+                }
+                int u = 0;
+                for (int q = 0; q < 256; q++)
+                {
+                    u = (u + p[q] + a[q]) % 256;
+                    byte t = p[q];
+                    p[q] = p[u];
+                    p[u] = t;
+                }
+                int i = 0;
+                u = 0;
+                for (int q = 0; q < r.Length; q++)
+                {
+                    i = (i + 1) % 256;
+                    u = (u + p[i]) % 256;
+                    byte t = p[i];
+                    p[i] = p[u];
+                    p[u] = t;
+                    byte k = p[(p[i] + p[u]) % 256];
+                    o[q] = (byte)(r[q] ^ k);
+                }
+                _sign2 = Convert.ToBase64String(o);
+
+                Tracer.GlobalTracer.TraceInfo("Initialization complete.\r\nbdstoken=" + _bdstoken + "\r\nsign1=" + _sign1 + "\r\nsign2=" + _sign2 + "\r\nsign3=" + _sign3 + "\r\ntimestamp=" + _timestamp);
+                //test
+                //TestFunc();
+
+                //next update thread
+                if (__next_update_thread != null)
+                {
+                    try { var thd = __next_update_thread; __next_update_thread = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch { }
+                }
+                __next_update_thread = new Thread(() =>
+                {
+                    var ts = TimeSpan.FromHours(1);
+                    Thread.Sleep(ts);
+                    _init_login_data();
+                    __next_update_thread = null;
+                });
+                __next_update_thread.IsBackground = true;
+                __next_update_thread.Name = "网盘登陆数据刷新线程";
+                __next_update_thread.Start();
+            }
+            catch (ThreadAbortException) { }
+            catch (Exception ex)
+            {
+                Tracer.GlobalTracer.TraceError(ex.ToString());
+                //next update thread (exception raised mode)
+                if (__next_update_thread != null)
+                {
+                    try { var thd = __next_update_thread; __next_update_thread = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch { }
+                }
+                __next_update_thread = new Thread(() =>
+                {
+                    var ts = TimeSpan.FromSeconds(15);
+                    Thread.Sleep(ts);
+                    _init_login_data();
+                    __next_update_thread = null;
+                });
+                __next_update_thread.IsBackground = true;
+                __next_update_thread.Name = "网盘登陆数据刷新线程";
+                __next_update_thread.Start();
+                __next_update_thread.Join();
+            }
+        }
+        private string _bdstoken, _sign1, _sign2, _sign3, _timestamp;
+        public string bdstoken
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_bdstoken))
+                    _init_pcs_auth_data();
+                return _bdstoken;
+            }
+        }
+        public string sign1
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_sign1))
+                    _init_pcs_auth_data();
+                return _sign1;
+            }
+        }
+        public string sign2
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_sign2))
+                    _init_pcs_auth_data();
+                return _sign2;
+            }
+        }
+        public string sign3
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_sign3))
+                    _init_pcs_auth_data();
+                return _sign3;
+            }
+        }
+        public string timestamp
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_timestamp))
+                    _init_pcs_auth_data();
+                return _timestamp;
+            }
+        }
+        //private void TestFunc()
+        //{
+        //    var url = "http://pan.baidu.com/api/report/user";
+        //    var query_param = new Parameters();
+        //    query_param.Add("channel", "chunlei");
+        //    query_param.Add("web", 1);
+        //    query_param.Add("app_id", APPID);
+        //    query_param.Add("bdstoken", _bdstoken);
+        //    query_param.Add("logid", _get_logid());
+        //    query_param.Add("clienttype", 0);
+
+        //    var post_param = new Parameters();
+        //    post_param.Add("timestamp", (long)util.ToUnixTimestamp(DateTime.Now));
+        //    post_param.Add("action", "fm_self");
+
+        //    var ns = new NetStream();
+        //    ns.CookieKey = _auth.CookieIdentifier;
+        //    ns.HttpPost(url, post_param, headerParam: _get_xhr_param(), urlParam: query_param);
+        //    var rep = ns.ReadResponseString();
+        //    ns.Close();
+        //}
         #endregion
     }
 }
