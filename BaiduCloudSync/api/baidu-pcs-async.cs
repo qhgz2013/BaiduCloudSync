@@ -7,7 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace BaiduCloudSync
@@ -22,25 +21,25 @@ namespace BaiduCloudSync
         /// </summary>
         /// <param name="success">是否成功</param>
         /// <param name="result">网盘的使用情况</param>
-        public delegate void QuotaCallback(bool success, Quota result);
+        public delegate void QuotaCallback(bool success, Quota result, object state);
         /// <summary>
         /// 文件/文件夹操作回调函数原型
         /// </summary>
         /// <param name="success">是否成功</param>
         /// <param name="result">是否成功（同success）</param>
-        public delegate void OperationCallback(bool success, bool result);
+        public delegate void OperationCallback(bool success, bool result, object state);
         /// <summary>
         /// 文件/文件夹信息回调函数原型
         /// </summary>
         /// <param name="success">是否成功</param>
         /// <param name="result">文件/文件夹信息</param>
-        public delegate void ObjectMetaCallback(bool success, ObjectMetadata result);
+        public delegate void ObjectMetaCallback(bool success, ObjectMetadata result, object state);
         /// <summary>
         /// 多个文件/文件夹信息回调函数原型
         /// </summary>
         /// <param name="success">是否成功</param>
         /// <param name="result">多个文件/文件夹信息</param>
-        public delegate void MultiObjectMetaCallback(bool success, ObjectMetadata[] result);
+        public delegate void MultiObjectMetaCallback(bool success, ObjectMetadata[] result, object state);
         /// <summary>
         /// 文件差异比较的回调函数
         /// </summary>
@@ -49,45 +48,45 @@ namespace BaiduCloudSync
         /// <param name="reset">是否重置</param>
         /// <param name="next_cursor">下一个游标位置</param>
         /// <param name="result">多个文件/文件夹信息</param>
-        public delegate void FileDiffCallback(bool success, bool has_more, bool reset, string next_cursor, ObjectMetadata[] result);
+        public delegate void FileDiffCallback(bool success, bool has_more, bool reset, string next_cursor, ObjectMetadata[] result, object state);
         /// <summary>
         /// 异步上传文件的回调函数原型
         /// </summary>
         /// <param name="success">是否成功</param>
         /// <param name="task_id">分配的任务id</param>
         /// <param name="connect_stream">输出的数据流</param>
-        public delegate void UploadCallback(bool success, Guid task_id, Stream connect_stream);
+        public delegate void UploadCallback(bool success, Guid task_id, Stream connect_stream, object state);
         /// <summary>
         /// 预创建文件的回调函数原型
         /// </summary>
         /// <param name="success">是否成功</param>
         /// <param name="block_count">分段数量</param>
         /// <param name="upload_id">上传id</param>
-        public delegate void PreCreateCallback(bool success, int block_count, string upload_id);
+        public delegate void PreCreateCallback(bool success, int block_count, string upload_id, object state);
         /// <summary>
         /// 分段上传文件的回调函数原型
         /// </summary>
         /// <param name="success">是否成功</param>
         /// <param name="slice_md5">该分段的MD5</param>
-        public delegate void SliceUploadCallback(bool success, string slice_md5);
+        public delegate void SliceUploadCallback(bool success, string slice_md5, object state);
         /// <summary>
         /// 获取下载链接的回调函数原型
         /// </summary>
         /// <param name="success">是否成功</param>
         /// <param name="urls">多个url</param>
-        public delegate void DownloadLinkCallback(bool success, string[] urls);
+        public delegate void DownloadLinkCallback(bool success, string[] urls, object state);
         /// <summary>
         /// 分享文件的回调函数原型
         /// </summary>
         /// <param name="success"></param>
         /// <param name="result"></param>
-        public delegate void ShareMetaCallback(bool success, ShareData result);
+        public delegate void ShareMetaCallback(bool success, ShareData result, object state);
         /// <summary>
         /// 获取分享详细信息的回调函数原型
         /// </summary>
         /// <param name="success"></param>
         /// <param name="result"></param>
-        public delegate void ShareMultiMetaCallback(bool success, ShareRecord[] result);
+        public delegate void ShareMultiMetaCallback(bool success, ShareRecord[] result, object state);
         #endregion
 
         #region file/directory operation
@@ -95,7 +94,7 @@ namespace BaiduCloudSync
         /// 异步获取网盘配额
         /// </summary>
         /// <param name="callback">回调函数</param>
-        public void GetQuotaAsync(QuotaCallback callback)
+        public void GetQuotaAsync(QuotaCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.GetQuotaAsync called: QuotaCallback callback=" + callback.ToString());
             var ret = new Quota();
@@ -123,12 +122,12 @@ namespace BaiduCloudSync
 
                         ret.InUsed = json.Value<ulong>("used");
                         ret.Total = json.Value<ulong>("total");
-                        callback?.Invoke(true, ret);
+                        callback?.Invoke(true, ret, state);
                     }
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
-                        callback?.Invoke(false, ret);
+                        callback?.Invoke(false, ret, state);
                     }
                     finally
                     {
@@ -150,17 +149,17 @@ namespace BaiduCloudSync
         /// </summary>
         /// <param name="path">文件路径</param>
         /// <param name="callback">回调函数</param>
-        public void DeletePathAsync(string path, OperationCallback callback)
+        public void DeletePathAsync(string path, OperationCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.DeletePathAsync called: string path=" + path + ", OperationCallback callback=" + callback.ToString());
-            DeletePathAsync(new string[] { path }, callback);
+            DeletePathAsync(new string[] { path }, callback, state);
         }
         /// <summary>
         /// 异步删除多个文件
         /// </summary>
         /// <param name="paths">文件路径</param>
         /// <param name="callback">回调函数</param>
-        public void DeletePathAsync(IEnumerable<string> paths, OperationCallback callback)
+        public void DeletePathAsync(IEnumerable<string> paths, OperationCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.DeletePathAsync called: IEnumerable<string> paths=[count=" + paths.Count() + "], OperationCallback callback=" + callback.ToString());
             try
@@ -209,12 +208,12 @@ namespace BaiduCloudSync
                                 _trace.TraceInfo(response);
                                 var json = JsonConvert.DeserializeObject(response) as JObject;
                                 _check_error(json);
-                                callback?.Invoke(true, true);
+                                callback?.Invoke(true, true, state);
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex.ToString());
-                                callback.Invoke(false, false);
+                                callback.Invoke(false, false, state);
                             }
                             finally
                             {
@@ -226,7 +225,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex.ToString());
                         sender.Close();
-                        callback?.Invoke(false, false);
+                        callback?.Invoke(false, false, state);
                     }
                 }
                 , null, "application/x-www-form-urlencoded", _get_xhr_param(), querystr);
@@ -245,10 +244,10 @@ namespace BaiduCloudSync
         /// <param name="destination">目标文件路径</param>
         /// <param name="callback">回调函数</param>
         /// <param name="ondup">同名覆盖方式</param>
-        public void MovePathAsync(string source, string destination, OperationCallback callback, ondup ondup = ondup.overwrite)
+        public void MovePathAsync(string source, string destination, OperationCallback callback, ondup ondup = ondup.overwrite, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.MovePathAsync called, string source=" + source + ", string destination=" + destination + ", OperationCallback callback=" + callback.ToString() + ", ondup ondup=" + ondup.ToString());
-            MovePathAsync(new string[] { source }, new string[] { destination }, callback, ondup);
+            MovePathAsync(new string[] { source }, new string[] { destination }, callback, ondup, state);
         }
         /// <summary>
         /// 异步移动多个文件
@@ -257,7 +256,7 @@ namespace BaiduCloudSync
         /// <param name="destination">目标文件路径</param>
         /// <param name="callback">回调函数</param>
         /// <param name="ondup">同名覆盖方式</param>
-        public void MovePathAsync(IEnumerable<string> source, IEnumerable<string> destination, OperationCallback callback, ondup ondup = ondup.overwrite)
+        public void MovePathAsync(IEnumerable<string> source, IEnumerable<string> destination, OperationCallback callback, ondup ondup = ondup.overwrite, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.MovePathAsync called, IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], OperationCallback callback=" + callback.ToString() + ", ondup ondup=" + ondup.ToString());
 
@@ -327,12 +326,12 @@ namespace BaiduCloudSync
                                 var json = JsonConvert.DeserializeObject(response) as JObject;
                                 _check_error(json);
 
-                                callback?.Invoke(true, true);
+                                callback?.Invoke(true, true, state);
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
-                                callback?.Invoke(false, false);
+                                callback?.Invoke(false, false, state);
                             }
                             finally
                             {
@@ -344,7 +343,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, false);
+                        callback?.Invoke(false, false, state);
                     }
                 }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), param);
             }
@@ -362,10 +361,10 @@ namespace BaiduCloudSync
         /// <param name="destination">目标文件路径</param>
         /// <param name="callback">回调函数</param>
         /// <param name="ondup">同名覆盖方式</param>
-        public void CopyPathAsync(string source, string destination, OperationCallback callback, ondup ondup = ondup.overwrite)
+        public void CopyPathAsync(string source, string destination, OperationCallback callback, ondup ondup = ondup.overwrite, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.CopyPathAsync called: string source=" + source + ", string destination=" + destination + ", OperationCallback callback=" + callback.ToString() + ", ondup ondup=" + ondup.ToString());
-            CopyPathAsync(new string[] { source }, new string[] { destination }, callback, ondup);
+            CopyPathAsync(new string[] { source }, new string[] { destination }, callback, ondup, state);
         }
         /// <summary>
         /// 异步复制多个文件
@@ -374,7 +373,7 @@ namespace BaiduCloudSync
         /// <param name="destination">目标文件路径</param>
         /// <param name="callback">回调函数</param>
         /// <param name="ondup">同名覆盖方式</param>
-        public void CopyPathAsync(IEnumerable<string> source, IEnumerable<string> destination, OperationCallback callback, ondup ondup = ondup.overwrite)
+        public void CopyPathAsync(IEnumerable<string> source, IEnumerable<string> destination, OperationCallback callback, ondup ondup = ondup.overwrite, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.CopyPathAsync called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], OperationCallback callback=" + callback.ToString() + ", ondup ondup=" + ondup.ToString());
 
@@ -444,12 +443,12 @@ namespace BaiduCloudSync
                                 var json = JsonConvert.DeserializeObject(response) as JObject;
                                 _check_error(json);
 
-                                callback?.Invoke(true, true);
+                                callback?.Invoke(true, true, state);
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
-                                callback?.Invoke(false, false);
+                                callback?.Invoke(false, false, state);
                             }
                             finally
                             {
@@ -461,7 +460,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, false);
+                        callback?.Invoke(false, false, state);
                     }
                 }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), param);
             }
@@ -479,10 +478,10 @@ namespace BaiduCloudSync
         /// <param name="source">原文件路径</param>
         /// <param name="new_name">新文件名</param>
         /// <param name="callback">回调函数</param>
-        public void RenameAsync(string source, string new_name, OperationCallback callback)
+        public void RenameAsync(string source, string new_name, OperationCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.RenameAsync called: string source=" + source + ", string new_name=" + new_name + ", OperationCallback callback=" + callback.ToString());
-            RenameAsync(new string[] { source }, new string[] { new_name }, callback);
+            RenameAsync(new string[] { source }, new string[] { new_name }, callback, state);
         }
         /// <summary>
         /// 异步重命名多个文件
@@ -490,7 +489,7 @@ namespace BaiduCloudSync
         /// <param name="source">原文件路径</param>
         /// <param name="new_name">新文件名</param>
         /// <param name="callback">回调函数</param>
-        public void RenameAsync(IEnumerable<string> source, IEnumerable<string> new_name, OperationCallback callback)
+        public void RenameAsync(IEnumerable<string> source, IEnumerable<string> new_name, OperationCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.RenameAsync called: string IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> new_name=[count=" + new_name.Count() + "], OperationCallback callback=" + callback.ToString());
 
@@ -547,12 +546,12 @@ namespace BaiduCloudSync
                                 var json = JsonConvert.DeserializeObject(response) as JObject;
                                 _check_error(json);
 
-                                callback?.Invoke(true, true);
+                                callback?.Invoke(true, true, state);
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
-                                callback?.Invoke(false, false);
+                                callback?.Invoke(false, false, state);
                             }
                             finally
                             {
@@ -564,7 +563,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, false);
+                        callback?.Invoke(false, false, state);
                     }
                 }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), param);
             }
@@ -580,7 +579,7 @@ namespace BaiduCloudSync
         /// </summary>
         /// <param name="path">网盘路径</param>
         /// <param name="callback">回调函数</param>
-        public void CreateDirectoryAsync(string path, ObjectMetaCallback callback)
+        public void CreateDirectoryAsync(string path, ObjectMetaCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.CreateDirectoryAsync called: string path=" + path + ", ObjectMetaCallback callback=" + callback.ToString());
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
@@ -629,12 +628,12 @@ namespace BaiduCloudSync
                                 ret.IsDir = json.Value<uint>("isdir") != 0;
                                 ret.MD5 = string.Empty;
 
-                                callback?.Invoke(true, ret);
+                                callback?.Invoke(true, ret, state);
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
-                                callback?.Invoke(false, new ObjectMetadata());
+                                callback?.Invoke(false, new ObjectMetadata(), state);
                             }
                             finally
                             {
@@ -646,7 +645,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, new ObjectMetadata());
+                        callback?.Invoke(false, new ObjectMetadata(), state);
                     }
                 }
                 , null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), query_param);
@@ -668,7 +667,7 @@ namespace BaiduCloudSync
         /// <param name="asc">排序顺序(true为顺序，false为倒序)</param>
         /// <param name="page">页数</param>
         /// <param name="count">显示数量</param>
-        public void GetFileListAsync(string path, MultiObjectMetaCallback callback, FileOrder order = FileOrder.name, bool asc = true, int page = 1, int count = 1000)
+        public void GetFileListAsync(string path, MultiObjectMetaCallback callback, FileOrder order = FileOrder.name, bool asc = true, int page = 1, int count = 1000, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.GetFileListAsync called: string path=" + path + ", MultiObjectMetaCallback callback=" + callback.ToString() + ", FileOrder order=" + order + ", bool asc=" + asc + ", int page=" + page + ", int count=" + count);
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
@@ -701,7 +700,7 @@ namespace BaiduCloudSync
                         if (Math.Abs(json.Value<int>("errno")) == 9)
                         {
                             _trace.TraceWarning("该文件夹不存在，请检查文件路径");
-                            callback?.Invoke(true, null);
+                            callback?.Invoke(true, null, state);
                             return;
                         }
                         _check_error(json);
@@ -712,13 +711,13 @@ namespace BaiduCloudSync
                         {
                             ret.Add(_read_json_meta(item));
                         }
-                        callback?.Invoke(true, ret.ToArray());
+                        callback?.Invoke(true, ret.ToArray(), state);
 
                     }
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
-                        callback?.Invoke(false, null);
+                        callback?.Invoke(false, null, state);
                     }
                     finally
                     {
@@ -737,7 +736,7 @@ namespace BaiduCloudSync
         /// </summary>
         /// <param name="cursor">游标位置</param>
         /// <param name="callback">回调函数</param>
-        public void GetFileDiffAsync(string cursor, FileDiffCallback callback)
+        public void GetFileDiffAsync(string cursor, FileDiffCallback callback, object state = null)
         {
             if (string.IsNullOrEmpty(cursor)) cursor = "null";
             _trace.TraceInfo("BaiduPCS.GetFileDiffAsync called: string cursor=" + cursor + "FileDiffCallback callback=" + callback.ToString());
@@ -774,12 +773,12 @@ namespace BaiduCloudSync
                         {
                             ret_filelist.Add(_read_json_meta((JObject)item.Value));
                         }
-                        callback?.Invoke(true, has_more, reset, next_cursor, ret_filelist.ToArray());
+                        callback?.Invoke(true, has_more, reset, next_cursor, ret_filelist.ToArray(), state);
                     }
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
-                        callback?.Invoke(false, false, false, null, null);
+                        callback?.Invoke(false, false, false, null, null, state);
                     }
                     finally
                     {
@@ -807,7 +806,7 @@ namespace BaiduCloudSync
         /// <param name="slice_md5">前256K验证段的MD5</param>
         /// <param name="callback">回调函数</param>
         /// <param name="ondup">同名覆盖方式</param>
-        public void RapidUploadAsync(string path, ulong content_length, string content_md5, string content_crc, string slice_md5, ObjectMetaCallback callback, ondup ondup = ondup.overwrite)
+        public void RapidUploadAsync(string path, ulong content_length, string content_md5, string content_crc, string slice_md5, ObjectMetaCallback callback, ondup ondup = ondup.overwrite, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.RapidUploadAsync called: string path=" + path + ", ulong content_length=" + content_length + ", string content_md5=" + content_md5 + ", string content_crc=" + content_crc + ", string slice_md5=" + slice_md5 + ", ObjectMetaCallback callback = " + callback.ToString() + ", ondup ondup=" + ondup);
             var param = new Parameters();
@@ -851,7 +850,7 @@ namespace BaiduCloudSync
                                 ret.FS_ID = json.Value<ulong>("fs_id");
                                 ret.IsDir = json.Value<int>("isdir") != 0;
                                 ret.ServerFileName = ret.Path.Substring(ret.Path.LastIndexOf('/') + 1);
-                                callback?.Invoke(true, ret);
+                                callback?.Invoke(true, ret, state);
                             }
                             catch (WebException ex)
                             {
@@ -859,13 +858,13 @@ namespace BaiduCloudSync
                                 if (ex.Response == null || ((HttpWebResponse)ex.Response).StatusCode == HttpStatusCode.NotFound)
                                 {
                                     _trace.TraceError(ex);
-                                    callback?.Invoke(false, new ObjectMetadata());
+                                    callback?.Invoke(false, new ObjectMetadata(), state);
                                 }
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
-                                callback?.Invoke(false, new ObjectMetadata());
+                                callback?.Invoke(false, new ObjectMetadata(), state);
                             }
                             finally
                             {
@@ -877,7 +876,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, new ObjectMetadata());
+                        callback?.Invoke(false, new ObjectMetadata(), state);
                     }
                 }, null, "text/html", _get_xhr_param(), param);
             }
@@ -919,7 +918,7 @@ namespace BaiduCloudSync
         /// <param name="path">网盘文件路径</param>
         /// <param name="callback">回调函数，包含任务分配的id和网络数据流</param>
         /// <param name="ondup">同名覆盖方式</param>
-        public void UploadBeginAsync(ulong content_length, string path, UploadCallback callback, ondup ondup = ondup.overwrite)
+        public void UploadBeginAsync(ulong content_length, string path, UploadCallback callback, ondup ondup = ondup.overwrite, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.UploadBeginAsync called: ulong content_length=" + content_length + ", string path=" + path + ", UploadCallback callback=" + callback.ToString() + ", ondup ondup=" + ondup.ToString());
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
@@ -962,13 +961,13 @@ namespace BaiduCloudSync
                         var data = new _upload_data { stream = sender, boundary = boundary };
                         _upload_queue.Add(guid, data);
 
-                        callback?.Invoke(true, guid, sender.RequestStream);
+                        callback?.Invoke(true, guid, sender.RequestStream, state);
                     }
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, Guid.Empty, null);
+                        callback?.Invoke(false, Guid.Empty, null, state);
                     }
                 }, null, "multipart/form-data; boundary=" + boundary, _get_xhr_param(), param);
             }
@@ -985,7 +984,7 @@ namespace BaiduCloudSync
         /// </summary>
         /// <param name="task_id">分配到的任务id</param>
         /// <param name="callback">回调函数</param>
-        public void UploadEndAsync(Guid task_id, ObjectMetaCallback callback)
+        public void UploadEndAsync(Guid task_id, ObjectMetaCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.UploadEndAsync called: Guid task_id=" + task_id.ToString() + ", ObjectMetaCallback callback=" + callback.ToString());
 
@@ -1026,12 +1025,12 @@ namespace BaiduCloudSync
                         ret.IsDir = json.Value<int>("isdir") != 0;
                         ret.ServerFileName = ret.Path.Substring(ret.Path.LastIndexOf('/') + 1);
 
-                        callback?.Invoke(true, ret);
+                        callback?.Invoke(true, ret, state);
                     }
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
-                        callback?.Invoke(false, new ObjectMetadata());
+                        callback?.Invoke(false, new ObjectMetadata(), state);
                     }
                     finally
                     {
@@ -1053,7 +1052,7 @@ namespace BaiduCloudSync
         /// <param name="path">文件路径</param>
         /// <param name="block_count">分段数量（以4mb为一个分段）</param>
         /// <param name="callback">回调函数</param>
-        public void PreCreateFileAsync(string path, int block_count, PreCreateCallback callback)
+        public void PreCreateFileAsync(string path, int block_count, PreCreateCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.PreCreateFileAsync called: string path=" + path + ", int block_count=" + block_count + ", PreCreateCallback callback=" + callback.ToString());
 
@@ -1111,12 +1110,12 @@ namespace BaiduCloudSync
                                 var return_type = json.Value<int>("return_type");
                                 var upload_id2 = json.Value<string>("uploadid");
 
-                                callback?.Invoke(true, block_count2, upload_id2);
+                                callback?.Invoke(true, block_count2, upload_id2, state);
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
-                                callback?.Invoke(false, 0, null);
+                                callback?.Invoke(false, 0, null, state);
                             }
                             finally
                             {
@@ -1128,7 +1127,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, 0, null);
+                        callback?.Invoke(false, 0, null, state);
                     }
                 }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), query_param);
             }
@@ -1169,7 +1168,7 @@ namespace BaiduCloudSync
         /// <param name="uploadid">上传id</param>
         /// <param name="sequence">文件序号</param>
         /// <param name="callback">回调函数，包含任务分配的id和网络数据流</param>
-        public void UploadSliceBeginAsync(ulong content_length, string path, string uploadid, int sequence, UploadCallback callback)
+        public void UploadSliceBeginAsync(ulong content_length, string path, string uploadid, int sequence, UploadCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.UploadSliceBeginAync called: ulong content_length=" + content_length + ", string path=" + path + ", string uploadid=" + uploadid + ", int sequence=" + sequence + ", SliceUploadCallback callback=" + callback.ToString());
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
@@ -1217,13 +1216,13 @@ namespace BaiduCloudSync
                         var data = new _upload_data2 { stream = sender, boundary = boundary, uploadid = uploadid, index = sequence };
                         _slice_upload_queue.Add(guid, data);
 
-                        callback?.Invoke(true, guid, sender.RequestStream);
+                        callback?.Invoke(true, guid, sender.RequestStream, state);
                     }
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, Guid.Empty, null);
+                        callback?.Invoke(false, Guid.Empty, null, state);
                     }
                 }, null, "multipart/form-data; boundary=" + boundary, _get_xhr_param(), query_param);
             }
@@ -1240,7 +1239,7 @@ namespace BaiduCloudSync
         /// </summary>
         /// <param name="task_id">分配到的任务id</param>
         /// <param name="callback">回调函数</param>
-        public void UploadSliceEndAsync(Guid task_id, SliceUploadCallback callback)
+        public void UploadSliceEndAsync(Guid task_id, SliceUploadCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.UploadSliceEndAsync called: Guid task_id=" + task_id.ToString() + ", SliceUploadCallback callback=" + callback.ToString());
 
@@ -1272,12 +1271,12 @@ namespace BaiduCloudSync
 
                         ret = json.Value<string>("md5");
 
-                        callback?.Invoke(true, ret);
+                        callback?.Invoke(true, ret, state);
                     }
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
-                        callback?.Invoke(false, null);
+                        callback?.Invoke(false, null, state);
                     }
                     finally
                     {
@@ -1301,7 +1300,7 @@ namespace BaiduCloudSync
         /// <param name="block_list">分段数据的MD5值</param>
         /// <param name="file_size">文件大小</param>
         /// <param name="callback">回调函数</param>
-        public void CreateSuperFileAsync(string path, string uploadid, IEnumerable<string> block_list, ulong file_size, ObjectMetaCallback callback)
+        public void CreateSuperFileAsync(string path, string uploadid, IEnumerable<string> block_list, ulong file_size, ObjectMetaCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.CreateSuperFileAsync called: string path=" + path + ", string uploadid=" + uploadid + ", IEnumerable<string> block_list=[count=" + block_list.Count() + "], ulong file_size=" + file_size + ", ObjectMetaCallback callback=" + callback.ToString());
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
@@ -1364,12 +1363,12 @@ namespace BaiduCloudSync
                                 ret.Size = json.Value<ulong>("size");
                                 ret.ServerFileName = ret.Path.Split('/').Last();
 
-                                callback?.Invoke(true, ret);
+                                callback?.Invoke(true, ret, state);
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
-                                callback?.Invoke(false, new ObjectMetadata());
+                                callback?.Invoke(false, new ObjectMetadata(), state);
                             }
                             finally
                             {
@@ -1381,7 +1380,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, new ObjectMetadata());
+                        callback?.Invoke(false, new ObjectMetadata(), state);
                     }
                 }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), query_param);
             }
@@ -1401,7 +1400,7 @@ namespace BaiduCloudSync
         /// <param name="path">文件路径</param>
         /// <param name="callback"> 回调函数</param>
         /// <param name="over_https">是否使用https</param>
-        public void GetDownloadLinkAPIAsync(string path, DownloadLinkCallback callback, bool over_https = true)
+        public void GetDownloadLinkAPIAsync(string path, DownloadLinkCallback callback, bool over_https = true, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.GetDownloadLinkAPIAsync called: string path=" + path + ", DownloadLinkCallback callback=" + callback.ToString() + ", bool over_https=" + over_https);
             var param = new Parameters();
@@ -1418,7 +1417,7 @@ namespace BaiduCloudSync
             ret_url += "?" + param.BuildQueryString();
             ThreadPool.QueueUserWorkItem(delegate
             {
-                callback?.Invoke(true, new string[] { ret_url });
+                callback?.Invoke(true, new string[] { ret_url }, state);
             });
         }
         /// <summary>
@@ -1427,7 +1426,7 @@ namespace BaiduCloudSync
         /// <param name="fs_id">FS_ID</param>
         /// <param name="callback">回调函数</param>
         /// <param name="over_https">是否使用https</param>
-        public void GetDownloadLinkAsync(ulong fs_id, DownloadLinkCallback callback, bool over_https = true)
+        public void GetDownloadLinkAsync(ulong fs_id, DownloadLinkCallback callback, bool over_https = true, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.GetDownloadLinkAsync called: ulong fs_id=" + fs_id + ", DownloadLinkCallback callback=" + callback.ToString() + ", bool over_https=" + over_https);
 
@@ -1463,7 +1462,7 @@ namespace BaiduCloudSync
                         var dlink_array = json.Value<JArray>("dlink");
                         if (dlink_array.Count == 0)
                         {
-                            callback?.Invoke(true, null);
+                            callback?.Invoke(true, null, state);
                             return;
                         }
                         var dlink = (dlink_array[0] as JObject).Value<string>("dlink");
@@ -1471,12 +1470,12 @@ namespace BaiduCloudSync
                         if (dlink.StartsWith("https") && !over_https) dlink = "http" + dlink.Substring(5);
                         else if (dlink.StartsWith("http") && !dlink.StartsWith("https") && over_https) dlink = "https" + dlink.Substring(4);
 
-                        callback?.Invoke(true, new string[] { dlink });
+                        callback?.Invoke(true, new string[] { dlink }, state);
                     }
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
-                        callback?.Invoke(false, null);
+                        callback?.Invoke(false, null, state);
                     }
                     finally
                     {
@@ -1497,7 +1496,7 @@ namespace BaiduCloudSync
         /// </summary>
         /// <param name="path">文件路径</param>
         /// <param name="callback">回调函数</param>
-        public void GetLocateDownloadLinkAsync(string path, DownloadLinkCallback callback)
+        public void GetLocateDownloadLinkAsync(string path, DownloadLinkCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.GetLocateDownloadLinkAsync called: string path=" + path + ", DownloadLinkCallback callback=" + callback.ToString());
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
@@ -1533,12 +1532,12 @@ namespace BaiduCloudSync
                                 {
                                     ret_list.Add(item.Value<string>("url"));
                                 }
-                                callback?.Invoke(true, ret_list.ToArray());
+                                callback?.Invoke(true, ret_list.ToArray(), state);
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
-                                callback?.Invoke(false, null);
+                                callback?.Invoke(false, null, state);
                             }
                             finally
                             {
@@ -1550,7 +1549,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, null);
+                        callback?.Invoke(false, null, state);
                     }
                 }, null, "text/html", _get_xhr_param(), param);
             }
@@ -1583,7 +1582,7 @@ namespace BaiduCloudSync
         /// <param name="fs_id">FS ID</param>
         /// <param name="callback">回调函数</param>
         /// <param name="expire_time">有效时间（可选：1-1天，7-7天，0-永久）</param>
-        public void CreatePublicShareAsync(IEnumerable<ulong> fs_ids, ShareMetaCallback callback, int expire_time = 0)
+        public void CreatePublicShareAsync(IEnumerable<ulong> fs_ids, ShareMetaCallback callback, int expire_time = 0, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.CreatePublicShareAsync called: IEnumerable<ulong> fs_ids=[count=" + fs_ids.Count() + "], ShareMetaCallback callback=" + callback.ToString() + ", int expire_time=" + expire_time);
 
@@ -1634,12 +1633,12 @@ namespace BaiduCloudSync
                                 ret.Premis = json.Value<bool>("premis");
                                 ret.ShareID = json.Value<ulong>("shareid");
                                 ret.ShortURL = json.Value<string>("shorturl");
-                                callback?.Invoke(true, ret);
+                                callback?.Invoke(true, ret, state);
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
-                                callback?.Invoke(false, new ShareData());
+                                callback?.Invoke(false, new ShareData(), state);
                             }
                             finally
                             {
@@ -1651,7 +1650,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, new ShareData());
+                        callback?.Invoke(false, new ShareData(), state);
                     }
                 }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), query_param);
             }
@@ -1670,10 +1669,10 @@ namespace BaiduCloudSync
         /// <param name="password">分享密码</param>
         /// <param name="callback">回调函数</param>
         /// <param name="expire_time">有效时间（可选：1-1天，7-7天，0-永久）</param>
-        public void CreatePrivateShareAsync(ulong fs_id, string password, ShareMetaCallback callback, int expire_time = 0)
+        public void CreatePrivateShareAsync(ulong fs_id, string password, ShareMetaCallback callback, int expire_time = 0, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.CreatePrivateShareAsync called: ulong fs_id=" + fs_id + ", string password=" + password + ", ShareMetaCallback callback=" + callback.ToString() + ", int expire_time=" + expire_time);
-            CreatePrivateShareAsync(new ulong[] { fs_id }, password, callback, expire_time);
+            CreatePrivateShareAsync(new ulong[] { fs_id }, password, callback, expire_time, state);
         }
         /// <summary>
         /// 异步创建多文件（夹）加密分享
@@ -1682,7 +1681,7 @@ namespace BaiduCloudSync
         /// <param name="password">分享密码</param>
         /// <param name="callback">回调函数</param>
         /// <param name="expire_time">有效时间（可选：1-1天，7-7天，0-永久）</param>
-        public void CreatePrivateShareAsync(IEnumerable<ulong> fs_ids, string password, ShareMetaCallback callback, int expire_time = 0)
+        public void CreatePrivateShareAsync(IEnumerable<ulong> fs_ids, string password, ShareMetaCallback callback, int expire_time = 0, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.CreatePrivateShareAsync called: IEnumerable<ulong> fs_ids=[count=" + fs_ids.Count() + "], string password=" + password + ", ShareMetaCallback callback=" + callback.ToString() + ", int expire_time=" + expire_time);
 
@@ -1734,12 +1733,12 @@ namespace BaiduCloudSync
                                 ret.Premis = json.Value<bool>("premis");
                                 ret.ShareID = json.Value<ulong>("shareid");
                                 ret.ShortURL = json.Value<string>("shorturl");
-                                callback?.Invoke(true, ret);
+                                callback?.Invoke(true, ret, state);
                             }
                             catch (Exception ex)
                             {
                                 _trace.TraceError(ex);
-                                callback?.Invoke(false, new ShareData());
+                                callback?.Invoke(false, new ShareData(), state);
                             }
                             finally
                             {
@@ -1751,7 +1750,7 @@ namespace BaiduCloudSync
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, new ShareData());
+                        callback?.Invoke(false, new ShareData(), state);
                     }
                 }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), query_param);
             }
@@ -1767,17 +1766,17 @@ namespace BaiduCloudSync
         /// </summary>
         /// <param name="share_id">Share ID</param>
         /// <param name="callback">回调函数</param>
-        public void CancelShareAsync(ulong share_id, OperationCallback callback)
+        public void CancelShareAsync(ulong share_id, OperationCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.CancelShareAsync called: ulong share_id=" + share_id + ", OperationCallback callback=" + callback.ToString());
-            CancelShareAsync(new ulong[] { share_id }, callback);
+            CancelShareAsync(new ulong[] { share_id }, callback, state);
         }
         /// <summary>
         /// 异步取消多个分享
         /// </summary>
         /// <param name="share_ids">Share ID</param>
         /// <param name="callback">回调函数</param>
-        public void CancelShareAsync(IEnumerable<ulong> share_ids, OperationCallback callback)
+        public void CancelShareAsync(IEnumerable<ulong> share_ids, OperationCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.CancelShareAsync called: IEnumerable<ulong> share_ids=[count=" + share_ids.Count() + "], OperationCallback callback=" + callback.ToString());
             var ns = new NetStream();
@@ -1814,14 +1813,14 @@ namespace BaiduCloudSync
                             var json = JsonConvert.DeserializeObject(response) as JObject;
                             _check_error(json);
 
-                            callback?.Invoke(true, true);
+                            callback?.Invoke(true, true, state);
                         });
                     }
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
                         sender.Close();
-                        callback?.Invoke(false, false);
+                        callback?.Invoke(false, false, state);
                     }
                 }, null, NetStream.DEFAULT_CONTENT_TYPE_PARAM, _get_xhr_param(), query_param);
             }
@@ -1833,7 +1832,7 @@ namespace BaiduCloudSync
             }
         }
 
-        public void GetShareRecordsAsync(ShareMultiMetaCallback callback)
+        public void GetShareRecordsAsync(ShareMultiMetaCallback callback, object state = null)
         {
             _trace.TraceInfo("BaiduPCS.GetShareRecordsAsync called: ShareMultiMetaCallback callback=" + callback.ToString());
             //todo:支持多页&多排序
@@ -1896,12 +1895,12 @@ namespace BaiduCloudSync
 
                             ret.Add(record);
                         }
-                        callback?.Invoke(true, ret.ToArray());
+                        callback?.Invoke(true, ret.ToArray(), state);
                     }
                     catch (Exception ex)
                     {
                         _trace.TraceError(ex);
-                        callback?.Invoke(false, null);
+                        callback?.Invoke(false, null, state);
                     }
                     finally
                     {

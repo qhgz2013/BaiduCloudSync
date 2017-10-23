@@ -101,7 +101,9 @@
     <Compile Include="form\dialogs\frm-key-create.Designer.cs">
       <DependentUpon>frm-key-create.cs</DependentUpon>
     </Compile>
-    <Compile Include="testbench\TestBench.cs" />
+    <Compile Include="sql\sql-struct.cs" />
+    <Compile Include="sql\remote-file-cacher.cs" />
+    <Compile Include="testbench\test-bench.cs" />
     <Compile Include="util\filelist-cacher.cs" />
     <Compile Include="form\controls\ctl-debug-output.cs">
       <SubType>UserControl</SubType>
@@ -208,8 +210,12 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <None Include="App.config" />
-    <None Include="packages.config" />
+    <None Include="App.config">
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="packages.config">
+      <SubType>Designer</SubType>
+    </None>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -225,9 +231,7 @@
     <Content Include="代码重构规划.txt" />
     <Content Include="加密说明.txt" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="sql\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\packages\System.Data.SQLite.Core.1.0.105.1\build\net40\System.Data.SQLite.Core.targets" Condition="Exists('..\packages\System.Data.SQLite.Core.1.0.105.1\build\net40\System.Data.SQLite.Core.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

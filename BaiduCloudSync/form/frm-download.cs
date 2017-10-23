@@ -276,6 +276,7 @@ namespace BaiduCloudSync
                             //Tracer.GlobalTracer.TraceWarning("[dbg message][" + index + "]" + " length=" + length + " position=" + _position[index]);
                             throw new ArgumentException("数据流长度不匹配");
                         }
+                        _urls[index % _urls.Length] = ns.HTTP_Response.ResponseUri.ToString();
                     }
                     if (istream != null)
                     {

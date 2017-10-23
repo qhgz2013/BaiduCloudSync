@@ -12,9 +12,7 @@ using System.Threading;
 
 namespace BaiduCloudSync
 {
-    //百度自带的一些api，可能需要调用到oauth的参数
-    //todo: 优化授权代码 + 网盘定期刷新模块
-    public partial class BaiduPCS
+    public partial class BaiduPCS : IEquatable<BaiduPCS>
     {
         #region static & const vars
         public static uint APPID = 250528;
@@ -70,6 +68,7 @@ namespace BaiduCloudSync
 
         #region auth
         private BaiduOAuth _auth;
+        public BaiduOAuth Auth { get { return _auth; } set { _auth = value; } }
         public BaiduPCS(BaiduOAuth auth)
         {
             _auth = auth;
@@ -290,7 +289,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.GetQuota called: void");
             var sync_thread = Thread.CurrentThread;
             Quota ret = new Quota();
-            GetQuotaAsync((suc, data) =>
+            GetQuotaAsync((suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -326,7 +325,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.DeletePath called: IEnumerable<string> paths=[count=" + paths.Count() + "]");
             var sync_thread = Thread.CurrentThread;
             bool ret = false;
-            DeletePathAsync(paths, (suc, data) =>
+            DeletePathAsync(paths, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -363,7 +362,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.MovePath called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], ondup ondup=" + ondup);
             var sync_thread = Thread.CurrentThread;
             bool ret = false;
-            MovePathAsync(source, destination, (suc, data) =>
+            MovePathAsync(source, destination, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -401,7 +400,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.CopyPath called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], ondup ondup=" + ondup);
             var sync_thread = Thread.CurrentThread;
             bool ret = false;
-            CopyPathAsync(source, destination, (suc, data) =>
+            CopyPathAsync(source, destination, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -436,7 +435,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.Rename called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> new_name=[count=" + new_name.Count() + "]");
             var sync_thread = Thread.CurrentThread;
             bool ret = false;
-            RenameAsync(source, new_name, (suc, data) =>
+            RenameAsync(source, new_name, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -459,7 +458,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.CreateDirectory called: string path=" + path);
             var sync_thread = Thread.CurrentThread;
             ObjectMetadata ret = new ObjectMetadata();
-            CreateDirectoryAsync(path, (suc, data) =>
+            CreateDirectoryAsync(path, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -487,7 +486,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.GetFileList called: string path=" + path + ", FileOrder order=" + order + ", bool asc=" + asc + ", int page=" + page + ", int count=" + count);
             ObjectMetadata[] ret = null;
             var sync_thread = Thread.CurrentThread;
-            GetFileListAsync(path, (suc, data) =>
+            GetFileListAsync(path, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -513,7 +512,7 @@ namespace BaiduCloudSync
             var sync_thread = Thread.CurrentThread;
             string arg1 = null;
             bool arg2 = false, arg3 = false;
-            GetFileDiffAsync(cursor, (suc, hasmore, rst, nextcursor, data) =>
+            GetFileDiffAsync(cursor, (suc, hasmore, rst, nextcursor, data, s) =>
             {
                 ret = data;
                 arg1 = nextcursor;
@@ -553,7 +552,7 @@ namespace BaiduCloudSync
 
             var sync_thread = Thread.CurrentThread;
             ObjectMetadata ret = new ObjectMetadata();
-            RapidUploadAsync(path, content_length, content_md5, content_crc, slice_md5, (suc, data) =>
+            RapidUploadAsync(path, content_length, content_md5, content_crc, slice_md5, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -582,7 +581,7 @@ namespace BaiduCloudSync
             ObjectMetadata ret = new ObjectMetadata();
             var sync_thread = Thread.CurrentThread;
             Guid task_id;
-            UploadBeginAsync(content_length, path, (suc, id, data) =>
+            UploadBeginAsync(content_length, path, (suc, id, data, s) =>
             {
                 try
                 {
@@ -598,7 +597,7 @@ namespace BaiduCloudSync
                         callback?.Invoke(path, null, total, (long)content_length);
                     } while (cur > 0);
 
-                    UploadEndAsync(id, (suc2, data2) =>
+                    UploadEndAsync(id, (suc2, data2, s2) =>
                     {
                         ret = data2;
                         sync_thread.Interrupt();
@@ -632,7 +631,7 @@ namespace BaiduCloudSync
             var ret = new PreCreateResult();
 
             var sync_thread = Thread.CurrentThread;
-            PreCreateFileAsync(path, block_count, (suc, block_count2, uploadid) =>
+            PreCreateFileAsync(path, block_count, (suc, block_count2, uploadid, s) =>
             {
                 ret.BlockCount = block_count2;
                 ret.ReturnType = 0;
@@ -668,7 +667,7 @@ namespace BaiduCloudSync
             var memory_buffer = new MemoryStream(upload_data);
             upload_data = null;
 
-            UploadSliceBeginAsync((ulong)memory_buffer.Length, path, uploadid, sequence, (suc, id, data) =>
+            UploadSliceBeginAsync((ulong)memory_buffer.Length, path, uploadid, sequence, (suc, id, data, s) =>
             {
                 task_id = id;
                 var buffer = new byte[BUFFER_SIZE];
@@ -682,7 +681,7 @@ namespace BaiduCloudSync
                     callback?.Invoke(path, null, total, (long)memory_buffer.Length);
                 } while (cur > 0);
 
-                UploadSliceEndAsync(id, (suc2, data2) =>
+                UploadSliceEndAsync(id, (suc2, data2, s2) =>
                 {
                     ret = data2;
                     sync_thread.Interrupt();
@@ -710,7 +709,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.CreateSuperFile called: string path=" + path + ", string uploadid=" + uploadid + ", Ienumerable<string> block_list=[count=" + block_list.Count() + "]");
             ObjectMetadata ret = new ObjectMetadata();
             var sync_thread = Thread.CurrentThread;
-            CreateSuperFileAsync(path, uploadid, block_list, file_size, (suc, data) =>
+            CreateSuperFileAsync(path, uploadid, block_list, file_size, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -762,7 +761,7 @@ namespace BaiduCloudSync
 
             var sync_thread = Thread.CurrentThread;
             string[] ret = null;
-            GetDownloadLinkAsync(fs_id, (suc, data) =>
+            GetDownloadLinkAsync(fs_id, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -789,7 +788,7 @@ namespace BaiduCloudSync
 
             var sync_thread = Thread.CurrentThread;
             string[] ret = null;
-            GetLocateDownloadLinkAsync(path, (suc, data) =>
+            GetLocateDownloadLinkAsync(path, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -862,7 +861,7 @@ namespace BaiduCloudSync
             var ret = new ShareData();
 
             var sync_thread = Thread.CurrentThread;
-            CreatePublicShareAsync(fs_ids, (suc, data) =>
+            CreatePublicShareAsync(fs_ids, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -902,7 +901,7 @@ namespace BaiduCloudSync
             var ret = new ShareData();
 
             var sync_thread = Thread.CurrentThread;
-            CreatePublicShareAsync(fs_ids, (suc, data) =>
+            CreatePublicShareAsync(fs_ids, (suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -935,7 +934,7 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.CancelShare called: IEnumerable<ulong> share_ids=[count=" + share_ids.Count() + "]");
             var sync_thread = Thread.CurrentThread;
-            CancelShareAsync(share_ids, (suc, data) =>
+            CancelShareAsync(share_ids, (suc, data, s) =>
             {
                 sync_thread.Interrupt();
             });
@@ -1022,7 +1021,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.GetShareRecords called: void");
             ShareRecord[] ret = null;
             var sync_thread = Thread.CurrentThread;
-            GetShareRecordsAsync((suc, data) =>
+            GetShareRecordsAsync((suc, data, s) =>
             {
                 ret = data;
                 sync_thread.Interrupt();
@@ -1038,6 +1037,22 @@ namespace BaiduCloudSync
 
         #endregion
 
+        #region interfaces implement
+        public bool Equals(BaiduPCS other)
+        {
+            return (other as object == null) ? false : (_auth.CookieIdentifier == other._auth.CookieIdentifier);
+        }
+        public static bool operator ==(BaiduPCS a, BaiduPCS b)
+        {
+            if (a as object == null && b as object == null) return true;
+            return a.Equals(b);
+        }
+        public static bool operator !=(BaiduPCS a, BaiduPCS b)
+        {
+            if (a as object == null && b as object == null) return false;
+            return !a.Equals(b);
+        }
+        #endregion
     }
     public class ErrnoException : Exception
     {

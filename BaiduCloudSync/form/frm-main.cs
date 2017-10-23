@@ -29,6 +29,14 @@ namespace BaiduCloudSync
             //_auth = new BaiduOAuth("default");
             if (NetUtils.NetStream.DefaultCookieContainer.Keys.Count > 0)
                 _auth = new BaiduOAuth(NetUtils.NetStream.DefaultCookieContainer.Keys.First());
+            else
+            {
+                _auth = new BaiduOAuth(util.GenerateFormDataBoundary());
+                var frmlogin = new frmLogin(_auth);
+                frmlogin.ShowDialog();
+                if (!frmlogin.LoginSucceeded)
+                    Environment.Exit(0);
+            }
             _pcsAPI = new BaiduPCS(_auth);
             _file_list = new FileListCacher(_pcsAPI);
             _local_file_list = new LocalFileCacher();
@@ -120,7 +128,7 @@ namespace BaiduCloudSync
                 __quota_fetching = true;
                 try
                 {
-                    _pcsAPI.GetQuotaAsync((suc, quota) =>
+                    _pcsAPI.GetQuotaAsync((suc, quota, s) =>
                     {
                         try
                         {
