@@ -765,14 +765,16 @@ namespace BaiduCloudSync
                         _check_error(json);
 
                         var next_cursor = json.Value<string>("cursor");
-                        var entries = json.Value<JObject>("entries");
+                        JObject entries = null;
+                        if (json["entries"].GetType() == typeof(JObject)) entries = json.Value<JObject>("entries");
                         var has_more = json.Value<bool>("has_more");
                         var reset = json.Value<bool>("reset");
                         var ret_filelist = new List<ObjectMetadata>();
-                        foreach (JProperty item in entries.Children())
-                        {
-                            ret_filelist.Add(_read_json_meta((JObject)item.Value));
-                        }
+                        if (entries != null)
+                            foreach (JProperty item in entries.Children())
+                            {
+                                ret_filelist.Add(_read_json_meta((JObject)item.Value));
+                            }
                         callback?.Invoke(true, has_more, reset, next_cursor, ret_filelist.ToArray(), state);
                     }
                     catch (Exception ex)

@@ -43,7 +43,6 @@ namespace BaiduCloudSync
             StaticConfig.LoadStaticConfig();
 
             //test code for upload
-            //TestBench.TestPCS_API(_pcsAPI);
         }
         private void Form1_Load(object sender, EventArgs e)
         {

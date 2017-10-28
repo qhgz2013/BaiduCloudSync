@@ -644,101 +644,106 @@ namespace BaiduCloudSync
 
         #region pcs api auth
         private Thread __next_update_thread;
+        private object _external_auth_lock = new object();
         //登陆的一些参数，由抓包得来
         private void _init_pcs_auth_data()
         {
-            Tracer.GlobalTracer.TraceInfo("BaiduOAuth._init_pcs_auth_data called: void");
-            try
+            lock (_external_auth_lock)
             {
-                _http.HttpGet(_PAN_ROOT_URL);
-
-                var str = _http.ReadResponseString();
-                _http.Close();
-
-                //_trace.TraceInfo(str);
-
-                var match = Regex.Match(str, "\"bdstoken\":\"(\\w+)\"");
-                if (match.Success) _bdstoken = match.Result("$1");
-                match = Regex.Match(str, "\"sign1\":\"(\\w+)\"");
-                if (match.Success) _sign1 = match.Result("$1");
-                match = Regex.Match(str, "\"sign3\":\"(\\w+)\"");
-                if (match.Success) _sign3 = match.Result("$1");
-                match = Regex.Match(str, "\"timestamp\":(\\d+)");
-                if (match.Success) _timestamp = match.Result("$1");
-
-                //calculate for sign2
-                var j = Encoding.UTF8.GetBytes(_sign3);
-                var r = Encoding.UTF8.GetBytes(_sign1);
-                byte[] a = new byte[256], p = new byte[256];
-                var o = new byte[r.Length];
-                int v = j.Length;
-                for (int q = 0; q < 256; q++)
+                if (!string.IsNullOrEmpty(_sign2)) return;
+                Tracer.GlobalTracer.TraceInfo("BaiduOAuth._init_pcs_auth_data called: void");
+                try
                 {
-                    a[q] = j[q % v];
-                    p[q] = (byte)q;
+                    _http.HttpGet(_PAN_ROOT_URL);
+
+                    var str = _http.ReadResponseString();
+                    _http.Close();
+
+                    //_trace.TraceInfo(str);
+
+                    var match = Regex.Match(str, "\"bdstoken\":\"(\\w+)\"");
+                    if (match.Success) _bdstoken = match.Result("$1");
+                    match = Regex.Match(str, "\"sign1\":\"(\\w+)\"");
+                    if (match.Success) _sign1 = match.Result("$1");
+                    match = Regex.Match(str, "\"sign3\":\"(\\w+)\"");
+                    if (match.Success) _sign3 = match.Result("$1");
+                    match = Regex.Match(str, "\"timestamp\":(\\d+)");
+                    if (match.Success) _timestamp = match.Result("$1");
+
+                    //calculate for sign2
+                    var j = Encoding.UTF8.GetBytes(_sign3);
+                    var r = Encoding.UTF8.GetBytes(_sign1);
+                    byte[] a = new byte[256], p = new byte[256];
+                    var o = new byte[r.Length];
+                    int v = j.Length;
+                    for (int q = 0; q < 256; q++)
+                    {
+                        a[q] = j[q % v];
+                        p[q] = (byte)q;
+                    }
+                    int u = 0;
+                    for (int q = 0; q < 256; q++)
+                    {
+                        u = (u + p[q] + a[q]) % 256;
+                        byte t = p[q];
+                        p[q] = p[u];
+                        p[u] = t;
+                    }
+                    int i = 0;
+                    u = 0;
+                    for (int q = 0; q < r.Length; q++)
+                    {
+                        i = (i + 1) % 256;
+                        u = (u + p[i]) % 256;
+                        byte t = p[i];
+                        p[i] = p[u];
+                        p[u] = t;
+                        byte k = p[(p[i] + p[u]) % 256];
+                        o[q] = (byte)(r[q] ^ k);
+                    }
+                    _sign2 = Convert.ToBase64String(o);
+
+                    Tracer.GlobalTracer.TraceInfo("Initialization complete.\r\nbdstoken=" + _bdstoken + "\r\nsign1=" + _sign1 + "\r\nsign2=" + _sign2 + "\r\nsign3=" + _sign3 + "\r\ntimestamp=" + _timestamp);
+                    //test
+                    //TestFunc();
+
+                    //next update thread
+                    if (__next_update_thread != null)
+                    {
+                        try { var thd = __next_update_thread; __next_update_thread = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch { }
+                    }
+                    __next_update_thread = new Thread(() =>
+                    {
+                        var ts = TimeSpan.FromHours(1);
+                        Thread.Sleep(ts);
+                        _init_login_data();
+                        __next_update_thread = null;
+                    });
+                    __next_update_thread.IsBackground = true;
+                    __next_update_thread.Name = "网盘登陆数据刷新线程";
+                    __next_update_thread.Start();
                 }
-                int u = 0;
-                for (int q = 0; q < 256; q++)
+                catch (ThreadAbortException) { }
+                catch (Exception ex)
                 {
-                    u = (u + p[q] + a[q]) % 256;
-                    byte t = p[q];
-                    p[q] = p[u];
-                    p[u] = t;
+                    Tracer.GlobalTracer.TraceError(ex.ToString());
+                    //next update thread (exception raised mode)
+                    if (__next_update_thread != null)
+                    {
+                        try { var thd = __next_update_thread; __next_update_thread = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch { }
+                    }
+                    __next_update_thread = new Thread(() =>
+                    {
+                        var ts = TimeSpan.FromSeconds(15);
+                        Thread.Sleep(ts);
+                        _init_login_data();
+                        __next_update_thread = null;
+                    });
+                    __next_update_thread.IsBackground = true;
+                    __next_update_thread.Name = "网盘登陆数据刷新线程";
+                    __next_update_thread.Start();
+                    __next_update_thread.Join();
                 }
-                int i = 0;
-                u = 0;
-                for (int q = 0; q < r.Length; q++)
-                {
-                    i = (i + 1) % 256;
-                    u = (u + p[i]) % 256;
-                    byte t = p[i];
-                    p[i] = p[u];
-                    p[u] = t;
-                    byte k = p[(p[i] + p[u]) % 256];
-                    o[q] = (byte)(r[q] ^ k);
-                }
-                _sign2 = Convert.ToBase64String(o);
-
-                Tracer.GlobalTracer.TraceInfo("Initialization complete.\r\nbdstoken=" + _bdstoken + "\r\nsign1=" + _sign1 + "\r\nsign2=" + _sign2 + "\r\nsign3=" + _sign3 + "\r\ntimestamp=" + _timestamp);
-                //test
-                //TestFunc();
-
-                //next update thread
-                if (__next_update_thread != null)
-                {
-                    try { var thd = __next_update_thread; __next_update_thread = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch { }
-                }
-                __next_update_thread = new Thread(() =>
-                {
-                    var ts = TimeSpan.FromHours(1);
-                    Thread.Sleep(ts);
-                    _init_login_data();
-                    __next_update_thread = null;
-                });
-                __next_update_thread.IsBackground = true;
-                __next_update_thread.Name = "网盘登陆数据刷新线程";
-                __next_update_thread.Start();
-            }
-            catch (ThreadAbortException) { }
-            catch (Exception ex)
-            {
-                Tracer.GlobalTracer.TraceError(ex.ToString());
-                //next update thread (exception raised mode)
-                if (__next_update_thread != null)
-                {
-                    try { var thd = __next_update_thread; __next_update_thread = null; ThreadPool.QueueUserWorkItem(delegate { thd.Abort(); }); } catch { }
-                }
-                __next_update_thread = new Thread(() =>
-                {
-                    var ts = TimeSpan.FromSeconds(15);
-                    Thread.Sleep(ts);
-                    _init_login_data();
-                    __next_update_thread = null;
-                });
-                __next_update_thread.IsBackground = true;
-                __next_update_thread.Name = "网盘登陆数据刷新线程";
-                __next_update_thread.Start();
-                __next_update_thread.Join();
             }
         }
         private string _bdstoken, _sign1, _sign2, _sign3, _timestamp;
