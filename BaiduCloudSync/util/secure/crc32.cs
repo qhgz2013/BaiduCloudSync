@@ -2,10 +2,15 @@
 //
 // 用于计算指定字节集的CRC32值
 //
+using System;
+using System.IO;
+
 namespace BaiduCloudSync
 {
+    [Serializable]
     public class Crc32
     {
+        [NonSerialized]
         private static uint[] _table;
         static Crc32()
         {
@@ -73,5 +78,50 @@ namespace BaiduCloudSync
             var crc = new Crc32();
             return crc.Append(data, offset, size);
         }
+
+
+        #region serialization
+        /// <summary>
+        /// 从数据流中逆序列化并创建一个CRC32类
+        /// </summary>
+        /// <param name="stream">可读取的数据流</param>
+        /// <returns></returns>
+        public static Crc32 Deserialize(Stream stream)
+        {
+            var fmt = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+            return (Crc32)fmt.Deserialize(stream);
+        }
+        /// <summary>
+        /// 从数据流中序列化当前CRC32类（并保存当前的计算状态）
+        /// </summary>
+        /// <param name="stream">可写入的数据流</param>
+        public void Serialize(Stream stream)
+        {
+            var fmt = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+            fmt.Serialize(stream, this);
+        }
+        /// <summary>
+        /// 从文件中逆序列化并创建一个CRC32类
+        /// </summary>
+        /// <param name="file">文件路径</param>
+        /// <returns></returns>
+        public static Crc32 Deserialize(string file)
+        {
+            var fs = new FileStream(file, FileMode.Open, FileAccess.Read);
+            var ret = Deserialize(fs);
+            fs.Close();
+            return ret;
+        }
+        /// <summary>
+        /// 从文件中序列化当前CRC32类（并保存当前的计算状态）
+        /// </summary>
+        /// <param name="file">文件路径</param>
+        public void Serialize(string file)
+        {
+            var fs = new FileStream(file, FileMode.Create, FileAccess.Write);
+            Serialize(fs);
+            fs.Close();
+        }
+        #endregion
     }
 }

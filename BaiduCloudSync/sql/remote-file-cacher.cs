@@ -52,6 +52,7 @@ namespace BaiduCloudSync
                 + ")";
             const string sql_create_dbvar_table = "create table DbVars (Key varchar(100) primary key, Value varchar(2048))";
             const string sql_insert_account_id = "insert into DbVars(Key, Value) values('account_allocated', '-1')";
+            const string sql_insert_version = "insert into DbVars(Key, Value) values('version', '1.0.0')";
             const string sql_query_table_count = "select count(*) from sqlite_master where type = 'table'";
 
             //opening sql connection
@@ -79,6 +80,8 @@ namespace BaiduCloudSync
                     _sql_cmd.CommandText = sql_create_dbvar_table;
                     _sql_cmd.ExecuteNonQuery();
                     _sql_cmd.CommandText = sql_insert_account_id;
+                    _sql_cmd.ExecuteNonQuery();
+                    _sql_cmd.CommandText = sql_insert_version;
                     _sql_cmd.ExecuteNonQuery();
                     _sql_trs.Commit();
                     _sql_trs = _sql_con.BeginTransaction();
@@ -280,12 +283,12 @@ namespace BaiduCloudSync
                 ThreadPool.QueueUserWorkItem(delegate
                 {
                     Thread.Sleep(3000);
-                    _AccountData data;
+                    _AccountData data2;
                     lock (_file_diff_thread_fetching_head_lock)
                     {
-                        data = _file_diff_thread_fetching_head[(int)state];
+                        data2 = _file_diff_thread_fetching_head[(int)state];
                     }
-                    data.pcs.GetFileDiffAsync(data.cursor, _file_diff_data_callback, state);
+                    data2.pcs.GetFileDiffAsync(data2.cursor, _file_diff_data_callback, state);
                 });
             }
 
@@ -305,29 +308,28 @@ namespace BaiduCloudSync
                 }
             }
 
+            //modifying cursor
+            _AccountData data;
+            lock (_file_diff_thread_fetching_head_lock)
+            {
+                data = _file_diff_thread_fetching_head[(int)state];
+                data.cursor = next_cursor;
+                _file_diff_thread_fetching_head[(int)state] = data;
+            }
+            //updating sql
+            var update_account_sql = "update Account set cursor = @next_cursor where account_id = " + (int)state;
+            lock (_sql_lock)
+            {
+                _sql_cmd.CommandText = update_account_sql;
+                _sql_cmd.Parameters.Add("@next_cursor", System.Data.DbType.String);
+                _sql_cmd.Parameters["@next_cursor"].Value = next_cursor;
+                _sql_cmd.ExecuteNonQuery();
+                _sql_cmd.Parameters.Clear();
+            }
+
             if (has_more)
             {
                 //fetching the continous data
-
-                //modifying cursor
-                _AccountData data;
-                lock (_file_diff_thread_fetching_head_lock)
-                {
-                    data = _file_diff_thread_fetching_head[(int)state];
-                    data.cursor = next_cursor;
-                    _file_diff_thread_fetching_head[(int)state] = data;
-                }
-                //updating sql
-                var update_sql = "update Account set cursor = @next_cursor where account_id = " + (int)state;
-                lock (_sql_lock)
-                {
-                    _sql_cmd.CommandText = update_sql;
-                    _sql_cmd.Parameters.Add("@next_cursor", System.Data.DbType.String);
-                    _sql_cmd.Parameters["@next_cursor"].Value = next_cursor;
-                    _sql_cmd.ExecuteNonQuery();
-                    _sql_cmd.Parameters.Clear();
-                }
-                //fetching data
                 data.pcs.GetFileDiffAsync(next_cursor, _file_diff_data_callback, state);
             }
 
@@ -336,6 +338,8 @@ namespace BaiduCloudSync
             var delete_sql2 = "delete from FileListExtended where account_id = " + (int)state + " and FS_ID = ";
             var insert_sql = "insert into FileList(FS_ID, Category, IsDir, LocalCTime, LocalMTime, OperID, Path, ServerCTime, ServerFileName, ServerMTime, Size, Unlist, MD5, account_id) values " +
                 "(@FS_ID, @Category, @IsDir, @LocalCTime, @LocalMTime, @OperID, @Path, @ServerCTime, @ServerFileName, @ServerMTime, @Size, @Unlist, @MD5, @account_id)";
+            var update_sql = "update FileList set Category = @Category, IsDir = @IsDir, LocalCTime = @LocalCTime, LocalMTime = @LocalMTime, OperID = @OperID, Path = @Path, ServerCTime = @ServerCTime, ServerFileName = @ServerFileName, ServerMTime = @ServerMTime, Size = @Size, Unlist = @Unlist, MD5 = @MD5, account_id = @account_id where FS_ID = @FS_ID";
+            var query_sql = "select count(*) from FileList where FS_ID = @FS_ID";
             lock (_sql_lock)
                 foreach (var item in result)
                 {
@@ -348,9 +352,17 @@ namespace BaiduCloudSync
                     }
                     else
                     {
-                        _sql_cmd.CommandText = insert_sql;
                         _sql_cmd.Parameters.Add("@FS_ID", System.Data.DbType.Int64);
                         _sql_cmd.Parameters["@FS_ID"].Value = (long)item.FS_ID;
+                        _sql_cmd.CommandText = query_sql;
+                        var count = Convert.ToInt32(_sql_cmd.ExecuteScalar());
+                        if (count == 0)
+                            _sql_cmd.CommandText = insert_sql;
+                        else
+                        {
+                            _sql_cmd.CommandText = update_sql;
+                            Tracer.GlobalTracer.TraceWarning("[W] FS_ID " + item.FS_ID + "(" + item.Path + ") has already cached in sql, overwriting data!");
+                        }
                         _sql_cmd.Parameters.Add("@Category", System.Data.DbType.Int32);
                         _sql_cmd.Parameters["@Category"].Value = (int)item.Category;
                         _sql_cmd.Parameters.Add("@IsDir", System.Data.DbType.Byte);
@@ -620,7 +632,7 @@ namespace BaiduCloudSync
         public void GetFileListAsync(string path, BaiduPCS.MultiObjectMetaCallback callback, int account_id = 0, BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name, bool asc = true, int page = 1, int size = 1000)
         {
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-            if (_is_file_diff_working)
+            if (_is_file_diff_working || _account_changed)
             {
                 _account_data[account_id].pcs.GetFileListAsync(path, callback, order, asc, page, size);
             }
@@ -643,7 +655,10 @@ namespace BaiduCloudSync
                 lock (_file_diff_thread_fetching_head_lock)
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
+                    {
                         _file_diff_thread_data_dirty[account_id] = true;
+                        _is_file_diff_working = true;
+                    }
                 }
                 _account_data[account_id].pcs.CreateDirectoryAsync(path, callback);
             }
@@ -651,40 +666,76 @@ namespace BaiduCloudSync
 
         public void MovePathAsync(string source, string destination, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
-
+            MovePathAsync(new string[] { source }, new string[] { destination }, callback, account_id);
         }
         public void MovePathAsync(IEnumerable<string> source, IEnumerable<string> destination, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-
+            lock (_account_data_external_lock)
+            {
+                lock (_file_diff_thread_fetching_head_lock)
+                {
+                    if (_file_diff_thread_data_dirty.ContainsKey(account_id))
+                        _file_diff_thread_data_dirty[account_id] = true;
+                    _is_file_diff_working = true;
+                }
+                _account_data[account_id].pcs.MovePathAsync(source, destination, callback);
+            }
         }
         public void CopyPathAsync(string source, string destination, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
-
+            CopyPathAsync(new string[] { source }, new string[] { destination }, callback, account_id);
         }
         public void CopyPathAsync(IEnumerable<string> source, IEnumerable<string> destination, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-
+            lock (_account_data_external_lock)
+            {
+                lock (_file_diff_thread_fetching_head_lock)
+                {
+                    if (_file_diff_thread_data_dirty.ContainsKey(account_id))
+                        _file_diff_thread_data_dirty[account_id] = true;
+                    _is_file_diff_working = true;
+                }
+                _account_data[account_id].pcs.CopyPathAsync(source, destination, callback);
+            }
         }
-        public void RenameAsync(string source, string destination, BaiduPCS.OperationCallback callback, int account_id = 0)
+        public void RenameAsync(string source, string new_name, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-
+            RenameAsync(new string[] { source }, new string[] { new_name }, callback, account_id);
         }
-        public void RenameAsync(IEnumerable<string> source, IEnumerable<string> destination, BaiduPCS.OperationCallback callback, int account_id = 0)
+        public void RenameAsync(IEnumerable<string> source, IEnumerable<string> new_name, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-
+            lock (_account_data_external_lock)
+            {
+                lock (_file_diff_thread_fetching_head_lock)
+                {
+                    if (_file_diff_thread_data_dirty.ContainsKey(account_id))
+                        _file_diff_thread_data_dirty[account_id] = true;
+                    _is_file_diff_working = true;
+                }
+                _account_data[account_id].pcs.RenameAsync(source, new_name, callback);
+            }
         }
         public void DeletePathAsync(string path, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
-
+            DeletePathAsync(path, callback, account_id);
         }
         public void DeletePathAsync(IEnumerable<string> path, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-
+            lock (_account_data_external_lock)
+            {
+                lock (_file_diff_thread_fetching_head_lock)
+                {
+                    if (_file_diff_thread_data_dirty.ContainsKey(account_id))
+                        _file_diff_thread_data_dirty[account_id] = true;
+                    _is_file_diff_working = true;
+                }
+                _account_data[account_id].pcs.DeletePathAsync(path, callback);
+            }
         }
 
         #endregion

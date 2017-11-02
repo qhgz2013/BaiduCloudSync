@@ -1038,9 +1038,10 @@ namespace BaiduCloudSync
         #endregion
 
         #region interfaces implement
-        public bool Equals(BaiduPCS other)
+        public override bool Equals(object other)
         {
-            return (other as object == null) ? false : (_auth.CookieIdentifier == other._auth.CookieIdentifier);
+            if (other.GetType() != typeof(BaiduPCS)) return false;
+            return (other as object == null) ? false : (_auth.CookieIdentifier == ((BaiduPCS)other)._auth.CookieIdentifier);
         }
         public static bool operator ==(BaiduPCS a, BaiduPCS b)
         {
@@ -1051,6 +1052,10 @@ namespace BaiduCloudSync
         {
             if (a as object == null && b as object == null) return false;
             return !a.Equals(b);
+        }
+        public override int GetHashCode()
+        {
+            return base.GetHashCode();
         }
         #endregion
     }

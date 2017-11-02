@@ -13,6 +13,8 @@ namespace BaiduCloudSync
 {
     public partial class BaiduPCS
     {
+        //是否在函数调用时写入Debug消息
+        private const bool _enable_function_trace = true;
         //回调函数的类型声明
         #region delegation callback
 

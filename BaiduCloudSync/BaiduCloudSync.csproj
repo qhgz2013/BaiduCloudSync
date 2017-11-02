@@ -23,6 +23,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -103,6 +104,7 @@
     </Compile>
     <Compile Include="sql\sql-struct.cs" />
     <Compile Include="sql\remote-file-cacher.cs" />
+    <Compile Include="sql\local-file-cacher.cs" />
     <Compile Include="testbench\test-bench.cs" />
     <Compile Include="util\filelist-cacher.cs" />
     <Compile Include="form\controls\ctl-debug-output.cs">
@@ -155,6 +157,8 @@
     <Compile Include="util\secure\crypt-aes.cs" />
     <Compile Include="util\secure\crypt-rsa.cs" />
     <Compile Include="util\secure\crypt-util.cs" />
+    <Compile Include="util\secure\md5.cs" />
+    <Compile Include="util\secure\sha1.cs" />
     <Compile Include="util\task-dispatcher.cs" />
     <Compile Include="util\tracer.cs" />
     <Compile Include="util\net-util.cs" />

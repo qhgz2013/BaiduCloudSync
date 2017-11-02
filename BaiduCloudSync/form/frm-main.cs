@@ -42,7 +42,9 @@ namespace BaiduCloudSync
             _local_file_list = new LocalFileCacher();
             StaticConfig.LoadStaticConfig();
 
-            //test code for upload
+            //test code
+            //var test = new RemoteFileCacher();
+            //test.AddAccount(_pcsAPI);
         }
         private void Form1_Load(object sender, EventArgs e)
         {
