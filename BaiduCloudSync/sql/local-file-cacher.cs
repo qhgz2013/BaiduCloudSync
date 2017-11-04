@@ -32,6 +32,7 @@ namespace BaiduCloudSync
         //文件系统是否大小写敏感（WIN下为false，linux下为true）
         private const bool _FILE_SYSTEM_CASE_SENSITIVE = false;
 
+        private const int _DEFAULT_VALID_TIME_DIFF = 5000; //忽略5s内的时间差
 
         //sql
         private SQLiteConnection _sql_con;
@@ -61,11 +62,10 @@ namespace BaiduCloudSync
             const string create_fileiostate_sql = "create table FileIOState ("
                 + "Path_SHA1 binary(20) primary key,"
                 + "Path varchar(300),"
-                + "Offset bigint not null default 0,"
-                + "MD5_Serialized varchar(1024),"
-                + "SHA1_Serialized varchar(1024),"
-                + "CRC32_Serialized varchar(1024),"
-                + "MD5_Slice_Serialized varchar(1024)"
+                + "MD5_Serialized binary(1024),"
+                + "SHA1_Serialized binary(1024),"
+                + "CRC32_Serialized binary(1024),"
+                + "MD5_Slice_Serialized binary(1024)"
                 + ")";
             const string sql_insert_version = "insert into DbVars(Key, Value) values('version', '1.0.0')";
             const string sql_query_table_count = "select count(*) from sqlite_master where type = 'table'";
@@ -132,10 +132,11 @@ namespace BaiduCloudSync
                     continue;
                 }
 
-                FileStream io_stream = null;
                 try
                 {
                     var fileinfo = new FileInfo(next_path);
+                    var origin_file_length = fileinfo.Length;
+
                     if (fileinfo.Exists == false)
                     {
                         Tracer.GlobalTracer.TraceWarning("File " + next_path + " no longer exists, ignored");
@@ -163,22 +164,17 @@ namespace BaiduCloudSync
                     else
                         path_sha1 = SHA1.ComputeHash(next_path.ToLower());
 #pragma warning restore
-                    io_stream = fileinfo.Open(FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
-                    var buffer = new byte[65536];
-                    long length = 0;
-                    int current = 0;
-
-                    //calculation
-                    var md5_calc = new MD5();
-                    var sha1_calc = new SHA1();
-                    var md5_slice_calc = new MD5();
-                    var crc32_calc = new Crc32();
+                    //calculation (parallel access)
+                    var md5_calc = new MD5(); //speed: ~36s/GB
+                    var sha1_calc = new SHA1(); //speed: ~55s/GB
+                    var md5_slice_calc = new MD5(); //speed: ~45ms (256KB)
+                    var crc32_calc = new Crc32(); //speed: ~11s/GB
 
                     //loading pre-calculated data from sql
                     lock (_sql_lock)
                     {
-                        _sql_cmd.CommandText = "select MD5_Serialized, SHA1_Serialized, MD5_Slice_Serialized, CRC32_serialized, Offset from FileIOState where Path_SHA1 = @Path_SHA1";
+                        _sql_cmd.CommandText = "select MD5_Serialized, SHA1_Serialized, MD5_Slice_Serialized, CRC32_serialized from FileIOState where Path_SHA1 = @Path_SHA1";
                         _sql_cmd.Parameters.Add("@Path_SHA1", System.Data.DbType.Binary);
                         _sql_cmd.Parameters["@Path_SHA1"].Value = path_sha1;
                         var dr = _sql_cmd.ExecuteReader();
@@ -190,7 +186,6 @@ namespace BaiduCloudSync
                             var ms_md5_slice = new MemoryStream((byte[])dr[2]);
                             var ms_crc32 = new MemoryStream((byte[])dr[3]);
 
-                            var offset = (long)dr[4];
                             md5_calc = MD5.Deserialize(ms_md5);
                             sha1_calc = SHA1.Deserialize(ms_sha1);
                             md5_slice_calc = MD5.Deserialize(ms_md5_slice);
@@ -200,44 +195,112 @@ namespace BaiduCloudSync
                         _sql_cmd.Parameters.Clear();
                     }
 
-                    do
+                    int io_state = 0;
+                    long total_length = 0; //should be equal to origin_file_length * 3 + min(origin_file_length, 256K)
+                    //4 thread parallel read
+                    Parallel.For(0, 4, (i) =>
                     {
+                        //debug test
+                        var str = new string[] { "MD5", "SHA1", "CRC32", "Slice_MD5" };
+                        var sw = new System.Diagnostics.Stopwatch();
+                        Tracer.GlobalTracer.TraceInfo(str[i] + " calculation thread started");
+                        sw.Start();
+
+                        FileStream fs = null;
+                        var buffer = new byte[65536];
+                        long length = 0;
+                        int current = 0;
                         try
                         {
-                            current = io_stream.Read(buffer, 0, buffer.Length);
-                        }
-                        catch { break; }
-                        //multi-thread calculation, no hardware acc.
-                        //Parallel.For(0, 4, (i) => //Lambda for parallel for
-                        //{
-                        //    if (i == 0)
-                        //    {
-                        md5_calc.TransformBlock(buffer, 0, current);
-                        //    }
-                        //    else if (i == 1)
-                        //    {
-                        sha1_calc.TransformBlock(buffer, 0, current);
-                        //    }
-                        //    else if (i == 2)
-                        //    {
-                        //        if (length >= BaiduPCS.VALIDATE_SIZE) return;
-                        if (length < BaiduPCS.VALIDATE_SIZE)
-                        {
-                            int size = current;
-                            if (length + current >= BaiduPCS.VALIDATE_SIZE)
-                                size = (int)(BaiduPCS.VALIDATE_SIZE - length);
-                            md5_slice_calc.TransformBlock(buffer, 0, size);
-                        }
-                        //    }
-                        //    else
-                        //    {
-                        crc32_calc.Append(buffer, 0, current);
-                        //    }
-                        //});
+                            fs = new FileStream(next_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                            switch (i)
+                            {
+                                case 0:
+                                    if (md5_calc.Length > origin_file_length)
+                                        md5_calc.Initialize();
+                                    fs.Seek(md5_calc.Length, SeekOrigin.Begin);
+                                    break;
+                                case 1:
+                                    if (sha1_calc.Length > origin_file_length)
+                                        sha1_calc.Initialize();
+                                    fs.Seek(sha1_calc.Length, SeekOrigin.Begin);
+                                    break;
+                                case 2:
+                                    if (crc32_calc.Length > origin_file_length)
+                                        crc32_calc.Initialize();
+                                    fs.Seek(crc32_calc.Length, SeekOrigin.Begin);
+                                    break;
+                                case 3:
+                                    if (md5_slice_calc.Length > origin_file_length)
+                                        md5_slice_calc.Initialize();
+                                    fs.Seek(md5_slice_calc.Length, SeekOrigin.Begin);
+                                    break;
+                                default:
+                                    throw new InvalidOperationException();
+                            }
+                            length = fs.Position;
 
-                        length += current;
-                        LocalFileIOUpdate?.Invoke(next_path, length, fileinfo.Length);
-                    } while (is_file_changed == false && _io_thread_flags == 0 && current > 0 && io_stream.CanRead);
+                            do
+                            {
+                                try
+                                {
+                                    current = fs.Read(buffer, 0, buffer.Length);
+
+                                    switch (i)
+                                    {
+                                        case 0:
+                                            md5_calc.TransformBlock(buffer, 0, current);
+                                            break;
+                                        case 1:
+                                            sha1_calc.TransformBlock(buffer, 0, current);
+                                            break;
+                                        case 2:
+                                            crc32_calc.TransformBlock(buffer, 0, current);
+                                            break;
+
+                                        case 3:
+                                            if (length >= BaiduPCS.VALIDATE_SIZE)
+                                                return;
+                                            current = (int)Math.Min(BaiduPCS.VALIDATE_SIZE - length, current);
+                                            md5_slice_calc.TransformBlock(buffer, 0, current);
+                                            break;
+
+                                        default:
+                                            throw new InvalidOperationException();
+                                    }
+
+                                    total_length += current;
+                                    length += current;
+                                }
+                                catch { break; }
+
+
+                            } while (is_file_changed == false && _io_thread_flags == 0 && current > 0 && fs.CanRead);
+
+                        }
+                        finally
+                        {
+                            try
+                            {
+                                if (fs != null)
+                                {
+                                    fs.Close();
+                                    fs.Dispose();
+                                }
+                            }
+                            catch { }
+
+                            if ((i != 3 && length == origin_file_length) || (i == 3 && length == Math.Min(BaiduPCS.VALIDATE_SIZE, origin_file_length)))
+                            {
+                                io_state |= (1 << i);
+                            }
+
+                            //debug test
+                            sw.Stop();
+                            Tracer.GlobalTracer.TraceInfo(str[i] + " calculation finished (" + sw.ElapsedMilliseconds + " ms ellapsed)");
+                        }
+
+                    });
 
                     //handling file changed
                     if (is_file_changed)
@@ -245,17 +308,17 @@ namespace BaiduCloudSync
                         continue;
                     }
 
-                    //handling file data
-                    var temp_zero_bytes = new byte[0];
-                    md5_calc.TransformFinalBlock(temp_zero_bytes, 0, 0);
-                    sha1_calc.TransformFinalBlock(temp_zero_bytes, 0, 0);
-                    md5_slice_calc.TransformFinalBlock(temp_zero_bytes, 0, 0);
-
                     //handling io finish state
-                    if (length == fileinfo.Length)
+                    if (io_state == 0xf)
                     {
+                        //handling file data
+                        var temp_zero_bytes = new byte[0];
+                        md5_calc.TransformFinalBlock(temp_zero_bytes, 0, 0);
+                        sha1_calc.TransformFinalBlock(temp_zero_bytes, 0, 0);
+                        md5_slice_calc.TransformFinalBlock(temp_zero_bytes, 0, 0);
+
                         var local_data = new LocalFileData();
-                        local_data.CRC32 = crc32_calc.GetCrc32();
+                        local_data.CRC32 = crc32_calc.Hash;
                         local_data.CTime = fileinfo.CreationTime;
                         local_data.MD5 = util.Hex(md5_calc.Hash);
                         local_data.MTime = fileinfo.LastWriteTime;
@@ -298,6 +361,10 @@ namespace BaiduCloudSync
                                 _sql_cmd.CommandText = "update FileList set Path = @Path, CRC32 = @CRC32, CTime = @CTime, MD5 = @MD5, MTime = @MTime, SHA1 = @SHA1, Slice_MD5 = @Slice_MD5, Size = @Size where Path_SHA1 = @Path_SHA1";
                             }
                             _sql_cmd.ExecuteNonQuery();
+
+                            _sql_cmd.CommandText = "delete from FileIOState where Path_SHA1 = @Path_SHA1";
+                            _sql_cmd.ExecuteNonQuery();
+                            _sql_cmd.Parameters.Clear();
                         }
 
                         LocalFileIOFinish?.Invoke(local_data);
@@ -308,7 +375,7 @@ namespace BaiduCloudSync
                     {
 
                         //handling non-completed io calculation
-                        if (length != fileinfo.Length)
+                        if (io_state != 0xf)
                         {
                             lock (_sql_lock)
                             {
@@ -320,12 +387,16 @@ namespace BaiduCloudSync
                                 _sql_cmd.Parameters["@Path"].Value = next_path;
                                 var ms_md5 = new MemoryStream();
                                 md5_calc.Serialize(ms_md5);
+                                ms_md5.Position = 0;
                                 var ms_sha1 = new MemoryStream();
                                 sha1_calc.Serialize(ms_sha1);
+                                ms_sha1.Position = 0;
                                 var ms_crc32 = new MemoryStream();
                                 crc32_calc.Serialize(ms_crc32);
+                                ms_crc32.Position = 0;
                                 var ms_md5_slice = new MemoryStream();
                                 md5_slice_calc.Serialize(ms_md5_slice);
+                                ms_md5_slice.Position = 0;
                                 _sql_cmd.Parameters.Add("@MD5", System.Data.DbType.Binary);
                                 _sql_cmd.Parameters["@MD5"].Value = util.ReadBytes(ms_md5, (int)ms_md5.Length);
                                 _sql_cmd.Parameters.Add("@SHA1", System.Data.DbType.Binary);
@@ -334,17 +405,15 @@ namespace BaiduCloudSync
                                 _sql_cmd.Parameters["@CRC32"].Value = util.ReadBytes(ms_crc32, (int)ms_crc32.Length);
                                 _sql_cmd.Parameters.Add("@MD5_Slice", System.Data.DbType.Binary);
                                 _sql_cmd.Parameters["@MD5_Slice"].Value = util.ReadBytes(ms_md5_slice, (int)ms_md5_slice.Length);
-                                _sql_cmd.Parameters.Add("@Offset", System.Data.DbType.Int64);
-                                _sql_cmd.Parameters["@Offset"].Value = length;
-
+                                
                                 var count = Convert.ToInt32(_sql_cmd.ExecuteScalar());
                                 if (count == 0)
                                 {
-                                    _sql_cmd.CommandText = "insert into FileIOState(Path, Path_SHA1, Offset, MD5_Serialized, SHA1_Serialized, CRC32_Serialized, MD5_Slice_Serialized) values(@Path, @Path_SHA1, @Offset, @MD5, @SHA1, @CRC32, @MD5_Slice)";
+                                    _sql_cmd.CommandText = "insert into FileIOState(Path, Path_SHA1, MD5_Serialized, SHA1_Serialized, CRC32_Serialized, MD5_Slice_Serialized) values(@Path, @Path_SHA1, @MD5, @SHA1, @CRC32, @MD5_Slice)";
                                 }
                                 else
                                 {
-                                    _sql_cmd.CommandText = "update FileIOState set Path = @Path, Offset = @Offset, MD5_Serialized = @MD5, SHA1_Serialized = @SHA1, CRC32_Serialized = @CRC32, MD5_Slice_Serialized = @MD5_Slice where Path_SHA1 = @Path_SHA1";
+                                    _sql_cmd.CommandText = "update FileIOState set Path = @Path, MD5_Serialized = @MD5, SHA1_Serialized = @SHA1, CRC32_Serialized = @CRC32, MD5_Slice_Serialized = @MD5_Slice where Path_SHA1 = @Path_SHA1";
                                 }
                                 _sql_cmd.ExecuteNonQuery();
                                 _sql_cmd.Parameters.Clear();
@@ -366,15 +435,9 @@ namespace BaiduCloudSync
                 {
                     Tracer.GlobalTracer.TraceError(ex);
                 }
-                finally
-                {
-                    try { if (io_stream != null) { io_stream.Close(); io_stream.Dispose(); } }
-                    catch { }
-                }
             }
         }
 
-        private const int _DEFAULT_VALID_TIME_DIFF = 5000; //忽略5s内的时间差
         private bool _in_duration(DateTime d1, DateTime d2)
         {
             return (Math.Abs((d1 - d2).TotalMilliseconds) < _DEFAULT_VALID_TIME_DIFF);

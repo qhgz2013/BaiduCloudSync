@@ -214,7 +214,7 @@ namespace BaiduCloudSync
                 rbyte = sin.Read(buffer, 0, buffer_size);
                 md5_calc.TransformBlock(buffer, 0, rbyte, out_buffer, 0);
                 sha1_calc.TransformBlock(buffer, 0, rbyte, out_buffer, 0);
-                crc32_calc.Append(buffer, 0, rbyte);
+                crc32_calc.TransformBlock(buffer, 0, rbyte);
 
                 total_byte += rbyte;
             } while (rbyte > 0);
@@ -223,7 +223,7 @@ namespace BaiduCloudSync
 
             MD5 = util.Hex(md5_calc.Hash);
             SHA1 = util.Hex(sha1_calc.Hash);
-            var crc32_int = crc32_calc.GetCrc32();
+            var crc32_int = crc32_calc.Hash;
             var crc_bytes = new byte[] { (byte)((crc32_int >> 24) & 0xff), (byte)((crc32_int >> 16) & 0xff), (byte)((crc32_int >> 8) & 0xff), (byte)(crc32_int & 0xff) };
             CRC32 = util.Hex(crc_bytes);
         }

@@ -74,8 +74,8 @@ namespace BaiduCloudSync
             md5cp.TransformFinalBlock(data, 0, (int)BaiduPCS.VALIDATE_SIZE);
             var slice_md5 = util.Hex(md5cp.Hash);
             var crccp = new Crc32();
-            crccp.Append(data, 0, data.Length);
-            var content_crc32 = crccp.GetCrc32().ToString("X2").ToLower();
+            crccp.TransformBlock(data, 0, data.Length);
+            var content_crc32 = crccp.Hash.ToString("X2").ToLower();
 
             trace.TraceInfo("[6/88] Upload Test (overwrite test)");
             data = new byte[300];

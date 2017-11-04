@@ -29,6 +29,7 @@ namespace BaiduCloudSync
             }
         }
         private uint _value;
+        private long _length;
         public Crc32()
         {
             Initialize();
@@ -39,16 +40,18 @@ namespace BaiduCloudSync
         public void Initialize()
         {
             _value = 0xffffffff;
+            _length = 0;
         }
         /// <summary>
         /// 在当前基础上更新并计算单个字节
         /// </summary>
         /// <param name="b">数据</param>
         /// <returns></returns>
-        public uint AppendByte(byte b)
+        public uint TransformBlock(byte b)
         {
             _value = _table[(_value % 256) ^ b] ^ (_value >> 8);
-            return GetCrc32();
+            _length++;
+            return Hash;
         }
         /// <summary>
         /// 在当前基础上更新并计算多个字节
@@ -57,26 +60,28 @@ namespace BaiduCloudSync
         /// <param name="offset">起始位置偏移</param>
         /// <param name="size">数据长度</param>
         /// <returns></returns>
-        public uint Append(byte[] b, int offset, int size)
+        public uint TransformBlock(byte[] b, int offset, int size)
         {
             for (int i = 0; i < size; i++)
             {
                 _value = _table[(_value % 256) ^ b[offset + i]] ^ (_value >> 8);
             }
-            return GetCrc32();
+            _length += size;
+            return Hash;
         }
         /// <summary>
         /// 获取当前已经计算出的crc32的值
         /// </summary>
         /// <returns></returns>
-        public uint GetCrc32()
+        public uint Hash
         {
-            return _value ^ 0xffffffff;
+            get { return _value ^ 0xffffffff; }
         }
-        public static uint CalculateCrc32(byte[] data, int offset, int size)
+        public long Length { get { return _length; } }
+        public static uint ComputeHash(byte[] data, int offset, int size)
         {
             var crc = new Crc32();
-            return crc.Append(data, offset, size);
+            return crc.TransformBlock(data, offset, size);
         }
 
 

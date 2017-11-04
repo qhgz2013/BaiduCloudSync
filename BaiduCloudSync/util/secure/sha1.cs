@@ -322,6 +322,7 @@ namespace BaiduCloudSync
                 return data;
             }
         }
+        public long Length { get { return _length; } }
         #endregion
 
 
