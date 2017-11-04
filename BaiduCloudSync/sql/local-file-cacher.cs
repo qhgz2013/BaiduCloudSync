@@ -28,6 +28,11 @@ namespace BaiduCloudSync
         private const string _CACHE_PATH = "data";
         private const string _LOCAL_CACHE_NAME = _CACHE_PATH + "/local-track.db";
 
+
+        //文件系统是否大小写敏感（WIN下为false，linux下为true）
+        private const bool _FILE_SYSTEM_CASE_SENSITIVE = false;
+
+
         //sql
         private SQLiteConnection _sql_con;
         private SQLiteCommand _sql_cmd;
@@ -48,13 +53,13 @@ namespace BaiduCloudSync
                 + "Size bigint,"
                 + "CRC32 int,"
                 + "Slice_MD5 binary(16),"
-                + "SHA1 binary(20)"
+                + "SHA1 binary(20),"
                 + "CTime bigint,"
                 + "MTime bigint"
                 + ")";
             const string create_dbvar_sql = "create table DbVars(Key varchar(100) primary key, Value varchar(2048))";
             const string create_fileiostate_sql = "create table FileIOState ("
-                + "Path_SHA1 binary(20) primay key,"
+                + "Path_SHA1 binary(20) primary key,"
                 + "Path varchar(300),"
                 + "Offset bigint not null default 0,"
                 + "MD5_Serialized varchar(1024),"
@@ -117,7 +122,13 @@ namespace BaiduCloudSync
 
                 if (queue_empty)
                 {
-                    Thread.Sleep(3000);
+                    try
+                    {
+                        Thread.Sleep(3000);
+                    }
+                    catch (ThreadInterruptedException) { }
+                    catch (ThreadAbortException) { _io_thread_flags = _IO_THREAD_ABORTED; return; }
+                    catch (Exception) { throw; }
                     continue;
                 }
 
@@ -133,15 +144,29 @@ namespace BaiduCloudSync
 
                     var fs_watcher = new FileSystemWatcher(fileinfo.DirectoryName, fileinfo.Name);
                     bool is_file_changed = false;
-                    fs_watcher.Deleted += (s, e) => { is_file_changed = true; };
-                    fs_watcher.Changed += (s, e) => { is_file_changed = true; };
+                    fs_watcher.Deleted += (s, e) =>
+                    {
+                        Tracer.GlobalTracer.TraceWarning("File deleted while reading " + next_path);
+                        is_file_changed = true;
+                    };
+                    fs_watcher.Changed += (s, e) =>
+                    {
+                        Tracer.GlobalTracer.TraceWarning("File changed while reading " + next_path);
+                        is_file_changed = true;
+                    };
                     fs_watcher.EnableRaisingEvents = true;
 
-                    var path_sha1 = SHA1.ComputeHash(next_path);
+                    byte[] path_sha1 = null;
+#pragma warning disable CS0162
+                    if (_FILE_SYSTEM_CASE_SENSITIVE)
+                        path_sha1 = SHA1.ComputeHash(next_path);
+                    else
+                        path_sha1 = SHA1.ComputeHash(next_path.ToLower());
+#pragma warning restore
                     io_stream = fileinfo.Open(FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
-                    var buffer = new byte[4096];
-                    long length = fileinfo.Length;
+                    var buffer = new byte[65536];
+                    long length = 0;
                     int current = 0;
 
                     //calculation
@@ -177,36 +202,43 @@ namespace BaiduCloudSync
 
                     do
                     {
-                        current = io_stream.Read(buffer, 0, 4096);
-                        //multi-thread calculation, no hardware acc.
-                        Parallel.For(0, 4, (i) => //Lambda for parallel for
+                        try
                         {
-                            if (i == 0)
-                            {
-                                md5_calc.TransformBlock(buffer, 0, current);
-                            }
-                            else if (i == 1)
-                            {
-                                sha1_calc.TransformBlock(buffer, 0, current);
-                            }
-                            else if (i == 2)
-                            {
-                                if (length >= BaiduPCS.VALIDATE_SIZE) return;
-                                int size = current;
-                                if (length + current >= BaiduPCS.VALIDATE_SIZE)
-                                    size = (int)(BaiduPCS.VALIDATE_SIZE - length);
-                                md5_slice_calc.TransformBlock(buffer, 0, size);
-                            }
-                            else
-                            {
-                                crc32_calc.Append(buffer, 0, current);
-                            }
-                        });
+                            current = io_stream.Read(buffer, 0, buffer.Length);
+                        }
+                        catch { break; }
+                        //multi-thread calculation, no hardware acc.
+                        //Parallel.For(0, 4, (i) => //Lambda for parallel for
+                        //{
+                        //    if (i == 0)
+                        //    {
+                        md5_calc.TransformBlock(buffer, 0, current);
+                        //    }
+                        //    else if (i == 1)
+                        //    {
+                        sha1_calc.TransformBlock(buffer, 0, current);
+                        //    }
+                        //    else if (i == 2)
+                        //    {
+                        //        if (length >= BaiduPCS.VALIDATE_SIZE) return;
+                        if (length < BaiduPCS.VALIDATE_SIZE)
+                        {
+                            int size = current;
+                            if (length + current >= BaiduPCS.VALIDATE_SIZE)
+                                size = (int)(BaiduPCS.VALIDATE_SIZE - length);
+                            md5_slice_calc.TransformBlock(buffer, 0, size);
+                        }
+                        //    }
+                        //    else
+                        //    {
+                        crc32_calc.Append(buffer, 0, current);
+                        //    }
+                        //});
 
                         length += current;
                         LocalFileIOUpdate?.Invoke(next_path, length, fileinfo.Length);
                     } while (is_file_changed == false && _io_thread_flags == 0 && current > 0 && io_stream.CanRead);
-                    
+
                     //handling file changed
                     if (is_file_changed)
                     {
@@ -240,8 +272,8 @@ namespace BaiduCloudSync
                             _sql_cmd.Parameters.Add("@Path_SHA1", System.Data.DbType.Binary);
                             _sql_cmd.Parameters["@Path_SHA1"].Value = path_sha1;
 
-                            _sql_cmd.Parameters.Add("@CRC32", System.Data.DbType.Binary);
-                            _sql_cmd.Parameters["@CRC32"].Value = util.Hex(local_data.CRC32.ToString("X2"));
+                            _sql_cmd.Parameters.Add("@CRC32", System.Data.DbType.Int32);
+                            _sql_cmd.Parameters["@CRC32"].Value = (int)local_data.CRC32;
                             _sql_cmd.Parameters.Add("@CTime", System.Data.DbType.Int64);
                             _sql_cmd.Parameters["@CTime"].Value = (long)util.ToUnixTimestamp(local_data.CTime);
                             _sql_cmd.Parameters.Add("@MD5", System.Data.DbType.Binary);
@@ -267,6 +299,8 @@ namespace BaiduCloudSync
                             }
                             _sql_cmd.ExecuteNonQuery();
                         }
+
+                        LocalFileIOFinish?.Invoke(local_data);
                     }
 
                     //handling thread flags
@@ -347,6 +381,12 @@ namespace BaiduCloudSync
         }
         public void Dispose()
         {
+            if (_io_thread != null)
+            {
+                _io_thread_flags = _IO_THREAD_ABORT_REQUEST;
+                _io_thread.Join();
+                _io_thread = null;
+            }
             if (_sql_trs != null)
             {
                 _sql_trs.Commit();
@@ -390,7 +430,15 @@ namespace BaiduCloudSync
             ThreadPool.QueueUserWorkItem(delegate
             {
                 var file_info = new FileInfo(path);
-                var path_sha1 = SHA1.ComputeHash(path.ToLower());
+                byte[] path_sha1 = null;
+
+#pragma warning disable CS0162
+                if (_FILE_SYSTEM_CASE_SENSITIVE)
+                    path_sha1 = SHA1.ComputeHash(path);
+                else
+                    path_sha1 = SHA1.ComputeHash(path.ToLower());
+#pragma warning restore
+
                 var result = new LocalFileData();
                 bool sql_hit = false;
                 lock (_sql_lock)
@@ -433,6 +481,11 @@ namespace BaiduCloudSync
                 lock (_io_queue_lock)
                 {
                     _io_queue.Enqueue(path);
+                    if ((_io_thread.ThreadState & ThreadState.WaitSleepJoin) != 0)
+                    {
+                        //wake up from sleep state
+                        _io_thread.Interrupt();
+                    }
                 }
             });
         }

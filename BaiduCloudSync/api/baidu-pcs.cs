@@ -12,7 +12,7 @@ using System.Threading;
 
 namespace BaiduCloudSync
 {
-    public partial class BaiduPCS : IEquatable<BaiduPCS>
+    public partial class BaiduPCS : IEquatable<object>
     {
         #region static & const vars
         public static uint APPID = 250528;
@@ -1040,6 +1040,7 @@ namespace BaiduCloudSync
         #region interfaces implement
         public override bool Equals(object other)
         {
+            if (other == null) return false;
             if (other.GetType() != typeof(BaiduPCS)) return false;
             return (other as object == null) ? false : (_auth.CookieIdentifier == ((BaiduPCS)other)._auth.CookieIdentifier);
         }

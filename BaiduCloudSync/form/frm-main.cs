@@ -45,6 +45,27 @@ namespace BaiduCloudSync
             //test code
             //var test = new RemoteFileCacher();
             //test.AddAccount(_pcsAPI);
+            var test = new CLocalFileCacher();
+            test.LocalFileIOUpdate += (path, cur, len) =>
+            {
+                //Debug.Print("File IO Update: " + path + " (" + cur + "/" + len + ")");
+            };
+            test.LocalFileIOFinish += (data) =>
+            {
+                Debug.Print("File IO Finish:"
+                    + "\r\nPath: " + data.Path
+                    + "\r\nPath_SHA1: " + data.Path_SHA1
+                    + "\r\nCRC32: " + data.CRC32
+                    + "\r\nSHA1: " + data.SHA1
+                    + "\r\nMD5: " + data.MD5
+                    + "\r\nSlice_MD5: " + data.Slice_MD5
+                    + "\r\nSize: " + data.Size
+                    + "\r\nCTime: " + data.CTime.ToString()
+                    + "\r\nMTime: " + data.MTime.ToString()
+                    );
+                ThreadPool.QueueUserWorkItem(delegate { test.Dispose(); });
+            };
+            test.FileIORequest("D:\\download\\qt-opensource-windows-x86-msvc2015-5.7.0.exe");
         }
         private void Form1_Load(object sender, EventArgs e)
         {
