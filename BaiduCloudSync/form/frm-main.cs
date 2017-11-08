@@ -44,7 +44,6 @@ namespace BaiduCloudSync
 
             //test code
             //var test = new RemoteFileCacher();
-            //test.AddAccount(_pcsAPI);
             //var test = new CLocalFileCacher();
             //test.LocalFileIOUpdate += (path, cur, len) =>
             //{

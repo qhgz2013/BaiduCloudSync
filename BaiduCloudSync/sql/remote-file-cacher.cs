@@ -117,6 +117,7 @@ namespace BaiduCloudSync
             _file_diff_thread_fetching_head_lock = new object();
             _account_data_external_lock = new object();
 
+            _sql_cache_path = string.Empty;
 
             _initialize_sql_tables();
             _file_diff_thread = new Thread(_file_diff_thread_callback);
@@ -205,6 +206,58 @@ namespace BaiduCloudSync
         private Dictionary<int, bool> _file_diff_thread_data_dirty; //当前账号的数据是否需要更新
         private bool _is_file_diff_working; //差异线程是否在互联网上下载数据
         private object _file_diff_thread_fetching_head_lock;
+
+        //sql数据缓存
+        private string _sql_cache_path; //缓存路径
+        private List<BaiduPCS.ObjectMetadata> _sql_query_result;
+
+        #region comparison classes implement
+        private class _sort_meta : IComparer<BaiduPCS.ObjectMetadata>
+        {
+            private BaiduPCS.FileOrder _order;
+            private bool _asc;
+            public _sort_meta(BaiduPCS.FileOrder order, bool asc)
+            {
+                _order = order;
+                _asc = asc;
+            }
+            int IComparer<BaiduPCS.ObjectMetadata>.Compare(BaiduPCS.ObjectMetadata x, BaiduPCS.ObjectMetadata y)
+            {
+                if (x.IsDir != y.IsDir)
+                {
+                    if (x.IsDir) return -1;
+                    if (y.IsDir) return 1;
+                }
+                switch (_order)
+                {
+                    case BaiduPCS.FileOrder.time:
+                        if (x.ServerMTime == y.ServerMTime)
+                            return x.ServerFileName.CompareTo(y.ServerFileName);
+                        if (_asc)
+                            return x.ServerMTime.CompareTo(y.ServerMTime);
+                        else
+                            return y.ServerMTime.CompareTo(x.ServerMTime);
+                    case BaiduPCS.FileOrder.name:
+                        if (_asc)
+                            return x.ServerFileName.CompareTo(y.ServerFileName);
+                        else
+                            return y.ServerFileName.CompareTo(x.ServerFileName);
+                    case BaiduPCS.FileOrder.size:
+                        if (x.Size == y.Size)
+                            return x.ServerFileName.CompareTo(y.ServerFileName);
+                        if (_asc)
+                            return x.Size.CompareTo(y.Size);
+                        else
+                            return y.Size.CompareTo(x.Size);
+                    default:
+                        break;
+                }
+                throw new NotSupportedException();
+            }
+        }
+
+        #endregion
+
         //主监控线程回调
         private void _file_diff_thread_callback()
         {
@@ -415,54 +468,54 @@ namespace BaiduCloudSync
             if (!path.EndsWith("/")) path += "/";
             var sql_text = "select FS_ID, Category, IsDir, LocalCTime, LocalMTime, OperID, Path, ServerCTime, ServerFileName, ServerMTime, Size, Unlist, MD5" +
                 " from FileList where account_id = " + account_id + " and path like '" + path + "%' and path not like '" + path + "%/%'";
-            sql_text += " order by ";
-            switch (order)
-            {
-                case BaiduPCS.FileOrder.time:
-                    sql_text += "ServerCTime";
-                    break;
-                case BaiduPCS.FileOrder.name:
-                    sql_text += "ServerFileName";
-                    break;
-                case BaiduPCS.FileOrder.size:
-                    sql_text += "Size";
-                    break;
-                default:
-                    sql_text += "FS_ID";
-                    break;
-            }
-            if (!asc) sql_text += " desc";
-            sql_text += " limit " + size;
-            sql_text += " offset " + (size * (page - 1));
 
             ThreadPool.QueueUserWorkItem(delegate
             {
+                var ret = new List<BaiduPCS.ObjectMetadata>();
+                //to memory cache
                 lock (_sql_lock)
                 {
-                    _sql_cmd.CommandText = sql_text;
-                    var dr = _sql_cmd.ExecuteReader();
-                    var meta_list = new List<BaiduPCS.ObjectMetadata>();
-                    while (dr.Read())
+                    if (_sql_cache_path != path)
                     {
-                        var new_meta = new BaiduPCS.ObjectMetadata();
-                        if (!dr.IsDBNull(0)) new_meta.FS_ID = (ulong)(long)dr[0];
-                        if (!dr.IsDBNull(1)) new_meta.Category = (uint)(int)dr[1];
-                        if (!dr.IsDBNull(2)) new_meta.IsDir = (byte)dr[2] != 0;
-                        if (!dr.IsDBNull(3)) new_meta.LocalCTime = (ulong)(long)dr[3];
-                        if (!dr.IsDBNull(4)) new_meta.LocalMTime = (ulong)(long)dr[4];
-                        if (!dr.IsDBNull(5)) new_meta.OperID = (uint)(int)dr[5];
-                        if (!dr.IsDBNull(6)) new_meta.Path = (string)dr[6];
-                        if (!dr.IsDBNull(7)) new_meta.ServerCTime = (ulong)(long)dr[7];
-                        if (!dr.IsDBNull(8)) new_meta.ServerFileName = (string)dr[8];
-                        if (!dr.IsDBNull(9)) new_meta.ServerMTime = (ulong)(long)dr[9];
-                        if (!dr.IsDBNull(10)) new_meta.Size = (ulong)(long)dr[10];
-                        if (!dr.IsDBNull(11)) new_meta.Unlist = (uint)(int)dr[11];
-                        if (!dr.IsDBNull(12)) new_meta.MD5 = util.Hex((byte[])dr[12]);
-                        meta_list.Add(new_meta);
+                        _sql_cache_path = path;
+                        _sql_cmd.CommandText = sql_text;
+                        var dr = _sql_cmd.ExecuteReader();
+                        var meta_list = new List<BaiduPCS.ObjectMetadata>();
+                        while (dr.Read())
+                        {
+                            var new_meta = new BaiduPCS.ObjectMetadata();
+                            if (!dr.IsDBNull(0)) new_meta.FS_ID = (ulong)(long)dr[0];
+                            if (!dr.IsDBNull(1)) new_meta.Category = (uint)(int)dr[1];
+                            if (!dr.IsDBNull(2)) new_meta.IsDir = (byte)dr[2] != 0;
+                            if (!dr.IsDBNull(3)) new_meta.LocalCTime = (ulong)(long)dr[3];
+                            if (!dr.IsDBNull(4)) new_meta.LocalMTime = (ulong)(long)dr[4];
+                            if (!dr.IsDBNull(5)) new_meta.OperID = (uint)(int)dr[5];
+                            if (!dr.IsDBNull(6)) new_meta.Path = (string)dr[6];
+                            if (!dr.IsDBNull(7)) new_meta.ServerCTime = (ulong)(long)dr[7];
+                            if (!dr.IsDBNull(8)) new_meta.ServerFileName = (string)dr[8];
+                            if (!dr.IsDBNull(9)) new_meta.ServerMTime = (ulong)(long)dr[9];
+                            if (!dr.IsDBNull(10)) new_meta.Size = (ulong)(long)dr[10];
+                            if (!dr.IsDBNull(11)) new_meta.Unlist = (uint)(int)dr[11];
+                            if (!dr.IsDBNull(12)) new_meta.MD5 = util.Hex((byte[])dr[12]);
+                            meta_list.Add(new_meta);
+                        }
+                        dr.Close();
+
+                        //sorting
+                        meta_list.Sort(new _sort_meta(order, asc));
+
+                        _sql_query_result = meta_list;
                     }
-                    dr.Close();
-                    callback?.Invoke(true, meta_list.ToArray(), null);
+
+                    //return from cache
+                    int offset = page * size;
+                    for (int i = offset - size; i < _sql_query_result.Count && i < offset; i++)
+                    {
+                        ret.Add(_sql_query_result[i]);
+                    }
                 }
+
+                callback?.Invoke(true, ret.ToArray(), null);
             });
         }
 
