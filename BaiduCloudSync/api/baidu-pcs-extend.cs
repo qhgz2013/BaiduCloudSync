@@ -161,252 +161,252 @@ namespace BaiduCloudSync
         }
 
         //文件夹同步
-        #region Folder Sync
-        private bool _get_syncup_data(string local_path, string remote_path, LocalFileCacher local_cacher, FileListCacher remote_cacher, ref List<ObjectMetadata> delete_list, ref List<TrackedData> upload_list, bool recursive)
-        {
-            var local_files = local_cacher.GetDataFromPath(local_path, false);
-            var remote_files = remote_cacher.GetFileList(remote_path);
+        //#region Folder Sync
+        //private bool _get_syncup_data(string local_path, string remote_path, LocalFileCacher local_cacher, FileListCacher remote_cacher, ref List<ObjectMetadata> delete_list, ref List<TrackedData> upload_list, bool recursive)
+        //{
+        //    var local_files = local_cacher.GetDataFromPath(local_path, false);
+        //    var remote_files = remote_cacher.GetFileList(remote_path);
 
-            //extract file names only
-            var local_filenames = new List<string>();
-            var remote_filenames = new List<string>();
-            var local_paths = new List<string>();
-            var remote_paths = new List<string>();
+        //    //extract file names only
+        //    var local_filenames = new List<string>();
+        //    var remote_filenames = new List<string>();
+        //    var local_paths = new List<string>();
+        //    var remote_paths = new List<string>();
 
-            foreach (var item in local_files)
-            {
-                if (!item.IsDir)
-                    local_filenames.Add(item.Path.Split('/').Last());
-                else
-                    local_paths.Add(item.Path.Split('/').Last());
-            }
-            foreach (var item in remote_files)
-            {
-                if (!item.IsDir)
-                    remote_filenames.Add(item.ServerFileName);
-                else
-                    remote_paths.Add(item.ServerFileName);
-            }
+        //    foreach (var item in local_files)
+        //    {
+        //        if (!item.IsDir)
+        //            local_filenames.Add(item.Path.Split('/').Last());
+        //        else
+        //            local_paths.Add(item.Path.Split('/').Last());
+        //    }
+        //    foreach (var item in remote_files)
+        //    {
+        //        if (!item.IsDir)
+        //            remote_filenames.Add(item.ServerFileName);
+        //        else
+        //            remote_paths.Add(item.ServerFileName);
+        //    }
 
-            //generate differential filename list
+        //    //generate differential filename list
 
-            //remote_filenames - local_filenames
-            // the files exist in remote path but do not exist in local path (delete)
-            var delete_files = new List<string>();
-            delete_files.AddRange(remote_filenames.Except(local_filenames));
+        //    //remote_filenames - local_filenames
+        //    // the files exist in remote path but do not exist in local path (delete)
+        //    var delete_files = new List<string>();
+        //    delete_files.AddRange(remote_filenames.Except(local_filenames));
 
-            var upload_files = new List<string>();
-            //remote_filenames ∩ local_filenames
-            // the files exist in both remote and local (compare and overwrite data)
-            upload_files.AddRange(remote_filenames.Intersect(local_filenames));
+        //    var upload_files = new List<string>();
+        //    //remote_filenames ∩ local_filenames
+        //    // the files exist in both remote and local (compare and overwrite data)
+        //    upload_files.AddRange(remote_filenames.Intersect(local_filenames));
 
-            var pure_upload_files = new List<string>();
-            //local_filenames - remote_filenames
-            // the files exist in local path but do not exist in remote path (upload)
-            pure_upload_files.AddRange(local_filenames.Except(remote_filenames));
+        //    var pure_upload_files = new List<string>();
+        //    //local_filenames - remote_filenames
+        //    // the files exist in local path but do not exist in remote path (upload)
+        //    pure_upload_files.AddRange(local_filenames.Except(remote_filenames));
 
-            //converting to data list
-            var delete_file_data = new List<ObjectMetadata>();
-            foreach (var item in delete_files)
-            {
-                delete_file_data.Add(remote_files.First(o => o.ServerFileName == item)); //o(n^2)
-            }
-            var upload_file_data = new List<TrackedData>();
-            foreach (var item in upload_files)
-            {
-                var local_data = local_files.First(o => o.Path.Split('/').Last() == item); //o(n^2)
-                var remote_data = remote_files.First(o => o.ServerFileName == item);
+        //    //converting to data list
+        //    var delete_file_data = new List<ObjectMetadata>();
+        //    foreach (var item in delete_files)
+        //    {
+        //        delete_file_data.Add(remote_files.First(o => o.ServerFileName == item)); //o(n^2)
+        //    }
+        //    var upload_file_data = new List<TrackedData>();
+        //    foreach (var item in upload_files)
+        //    {
+        //        var local_data = local_files.First(o => o.Path.Split('/').Last() == item); //o(n^2)
+        //        var remote_data = remote_files.First(o => o.ServerFileName == item);
 
-                //skip same files
-                //if (local_data.ContentSize != remote_data.Size || local_data.MD5 != remote_data.MD5)
+        //        //skip same files
+        //        //if (local_data.ContentSize != remote_data.Size || local_data.MD5 != remote_data.MD5)
 
-                //忽略大于2G文件时的md5检查
-                if (local_data.ContentSize != remote_data.Size || (remote_data.Size < int.MaxValue && local_data.MD5 != remote_data.MD5))
-                {
-                    upload_file_data.Add(local_data);
-                }
-            }
-            foreach (var item in pure_upload_files)
-            {
-                upload_file_data.Add(local_files.First(o => o.Path.Split('/').Last() == item));
-            }
+        //        //忽略大于2G文件时的md5检查
+        //        if (local_data.ContentSize != remote_data.Size || (remote_data.Size < int.MaxValue && local_data.MD5 != remote_data.MD5))
+        //        {
+        //            upload_file_data.Add(local_data);
+        //        }
+        //    }
+        //    foreach (var item in pure_upload_files)
+        //    {
+        //        upload_file_data.Add(local_files.First(o => o.Path.Split('/').Last() == item));
+        //    }
 
-            //appending data
-            delete_list.AddRange(delete_file_data);
-            upload_list.AddRange(upload_file_data);
-
-
-
-            //generate differential path list
-            //remote_paths - local_paths
-            // the directories exist in remote path but do not exist in local path (delete)
-            var delete_paths = new List<string>();
-            delete_paths.AddRange(remote_paths.Except(local_paths));
-
-            //remote_paths ∩ local_paths
-            // the path exist in both remote and local (not modified)
-
-            //local_paths - remote_paths
-            // the directories exist in local but do not exist in remote path (create new)
-            var create_paths = new List<string>();
-            create_paths.AddRange(local_paths.Except(remote_paths));
-
-            //converting to data list
-            var delete_path_data = new List<ObjectMetadata>();
-            foreach (var item in delete_paths)
-            {
-                delete_path_data.Add(remote_files.First(o => o.ServerFileName == item)); //o(n^2)
-            }
-            var create_path_data = new List<TrackedData>();
-            foreach (var item in create_paths)
-            {
-                var local_data = local_files.First(o => o.Path.Split('/').Last() == item); //o(n^2)
-                create_path_data.Add(local_data);
-            }
-            //appending data
-            delete_list.AddRange(delete_path_data);
-            upload_list.AddRange(create_path_data);
-
-            //recursive
-            if (recursive)
-            {
-                foreach (var item in local_files)
-                {
-                    if (item.IsDir)
-                    {
-                        var name = item.Path.Split('/').Last();
-                        _get_syncup_data(local_path + "/" + name, remote_path + name + "/", local_cacher, remote_cacher, ref delete_list, ref upload_list, recursive);
-                    }
-                }
-            }
-            return true;
-        }
-        public bool GetSyncUpData(string local_path, string remote_path, LocalFileCacher local_cacher, FileListCacher remote_cacher, out List<ObjectMetadata> delete_list, out List<TrackedData> upload_list, bool recursive = true)
-        {
-            Tracer.GlobalTracer.TraceInfo("BaiduPCS.GetSyncUpData called: string local_path=" + local_path + ", string remote_path=" + remote_path + ", bool recursive=" + recursive);
-            delete_list = new List<ObjectMetadata>();
-            upload_list = new List<TrackedData>();
-            if (local_cacher == null || remote_cacher == null) return false;
-            if (string.IsNullOrEmpty(local_path) || string.IsNullOrEmpty(remote_path)) return false;
-
-            local_path = local_path.Replace(@"\", "/");
-            remote_path = remote_path.Replace(@"\", "/");
-
-            if (!remote_path.EndsWith("/")) remote_path += "/";
-            if (local_path.EndsWith("/")) local_path = local_path.Substring(0, local_path.Length - 1);
-
-            return _get_syncup_data(local_path, remote_path, local_cacher, remote_cacher, ref delete_list, ref upload_list, recursive);
-        }
-        private bool _get_syncdown_data(string local_path, string remote_path, LocalFileCacher local_cacher, FileListCacher remote_cacher, ref List<TrackedData> delete_list, ref List<ObjectMetadata> download_list, bool recursive)
-        {
-            var local_files = local_cacher.GetDataFromPath(local_path, false);
-            var remote_files = remote_cacher.GetFileList(remote_path);
-
-            var local_filenames = new List<string>();
-            var remote_filenames = new List<string>();
-            var local_paths = new List<string>();
-            var remote_paths = new List<string>();
-
-            foreach (var item in local_files)
-            {
-                if (item.IsDir)
-                    local_paths.Add(item.Path.Split('/').Last());
-                else
-                    local_filenames.Add(item.Path.Split('/').Last());
-            }
-            foreach (var item in remote_files)
-            {
-                if (item.IsDir)
-                    remote_paths.Add(item.ServerFileName);
-                else
-                    remote_filenames.Add(item.ServerFileName);
-            }
-
-            var delete_files = new List<string>();
-            delete_files.AddRange(local_filenames.Except(remote_filenames));
-
-            var download_files = new List<string>();
-            download_files.AddRange(local_filenames.Intersect(remote_filenames));
-
-            var pure_download_files = new List<string>();
-            pure_download_files.AddRange(remote_filenames.Except(local_filenames));
-
-            var delete_file_data = new List<TrackedData>();
-            foreach (var item in delete_files)
-            {
-                delete_file_data.Add(local_files.First(o => o.Path.Split('/').Last() == item));
-            }
-            var download_file_data = new List<ObjectMetadata>();
-            foreach (var item in download_files)
-            {
-                var local_data = local_files.First(o => o.Path.Split('/').Last() == item);
-                var remote_data = remote_files.First(o => o.ServerFileName == item);
-                //if (local_data.ContentSize != remote_data.Size || local_data.MD5 != remote_data.MD5)
-
-                //忽略大于2G文件时的md5检查
-                if (local_data.ContentSize != remote_data.Size || (remote_data.Size < int.MaxValue && local_data.MD5 != remote_data.MD5))
-                {
-                    download_file_data.Add(remote_data);
-                }
-            }
-            foreach (var item in pure_download_files)
-            {
-                download_file_data.Add(remote_files.First(o => o.ServerFileName == item));
-            }
-
-            delete_list.AddRange(delete_file_data);
-            download_list.AddRange(download_file_data);
+        //    //appending data
+        //    delete_list.AddRange(delete_file_data);
+        //    upload_list.AddRange(upload_file_data);
 
 
-            var delete_paths = new List<string>();
-            delete_paths.AddRange(local_paths.Except(remote_paths));
 
-            var create_paths = new List<string>();
-            create_paths.AddRange(remote_paths.Except(local_paths));
+        //    //generate differential path list
+        //    //remote_paths - local_paths
+        //    // the directories exist in remote path but do not exist in local path (delete)
+        //    var delete_paths = new List<string>();
+        //    delete_paths.AddRange(remote_paths.Except(local_paths));
 
-            var delete_path_data = new List<TrackedData>();
-            foreach (var item in delete_paths)
-            {
-                delete_path_data.Add(local_files.First(o => o.Path.Split('/').Last() == item));
-            }
-            var create_path_data = new List<ObjectMetadata>();
-            foreach (var item in create_paths)
-            {
-                create_path_data.Add(remote_files.First(o => o.ServerFileName == item));
-            }
+        //    //remote_paths ∩ local_paths
+        //    // the path exist in both remote and local (not modified)
 
-            delete_list.AddRange(delete_path_data);
-            download_list.AddRange(create_path_data);
+        //    //local_paths - remote_paths
+        //    // the directories exist in local but do not exist in remote path (create new)
+        //    var create_paths = new List<string>();
+        //    create_paths.AddRange(local_paths.Except(remote_paths));
 
-            if (recursive)
-            {
-                foreach (var item in remote_files)
-                {
-                    if (item.IsDir)
-                    {
-                        var name = item.ServerFileName;
-                        _get_syncdown_data(local_path + "/" + name, remote_path + name + "/", local_cacher, remote_cacher, ref delete_list, ref download_list, recursive);
-                    }
-                }
-            }
-            return true;
-        }
-        public bool GetSyncDownData(string local_path, string remote_path, LocalFileCacher local_cacher, FileListCacher remote_cacher, out List<TrackedData> delete_list, out List<ObjectMetadata> download_list, bool recursive = true)
-        {
-            Tracer.GlobalTracer.TraceInfo("BaiduPCS.GetSyncDownData called: string local_path=" + local_path + ", string remote_path=" + remote_path + ", bool recursive=" + recursive);
-            download_list = new List<ObjectMetadata>();
-            delete_list = new List<TrackedData>();
-            if (local_cacher == null || remote_cacher == null) return false;
-            if (string.IsNullOrEmpty(local_path) || string.IsNullOrEmpty(remote_path)) return false;
+        //    //converting to data list
+        //    var delete_path_data = new List<ObjectMetadata>();
+        //    foreach (var item in delete_paths)
+        //    {
+        //        delete_path_data.Add(remote_files.First(o => o.ServerFileName == item)); //o(n^2)
+        //    }
+        //    var create_path_data = new List<TrackedData>();
+        //    foreach (var item in create_paths)
+        //    {
+        //        var local_data = local_files.First(o => o.Path.Split('/').Last() == item); //o(n^2)
+        //        create_path_data.Add(local_data);
+        //    }
+        //    //appending data
+        //    delete_list.AddRange(delete_path_data);
+        //    upload_list.AddRange(create_path_data);
 
-            local_path = local_path.Replace(@"\", "/");
-            remote_path = remote_path.Replace(@"\", "/");
+        //    //recursive
+        //    if (recursive)
+        //    {
+        //        foreach (var item in local_files)
+        //        {
+        //            if (item.IsDir)
+        //            {
+        //                var name = item.Path.Split('/').Last();
+        //                _get_syncup_data(local_path + "/" + name, remote_path + name + "/", local_cacher, remote_cacher, ref delete_list, ref upload_list, recursive);
+        //            }
+        //        }
+        //    }
+        //    return true;
+        //}
+        //public bool GetSyncUpData(string local_path, string remote_path, LocalFileCacher local_cacher, FileListCacher remote_cacher, out List<ObjectMetadata> delete_list, out List<TrackedData> upload_list, bool recursive = true)
+        //{
+        //    Tracer.GlobalTracer.TraceInfo("BaiduPCS.GetSyncUpData called: string local_path=" + local_path + ", string remote_path=" + remote_path + ", bool recursive=" + recursive);
+        //    delete_list = new List<ObjectMetadata>();
+        //    upload_list = new List<TrackedData>();
+        //    if (local_cacher == null || remote_cacher == null) return false;
+        //    if (string.IsNullOrEmpty(local_path) || string.IsNullOrEmpty(remote_path)) return false;
 
-            if (!remote_path.EndsWith("/")) remote_path += "/";
-            if (local_path.EndsWith("/")) local_path = local_path.Substring(0, local_path.Length - 1);
+        //    local_path = local_path.Replace(@"\", "/");
+        //    remote_path = remote_path.Replace(@"\", "/");
 
-            return _get_syncdown_data(local_path, remote_path, local_cacher, remote_cacher, ref delete_list, ref download_list, recursive);
-        }
-        #endregion
+        //    if (!remote_path.EndsWith("/")) remote_path += "/";
+        //    if (local_path.EndsWith("/")) local_path = local_path.Substring(0, local_path.Length - 1);
+
+        //    return _get_syncup_data(local_path, remote_path, local_cacher, remote_cacher, ref delete_list, ref upload_list, recursive);
+        //}
+        //private bool _get_syncdown_data(string local_path, string remote_path, LocalFileCacher local_cacher, FileListCacher remote_cacher, ref List<TrackedData> delete_list, ref List<ObjectMetadata> download_list, bool recursive)
+        //{
+        //    var local_files = local_cacher.GetDataFromPath(local_path, false);
+        //    var remote_files = remote_cacher.GetFileList(remote_path);
+
+        //    var local_filenames = new List<string>();
+        //    var remote_filenames = new List<string>();
+        //    var local_paths = new List<string>();
+        //    var remote_paths = new List<string>();
+
+        //    foreach (var item in local_files)
+        //    {
+        //        if (item.IsDir)
+        //            local_paths.Add(item.Path.Split('/').Last());
+        //        else
+        //            local_filenames.Add(item.Path.Split('/').Last());
+        //    }
+        //    foreach (var item in remote_files)
+        //    {
+        //        if (item.IsDir)
+        //            remote_paths.Add(item.ServerFileName);
+        //        else
+        //            remote_filenames.Add(item.ServerFileName);
+        //    }
+
+        //    var delete_files = new List<string>();
+        //    delete_files.AddRange(local_filenames.Except(remote_filenames));
+
+        //    var download_files = new List<string>();
+        //    download_files.AddRange(local_filenames.Intersect(remote_filenames));
+
+        //    var pure_download_files = new List<string>();
+        //    pure_download_files.AddRange(remote_filenames.Except(local_filenames));
+
+        //    var delete_file_data = new List<TrackedData>();
+        //    foreach (var item in delete_files)
+        //    {
+        //        delete_file_data.Add(local_files.First(o => o.Path.Split('/').Last() == item));
+        //    }
+        //    var download_file_data = new List<ObjectMetadata>();
+        //    foreach (var item in download_files)
+        //    {
+        //        var local_data = local_files.First(o => o.Path.Split('/').Last() == item);
+        //        var remote_data = remote_files.First(o => o.ServerFileName == item);
+        //        //if (local_data.ContentSize != remote_data.Size || local_data.MD5 != remote_data.MD5)
+
+        //        //忽略大于2G文件时的md5检查
+        //        if (local_data.ContentSize != remote_data.Size || (remote_data.Size < int.MaxValue && local_data.MD5 != remote_data.MD5))
+        //        {
+        //            download_file_data.Add(remote_data);
+        //        }
+        //    }
+        //    foreach (var item in pure_download_files)
+        //    {
+        //        download_file_data.Add(remote_files.First(o => o.ServerFileName == item));
+        //    }
+
+        //    delete_list.AddRange(delete_file_data);
+        //    download_list.AddRange(download_file_data);
+
+
+        //    var delete_paths = new List<string>();
+        //    delete_paths.AddRange(local_paths.Except(remote_paths));
+
+        //    var create_paths = new List<string>();
+        //    create_paths.AddRange(remote_paths.Except(local_paths));
+
+        //    var delete_path_data = new List<TrackedData>();
+        //    foreach (var item in delete_paths)
+        //    {
+        //        delete_path_data.Add(local_files.First(o => o.Path.Split('/').Last() == item));
+        //    }
+        //    var create_path_data = new List<ObjectMetadata>();
+        //    foreach (var item in create_paths)
+        //    {
+        //        create_path_data.Add(remote_files.First(o => o.ServerFileName == item));
+        //    }
+
+        //    delete_list.AddRange(delete_path_data);
+        //    download_list.AddRange(create_path_data);
+
+        //    if (recursive)
+        //    {
+        //        foreach (var item in remote_files)
+        //        {
+        //            if (item.IsDir)
+        //            {
+        //                var name = item.ServerFileName;
+        //                _get_syncdown_data(local_path + "/" + name, remote_path + name + "/", local_cacher, remote_cacher, ref delete_list, ref download_list, recursive);
+        //            }
+        //        }
+        //    }
+        //    return true;
+        //}
+        //public bool GetSyncDownData(string local_path, string remote_path, LocalFileCacher local_cacher, FileListCacher remote_cacher, out List<TrackedData> delete_list, out List<ObjectMetadata> download_list, bool recursive = true)
+        //{
+        //    Tracer.GlobalTracer.TraceInfo("BaiduPCS.GetSyncDownData called: string local_path=" + local_path + ", string remote_path=" + remote_path + ", bool recursive=" + recursive);
+        //    download_list = new List<ObjectMetadata>();
+        //    delete_list = new List<TrackedData>();
+        //    if (local_cacher == null || remote_cacher == null) return false;
+        //    if (string.IsNullOrEmpty(local_path) || string.IsNullOrEmpty(remote_path)) return false;
+
+        //    local_path = local_path.Replace(@"\", "/");
+        //    remote_path = remote_path.Replace(@"\", "/");
+
+        //    if (!remote_path.EndsWith("/")) remote_path += "/";
+        //    if (local_path.EndsWith("/")) local_path = local_path.Substring(0, local_path.Length - 1);
+
+        //    return _get_syncdown_data(local_path, remote_path, local_cacher, remote_cacher, ref delete_list, ref download_list, recursive);
+        //}
+        //#endregion
     }
 }

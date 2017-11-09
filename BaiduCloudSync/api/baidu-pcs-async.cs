@@ -105,7 +105,7 @@ namespace BaiduCloudSync
             param.Add("checkexpire", 1);
             param.Add("app_id", APPID);
             param.Add("bdstoken", _auth.bdstoken);
-            param.Add("logid", _get_logid());
+            param.Add("logid", GetLogid());
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
@@ -173,7 +173,7 @@ namespace BaiduCloudSync
                 querystr.Add("web", 1);
                 querystr.Add("app_id", APPID);
                 querystr.Add("bdstoken", _auth.bdstoken);
-                querystr.Add("logid", _get_logid());
+                querystr.Add("logid", GetLogid());
                 querystr.Add("clienttype", 0);
 
                 var postParam = new Parameters();
@@ -301,7 +301,7 @@ namespace BaiduCloudSync
             param.Add("opera", "move");
             param.Add("app_id", APPID);
             param.Add("bdstoken", _auth.bdstoken);
-            param.Add("logid", _get_logid());
+            param.Add("logid", GetLogid());
 
             var post_param = new Parameters();
             post_param.Add("filelist", JsonConvert.SerializeObject(postArray));
@@ -418,7 +418,7 @@ namespace BaiduCloudSync
             param.Add("opera", "copy");
             param.Add("app_id", APPID);
             param.Add("bdstoken", _auth.bdstoken);
-            param.Add("logid", _get_logid());
+            param.Add("logid", GetLogid());
 
             var post_param = new Parameters();
             post_param.Add("filelist", JsonConvert.SerializeObject(postArray));
@@ -521,7 +521,7 @@ namespace BaiduCloudSync
             param.Add("opera", "rename");
             param.Add("app_id", APPID);
             param.Add("bdstoken", _auth.bdstoken);
-            param.Add("logid", _get_logid());
+            param.Add("logid", GetLogid());
 
             var post_param = new Parameters();
             post_param.Add("filelist", JsonConvert.SerializeObject(postArray));
@@ -597,7 +597,7 @@ namespace BaiduCloudSync
             query_param.Add("web", 1);
             query_param.Add("app_id", APPID);
             query_param.Add("bdstoken", _auth.bdstoken);
-            query_param.Add("logid", _get_logid());
+            query_param.Add("logid", GetLogid());
             query_param.Add("clienttype", 0);
 
             var ns = new NetStream();
@@ -677,7 +677,7 @@ namespace BaiduCloudSync
             var param = new Parameters();
             param.Add("dir", path);
             param.Add("bdstoken", _auth.bdstoken);
-            param.Add("logid", _get_logid());
+            param.Add("logid", GetLogid());
             param.Add("order", order);
             param.Add("desc", asc ? 0 : 1);
             param.Add("app_id", APPID);
@@ -749,7 +749,7 @@ namespace BaiduCloudSync
             param.Add("web", 1);
             param.Add("app_id", APPID);
             param.Add("bdstoken", _auth.bdstoken);
-            param.Add("logid", _get_logid());
+            param.Add("logid", GetLogid());
             param.Add("clienttype", 0);
 
             var ns = new NetStream();
@@ -932,7 +932,7 @@ namespace BaiduCloudSync
             param.Add("app_id", APPID);
             param.Add("path", path);
             param.Add("ondup", ondup);
-            param.Add("logid", _get_logid());
+            param.Add("logid", GetLogid());
             param.Add("BDUSS", _auth.bduss);
 
             var ns = new NetStream();
@@ -1071,7 +1071,7 @@ namespace BaiduCloudSync
             query_param.Add("web", 1);
             query_param.Add("app_id", APPID);
             query_param.Add("bdstoken", _auth.bdstoken);
-            query_param.Add("logid", _get_logid());
+            query_param.Add("logid", GetLogid());
             query_param.Add("clienttype", 0);
 
             var post_data = new Parameters();
@@ -1185,7 +1185,7 @@ namespace BaiduCloudSync
             query_param.Add("clienttype", 1);
             query_param.Add("web", 1);
             query_param.Add("BDUSS", _auth.bduss);
-            query_param.Add("logid", _get_logid());
+            query_param.Add("logid", GetLogid());
             query_param.Add("path", path);
             query_param.Add("uploadid", uploadid);
             query_param.Add("partseq", sequence);
@@ -1321,7 +1321,7 @@ namespace BaiduCloudSync
             query_param.Add("web", 1);
             query_param.Add("app_id", APPID);
             query_param.Add("bdstoken", _auth.bdstoken);
-            query_param.Add("logid", _get_logid());
+            query_param.Add("logid", GetLogid());
             query_param.Add("clienttype", 0);
 
             var post_param = new Parameters();
@@ -1448,7 +1448,7 @@ namespace BaiduCloudSync
             param.Add("web", "1");
             param.Add("app_id", APPID);
             param.Add("bdstoken", _auth.bdstoken);
-            param.Add("logid", _get_logid());
+            param.Add("logid", GetLogid());
             param.Add("clienttype", "0");
 
             try
@@ -1600,7 +1600,7 @@ namespace BaiduCloudSync
             query_param.Add("web", 1);
             query_param.Add("app_id", APPID);
             query_param.Add("bdstoken", _auth.bdstoken);
-            query_param.Add("logid", _get_logid());
+            query_param.Add("logid", GetLogid());
 
             var post_param = new Parameters();
             var fid_list = new JArray();
@@ -1699,7 +1699,7 @@ namespace BaiduCloudSync
             query_param.Add("web", 1);
             query_param.Add("app_id", APPID);
             query_param.Add("bdstoken", _auth.bdstoken);
-            query_param.Add("logid", _get_logid());
+            query_param.Add("logid", GetLogid());
 
             var post_param = new Parameters();
             var fid_list = new JArray();
@@ -1792,7 +1792,7 @@ namespace BaiduCloudSync
             query_param.Add("web", 1);
             query_param.Add("bdstoken", _auth.bdstoken);
             query_param.Add("app_id", APPID);
-            query_param.Add("logid", _get_logid());
+            query_param.Add("logid", GetLogid());
 
             var post_body = new Parameters();
             var shareid_list = new JArray();
@@ -1853,7 +1853,7 @@ namespace BaiduCloudSync
             query_param.Add("_", (ulong)util.ToUnixTimestamp(DateTime.Now) * 1000);
             query_param.Add("bdstoken", _auth.bdstoken);
             query_param.Add("app_id", APPID);
-            query_param.Add("logid", _get_logid());
+            query_param.Add("logid", GetLogid());
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;

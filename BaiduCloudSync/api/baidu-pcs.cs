@@ -200,7 +200,7 @@ namespace BaiduCloudSync
         /// 获取当前时间的Base64加密字符串 (logid)
         /// </summary>
         /// <returns>当前时间的Base64加密字符串</returns>
-        private string _get_logid()
+        public static string GetLogid()
         {
             var str = (util.ToUnixTimestamp(DateTime.Now) * 10000).ToString();
             if (!str.Contains(".")) str += ".0";

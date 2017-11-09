@@ -705,7 +705,7 @@ namespace BaiduCloudSync
 
                     Tracer.GlobalTracer.TraceInfo("Initialization complete.\r\nbdstoken=" + _bdstoken + "\r\nsign1=" + _sign1 + "\r\nsign2=" + _sign2 + "\r\nsign3=" + _sign3 + "\r\ntimestamp=" + _timestamp);
                     //test
-                    //TestFunc();
+                    TestFunc();
 
                     //next update thread
                     if (__next_update_thread != null)
@@ -792,27 +792,34 @@ namespace BaiduCloudSync
                 return _timestamp;
             }
         }
-        //private void TestFunc()
-        //{
-        //    var url = "http://pan.baidu.com/api/report/user";
-        //    var query_param = new Parameters();
-        //    query_param.Add("channel", "chunlei");
-        //    query_param.Add("web", 1);
-        //    query_param.Add("app_id", APPID);
-        //    query_param.Add("bdstoken", _bdstoken);
-        //    query_param.Add("logid", _get_logid());
-        //    query_param.Add("clienttype", 0);
+        private void TestFunc()
+        {
+            var url = "https://pan.baidu.com/api/report/user";
+            var query_param = new Parameters();
+            query_param.Add("channel", "chunlei");
+            query_param.Add("web", 1);
+            query_param.Add("app_id", BaiduPCS.APPID);
+            query_param.Add("bdstoken", _bdstoken);
+            query_param.Add("logid", BaiduPCS.GetLogid());
+            query_param.Add("clienttype", 0);
 
-        //    var post_param = new Parameters();
-        //    post_param.Add("timestamp", (long)util.ToUnixTimestamp(DateTime.Now));
-        //    post_param.Add("action", "fm_self");
+            var post_param = new Parameters();
+            post_param.Add("timestamp", (long)util.ToUnixTimestamp(DateTime.Now));
+            post_param.Add("action", "fm_self");
 
-        //    var ns = new NetStream();
-        //    ns.CookieKey = _auth.CookieIdentifier;
-        //    ns.HttpPost(url, post_param, headerParam: _get_xhr_param(), urlParam: query_param);
-        //    var rep = ns.ReadResponseString();
-        //    ns.Close();
-        //}
+            var ns = new NetStream();
+            ns.CookieKey = _cookie_identifier;
+
+            var header = new Parameters();
+
+            header.Add("X-Requested-With", "XMLHttpRequest");
+            header.Add("Origin", "http://pan.baidu.com");
+            header.Add("Referer", BaiduPCS.BAIDU_NETDISK_URL);
+
+            ns.HttpPost(url, post_param, headerParam: header, urlParam: query_param);
+            var rep = ns.ReadResponseString();
+            ns.Close();
+        }
         #endregion
     }
 }

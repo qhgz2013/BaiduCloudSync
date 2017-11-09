@@ -120,18 +120,29 @@ namespace BaiduCloudSync
 
                 //calculating origin file
                 _state = 8;
-                TrackedData data = new TrackedData();
+                LocalFileData data = new LocalFileData();
                 lock (_thd_lock)
                 {
-                    _cache.GetDataFromFile(_local_path);
+                    var cur_thd = Thread.CurrentThread;
+                    _cache.LocalFileIOFinish += (d) =>
+                    {
+                        if (d.Path == _local_path)
+                        {
+                            data = d;
+                            cur_thd.Interrupt();
+                        }
+                    };
+                    _cache.FileIORequest(_local_path);
+                    try
+                    {
+                        Thread.Sleep(Timeout.Infinite);
+                    }
+                    catch { }
                 }
-                if (!data.IsDir)
-                {
-                    _content_crc32 = data.CRC32;
-                    _content_md5 = data.MD5;
-                    _content_sha1 = data.SHA1;
-                    _content_length = data.ContentSize;
-                }
+                _content_crc32 = data.CRC32.ToString("X2").ToLower();
+                _content_md5 = data.MD5;
+                _content_sha1 = data.SHA1;
+                _content_length = (ulong)data.Size;
 
                 _encrypt_file();
 
@@ -428,15 +439,34 @@ namespace BaiduCloudSync
         {
             try
             {
-                TrackedData data;
+                LocalFileData data = new LocalFileData();
                 if (string.IsNullOrEmpty(_content_md5) || string.IsNullOrEmpty(_content_crc32))
                 {
+                    
                     lock (_thd_lock)
                     {
-                        data = _cache.GetDataFromFile(_local_path + (_is_encrypt_upload ? "_temp" : ""));
+                        var cur_thd = Thread.CurrentThread;
+                        _cache.LocalFileIOFinish += (d) =>
+                        {
+                            if (d.Path == _local_path)
+                            {
+                                data = d;
+                                cur_thd.Interrupt();
+                            }
+                        };
+                        _cache.FileIORequest(_local_path + (_is_encrypt_upload ? "_temp" : ""));
+                        try
+                        {
+                            Thread.Sleep(Timeout.Infinite);
+                        }
+                        catch { }
                     }
-                    _content_length = data.ContentSize;
-                    _content_crc32 = data.CRC32;
+                    //lock (_thd_lock)
+                    //{
+                    //    data = _cache.GetDataFromFile(_local_path + (_is_encrypt_upload ? "_temp" : ""));
+                    //}
+                    _content_length = (ulong)data.Size;
+                    _content_crc32 = data.CRC32.ToString("X2").ToLower();
                     _content_md5 = data.MD5;
                     _content_sha1 = data.SHA1;
                     _slice_count = (int)Math.Ceiling(_content_length / 4194304.0);

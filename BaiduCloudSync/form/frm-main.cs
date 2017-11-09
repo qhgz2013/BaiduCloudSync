@@ -1406,161 +1406,161 @@ namespace BaiduCloudSync
 
         private void 同步到云端ToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            List<ObjectMetadata> delete_list = new List<ObjectMetadata>();
-            List<TrackedData> upload_list = new List<TrackedData>();
-            if (UploadFileDir.ShowDialog() != DialogResult.OK) return;
-            var local_path = UploadFileDir.SelectedPath;
-            var temp_dirInfo = new DirectoryInfo(local_path);
-            var remote_path = __current_listview_path + temp_dirInfo.Name + "/";
+            //List<ObjectMetadata> delete_list = new List<ObjectMetadata>();
+            //List<LocalFileData> upload_list = new List<TrackedData>();
+            //if (UploadFileDir.ShowDialog() != DialogResult.OK) return;
+            //var local_path = UploadFileDir.SelectedPath;
+            //var temp_dirInfo = new DirectoryInfo(local_path);
+            //var remote_path = __current_listview_path + temp_dirInfo.Name + "/";
 
-            //calling updating
-            _asyncCall(delegate
-            {
-                bool suc = false;
-                try { suc = _pcsAPI.GetSyncUpData(local_path, remote_path, _local_file_list, _file_list, out delete_list, out upload_list, true); }
-                catch (ErrnoException ex)
-                {
-                    Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能获取文件信息（错误代码：" + ex.Errno + "），目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
-                    return;
-                }
-                if (!suc)
-                {
-                    Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能获取文件信息，目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
-                    return;
-                }
-                //delete path
-                var delete_path = new string[delete_list.Count];
-                for (int i = 0; i < delete_list.Count; i++)
-                {
-                    delete_path[i] = delete_list[i].Path;
-                }
+            ////calling updating
+            //_asyncCall(delegate
+            //{
+            //    bool suc = false;
+            //    try { suc = _pcsAPI.GetSyncUpData(local_path, remote_path, _local_file_list, _file_list, out delete_list, out upload_list, true); }
+            //    catch (ErrnoException ex)
+            //    {
+            //        Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能获取文件信息（错误代码：" + ex.Errno + "），目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
+            //        return;
+            //    }
+            //    if (!suc)
+            //    {
+            //        Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能获取文件信息，目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
+            //        return;
+            //    }
+            //    //delete path
+            //    var delete_path = new string[delete_list.Count];
+            //    for (int i = 0; i < delete_list.Count; i++)
+            //    {
+            //        delete_path[i] = delete_list[i].Path;
+            //    }
 
-                suc = false;
-                try { suc = _pcsAPI.DeletePath(delete_path); }
-                catch (ErrnoException ex)
-                {
-                    Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能删除文件/文件夹（错误代码：" + ex.Errno + "），目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
-                    return;
-                }
-                if (!suc)
-                {
-                    Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能删除文件/文件夹，目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
-                    return;
-                }
+            //    suc = false;
+            //    try { suc = _pcsAPI.DeletePath(delete_path); }
+            //    catch (ErrnoException ex)
+            //    {
+            //        Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能删除文件/文件夹（错误代码：" + ex.Errno + "），目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
+            //        return;
+            //    }
+            //    if (!suc)
+            //    {
+            //        Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能删除文件/文件夹，目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
+            //        return;
+            //    }
 
-                //create path
-                foreach (var item in upload_list)
-                {
-                    if (item.IsDir)
-                    {
-                        //converting relative path
-                        var relative_path = item.Path.Substring(local_path.Length + 1);
-                        var absolute_remote_path = remote_path + relative_path;
-                        ObjectMetadata data = new ObjectMetadata();
-                        try { data = _pcsAPI.CreateDirectory(absolute_remote_path); }
-                        catch (ErrnoException ex)
-                        {
-                            Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能创建文件夹（错误代码：" + ex.Errno + "），目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
-                            return;
-                        }
-                        if (data.FS_ID == 0)
-                        {
-                            Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能创建文件夹，目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
-                            return;
-                        }
+            //    //create path
+            //    foreach (var item in upload_list)
+            //    {
+            //        if (item.IsDir)
+            //        {
+            //            //converting relative path
+            //            var relative_path = item.Path.Substring(local_path.Length + 1);
+            //            var absolute_remote_path = remote_path + relative_path;
+            //            ObjectMetadata data = new ObjectMetadata();
+            //            try { data = _pcsAPI.CreateDirectory(absolute_remote_path); }
+            //            catch (ErrnoException ex)
+            //            {
+            //                Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能创建文件夹（错误代码：" + ex.Errno + "），目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
+            //                return;
+            //            }
+            //            if (data.FS_ID == 0)
+            //            {
+            //                Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "同步出错: 未能创建文件夹，目录结构可能不一致", "Error message", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
+            //                return;
+            //            }
 
-                    }
-                }
-                //calling refresh
-                刷新EToolStripMenuItem_Click(sender, e);
+            //        }
+            //    }
+            //    //calling refresh
+            //    刷新EToolStripMenuItem_Click(sender, e);
 
-                //calling uploading
-                foreach (var item in upload_list)
-                {
-                    if (!item.IsDir)
-                    {
-                        var relative_path = item.Path.Substring(local_path.Length + 1);
-                        var absolute_remote_path = remote_path + relative_path;
-                        var uploader = new Uploader(this, _pcsAPI, absolute_remote_path, _local_file_list, item.Path, ondup.overwrite, false);
-                        uploader.TaskFinished += _on_upload_finished;
-                        uploadTransferList1.AddTask(uploader);
-                    }
-                }
-            }, "获取文件信息...（该过程可能会比较长）");
+            //    //calling uploading
+            //    foreach (var item in upload_list)
+            //    {
+            //        if (!item.IsDir)
+            //        {
+            //            var relative_path = item.Path.Substring(local_path.Length + 1);
+            //            var absolute_remote_path = remote_path + relative_path;
+            //            var uploader = new Uploader(this, _pcsAPI, absolute_remote_path, _local_file_list, item.Path, ondup.overwrite, false);
+            //            uploader.TaskFinished += _on_upload_finished;
+            //            uploadTransferList1.AddTask(uploader);
+            //        }
+            //    }
+            //}, "获取文件信息...（该过程可能会比较长）");
         }
 
         private void 同步到本地ToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (downloadFileDir.ShowDialog() != DialogResult.OK) return;
-            var base_local_path = downloadFileDir.SelectedPath.Replace("\\", "/");
-            if (!base_local_path.EndsWith("/")) base_local_path += "/";
-            var base_remote_path = __current_listview_path;
-            //multi select resolving;
-            var selected_name = new List<string>();
-            foreach (ListViewItem item in listView_DirData.SelectedItems)
-            {
-                selected_name.Add(item.Text + (item.ImageKey == ":/dir/" ? "/" : ""));
-            }
-            if (selected_name.Count == 0) return;
+            //if (downloadFileDir.ShowDialog() != DialogResult.OK) return;
+            //var base_local_path = downloadFileDir.SelectedPath.Replace("\\", "/");
+            //if (!base_local_path.EndsWith("/")) base_local_path += "/";
+            //var base_remote_path = __current_listview_path;
+            ////multi select resolving;
+            //var selected_name = new List<string>();
+            //foreach (ListViewItem item in listView_DirData.SelectedItems)
+            //{
+            //    selected_name.Add(item.Text + (item.ImageKey == ":/dir/" ? "/" : ""));
+            //}
+            //if (selected_name.Count == 0) return;
 
-            _asyncCall(delegate
-            {
-                foreach (var item in selected_name)
-                {
-                    var data = _file_list.GetData(base_remote_path + item);
-                    var local_path = base_local_path + item;
-                    var remote_path = base_remote_path + item;
-                    if (data.IsDir)
-                    {
-                        List<TrackedData> delete_list;
-                        List<ObjectMetadata> download_list;
-                        _pcsAPI.GetSyncDownData(local_path, remote_path, _local_file_list, _file_list, out delete_list, out download_list);
+            //_asyncCall(delegate
+            //{
+            //    foreach (var item in selected_name)
+            //    {
+            //        var data = _file_list.GetData(base_remote_path + item);
+            //        var local_path = base_local_path + item;
+            //        var remote_path = base_remote_path + item;
+            //        if (data.IsDir)
+            //        {
+            //            List<TrackedData> delete_list;
+            //            List<ObjectMetadata> download_list;
+            //            _pcsAPI.GetSyncDownData(local_path, remote_path, _local_file_list, _file_list, out delete_list, out download_list);
 
-                        //delete path
-                        foreach (var item2 in delete_list)
-                        {
-                            if (item2.IsDir)
-                                Directory.Delete(item2.Path, true);
-                            else
-                                File.Delete(item2.Path);
-                        }
+            //            //delete path
+            //            foreach (var item2 in delete_list)
+            //            {
+            //                if (item2.IsDir)
+            //                    Directory.Delete(item2.Path, true);
+            //                else
+            //                    File.Delete(item2.Path);
+            //            }
 
-                        //create path
-                        foreach (var item2 in download_list)
-                        {
-                            if (item2.IsDir)
-                            {
-                                var relative_path = item2.Path.Substring(remote_path.Length);
-                                var absolute_local_path = local_path + relative_path;
-                                Directory.CreateDirectory(absolute_local_path);
-                            }
-                        }
+            //            //create path
+            //            foreach (var item2 in download_list)
+            //            {
+            //                if (item2.IsDir)
+            //                {
+            //                    var relative_path = item2.Path.Substring(remote_path.Length);
+            //                    var absolute_local_path = local_path + relative_path;
+            //                    Directory.CreateDirectory(absolute_local_path);
+            //                }
+            //            }
 
-                        //downloading
-                        foreach (var item2 in download_list)
-                        {
-                            if (!item2.IsDir)
-                            {
-                                var relative_path = item2.Path.Substring(remote_path.Length);
-                                var absolute_local_path = local_path + relative_path;
-                                var frm = new frmDownload(_pcsAPI, item2, absolute_local_path);
-                                downloadTransferList1.AddTask(frm);
-                            }
-                        }
+            //            //downloading
+            //            foreach (var item2 in download_list)
+            //            {
+            //                if (!item2.IsDir)
+            //                {
+            //                    var relative_path = item2.Path.Substring(remote_path.Length);
+            //                    var absolute_local_path = local_path + relative_path;
+            //                    var frm = new frmDownload(_pcsAPI, item2, absolute_local_path);
+            //                    downloadTransferList1.AddTask(frm);
+            //                }
+            //            }
 
-                    }
-                    else
-                    {
-                        var remote_data = _file_list.GetData(remote_path);
-                        var local_data = _local_file_list.GetDataFromPath(base_local_path, false).FirstOrDefault(o => o.Path == local_path);
-                        if (string.IsNullOrEmpty(local_data.MD5) || local_data.ContentSize != remote_data.Size || local_data.MD5 != remote_data.MD5)
-                        {
-                            var frm = new frmDownload(_pcsAPI, remote_data, local_path);
-                            downloadTransferList1.AddTask(frm);
-                        }
-                    }
-                }
-            }, "获取文件信息...（该过程可能会比较长）");
+            //        }
+            //        else
+            //        {
+            //            var remote_data = _file_list.GetData(remote_path);
+            //            var local_data = _local_file_list.GetDataFromPath(base_local_path, false).FirstOrDefault(o => o.Path == local_path);
+            //            if (string.IsNullOrEmpty(local_data.MD5) || local_data.ContentSize != remote_data.Size || local_data.MD5 != remote_data.MD5)
+            //            {
+            //                var frm = new frmDownload(_pcsAPI, remote_data, local_path);
+            //                downloadTransferList1.AddTask(frm);
+            //            }
+            //        }
+            //    }
+            //}, "获取文件信息...（该过程可能会比较长）");
         }
 
         private void 分享ToolStripMenuItem_Click(object sender, EventArgs e)

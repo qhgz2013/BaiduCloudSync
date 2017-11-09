@@ -23,7 +23,9 @@ namespace BaiduCloudSync
         public DateTime MTime;
     }
     public delegate void LocalFileIOFinishCallback(LocalFileData data);
-    public class CLocalFileCacher : IDisposable //will be replaced to class LocalFileCacher after removing the current cacher
+
+    //todo: 增加缓存大小修改
+    public class LocalFileCacher : IDisposable
     {
         private const string _CACHE_PATH = "data";
         private const string _LOCAL_CACHE_NAME = _CACHE_PATH + "/local-track.db";
@@ -469,7 +471,7 @@ namespace BaiduCloudSync
             }
         }
 
-        public CLocalFileCacher()
+        public LocalFileCacher()
         {
             _sql_lock = new object();
             _io_queue_lock = new object();
