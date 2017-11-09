@@ -5,6 +5,7 @@ using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.IO;
+using GlobalUtil;
 
 namespace BaiduCloudSync
 {

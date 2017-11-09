@@ -5,7 +5,7 @@
 using System;
 using System.IO;
 
-namespace BaiduCloudSync
+namespace GlobalUtil
 {
     [Serializable]
     public class Crc32

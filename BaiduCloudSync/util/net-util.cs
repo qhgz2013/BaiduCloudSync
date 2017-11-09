@@ -11,7 +11,7 @@ using System.IO;
 using System.Collections;
 using System.Threading;
 
-namespace BaiduCloudSync
+namespace GlobalUtil
 {
     namespace NetUtils
     {

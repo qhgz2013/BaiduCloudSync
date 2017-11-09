@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using static BaiduCloudSync.BaiduPCS;
+using GlobalUtil;
 //todo: 修改所有由主线程发起的异步线程调用方式 (+线程中止功能)
 namespace BaiduCloudSync
 {
@@ -27,8 +28,8 @@ namespace BaiduCloudSync
         {
             InitializeComponent();
             //_auth = new BaiduOAuth("default");
-            if (NetUtils.NetStream.DefaultCookieContainer.Keys.Count > 0)
-                _auth = new BaiduOAuth(NetUtils.NetStream.DefaultCookieContainer.Keys.First());
+            if (GlobalUtil.NetUtils.NetStream.DefaultCookieContainer.Keys.Count > 0)
+                _auth = new BaiduOAuth(GlobalUtil.NetUtils.NetStream.DefaultCookieContainer.Keys.First());
             else
             {
                 _auth = new BaiduOAuth(util.GenerateFormDataBoundary());
@@ -121,7 +122,7 @@ namespace BaiduCloudSync
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
-            NetUtils.NetStream.SaveCookie();
+            GlobalUtil.NetUtils.NetStream.SaveCookie();
             StaticConfig.SaveStaticConfig();
         }
 

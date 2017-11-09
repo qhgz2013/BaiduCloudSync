@@ -5,6 +5,7 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using static BaiduCloudSync.BaiduPCS;
+using GlobalUtil;
 
 namespace BaiduCloudSync
 {

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Security.Cryptography;
 
-namespace BaiduCloudSync
+namespace GlobalUtil
 {
     //RSA 1024/2048/3072/4096/... bit
     public partial class Crypt

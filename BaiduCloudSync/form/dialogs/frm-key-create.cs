@@ -9,6 +9,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
+using GlobalUtil;
 
 namespace BaiduCloudSync
 {

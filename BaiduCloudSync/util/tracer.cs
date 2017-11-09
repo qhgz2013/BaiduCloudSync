@@ -9,7 +9,7 @@ using System.Threading;
 using System.IO;
 using System.Text;
 
-namespace BaiduCloudSync
+namespace GlobalUtil
 {
     public class Tracer : IDisposable
     {

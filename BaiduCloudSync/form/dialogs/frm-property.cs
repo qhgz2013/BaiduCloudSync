@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using static BaiduCloudSync.BaiduPCS;
+using GlobalUtil;
 
 namespace BaiduCloudSync
 {

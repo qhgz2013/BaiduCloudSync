@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Security.Cryptography;
-namespace BaiduCloudSync
+namespace GlobalUtil
 {
     public class FileEncrypt
     {

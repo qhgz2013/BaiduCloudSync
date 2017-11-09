@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace BaiduCloudSync.Properties
+namespace GlobalUtil.Properties
 {
 
 

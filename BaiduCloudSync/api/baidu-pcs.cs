@@ -1,4 +1,5 @@
-﻿using BaiduCloudSync.NetUtils;
+﻿using GlobalUtil;
+using GlobalUtil.NetUtils;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;

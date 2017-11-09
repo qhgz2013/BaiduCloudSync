@@ -5,7 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace BaiduCloudSync
+namespace GlobalUtil
 {
     //a simple class to calculate MD5 with pause and continue supports
     //一个简单的用于计算MD5的类，支持暂停和继续计算功能

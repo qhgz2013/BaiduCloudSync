@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace BaiduCloudSync
+namespace GlobalUtil
 {
     //a simple class to calculate SHA1 with pause and continue supports
     //一个简单的用于计算SHA1的类，支持暂停和继续计算功能

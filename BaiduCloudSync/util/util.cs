@@ -6,7 +6,7 @@ using System;
 using System.IO;
 using System.Text;
 
-namespace BaiduCloudSync
+namespace GlobalUtil
 {
     public partial class util
     {

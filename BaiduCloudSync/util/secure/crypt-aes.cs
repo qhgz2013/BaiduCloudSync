@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Security.Cryptography;
 
-namespace BaiduCloudSync
+namespace GlobalUtil
 {
     //AES 128/192/256 bit CBC/CFB/CTS/ECB/OFB
     public partial class Crypt
