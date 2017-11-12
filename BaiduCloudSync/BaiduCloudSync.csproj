@@ -106,7 +106,6 @@
     <Compile Include="sql\remote-file-cacher.cs" />
     <Compile Include="sql\local-file-cacher.cs" />
     <Compile Include="testbench\test-bench.cs" />
-    <Compile Include="util\filelist-cacher.cs" />
     <Compile Include="form\controls\ctl-debug-output.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -150,6 +149,8 @@
       <DependentUpon>frm-property.cs</DependentUpon>
     </Compile>
     <Compile Include="form\static-config.cs" />
+    <Compile Include="transfer\downloader-pool.cs" />
+    <Compile Include="transfer\downloader.cs" />
     <Compile Include="util\icon-extractor.cs" />
     <Compile Include="util\secure\common-file-encrypt.cs" />
     <Compile Include="util\secure\crc32.cs" />

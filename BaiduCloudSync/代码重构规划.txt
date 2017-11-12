@@ -4,12 +4,11 @@
 2.  修改cookie保存机制，支持多cookie请求 【finished】
 3.  修改cookie解析机制，排除重复和session cookie的保存
 4.  修改百度登陆的oauth类，支持多账号（多实例化） 【finished】
-5.  修改pcs api类，支持异步请求（同步调用改为线程阻塞式）
-6.  降低类耦合度：pcs api直接传入oauth类，修改auth到pcs api的token接入
-7.  实现网盘文件的本地sql保存，增加filediff的api接入
-8.  统一本地文件的io状态接口，实现到ui的显示
-9.  实现pem的标准解析 (see: https://msdn.microsoft.com/en-us/library/windows/desktop/bb648645(v=vs.85).aspx)
-10. 建立非窗体的命令解析界面
-11. 多账号网盘RAID
-
-转移auth: pcs api (auth) -> oauth
+5.  修改pcs api类，支持异步请求（同步调用改为线程阻塞式）【finished】
+6.  降低类耦合度：pcs api直接传入oauth类，修改auth到pcs api的token接入【finished】
+7.  实现网盘文件的本地sql保存，增加filediff的api接入【finished】
+8.  统一本地文件的io状态接口，实现到ui的显示【finished】
+9.  统一上传/下载的任务池(搞一个接口什么的？)，所有上传/下载皆由任务池负责分配（类似于线程池）
+10. 实现RSA pem的标准解析 (see: https://msdn.microsoft.com/en-us/library/windows/desktop/bb648645(v=vs.85).aspx)
+11. 建立非窗体的命令解析界面(命令行后台操作)
+12. 多账号网盘RAID

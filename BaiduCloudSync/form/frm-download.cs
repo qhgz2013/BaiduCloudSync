@@ -19,7 +19,7 @@ namespace BaiduCloudSync
     public partial class frmDownload : Form
     {
         private const bool _enable_error_tracing = false;
-        public frmDownload(BaiduPCS pcs, BaiduPCS.ObjectMetadata data, string save_path, bool start_task_now = false)
+        public frmDownload(BaiduPCS pcs, ObjectMetadata data, string save_path, bool start_task_now = false)
         {
             InitializeComponent();
             if (pcs == null || data.FS_ID == 0) throw new ArgumentNullException();

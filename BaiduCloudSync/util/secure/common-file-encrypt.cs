@@ -1,4 +1,9 @@
-﻿using System;
+﻿//common-file-encrypt.cs
+//
+// 用于对文件进行加密的类
+// 加密为固定RSA+可变AES 或者是固定AES
+//
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -39,6 +44,7 @@ namespace GlobalUtil
             fs_out.Write(sha1_value, 0, sha1_value.Length);
             fs_out.Write(aes_key_value, 0, aes_key_value.Length);
             fs_out.Write(aes_iv_value, 0, aes_iv_value.Length);
+            fs_out.Write(new byte[2], 0, 2); //preserved for latter usage
 
             fs_out.Flush();
             var encrypted_stream = Crypt.AES_StreamEncrypt(fs_out, aesKey, CipherMode.CFB, aesIV);
@@ -74,6 +80,7 @@ namespace GlobalUtil
                 throw new ArgumentException("Invalid SHA1 Checksum");
 
             fs_out.WriteByte(FLG_STATIC_KEY);
+            fs_out.Write(new byte[2], 0, 2); //preserved for latter usage
             fs_out.Flush();
 
             var encrypted_stream = Crypt.AES_StreamEncrypt(fs_out, aesKey, CipherMode.CFB, aesIV);
@@ -120,6 +127,7 @@ namespace GlobalUtil
             var SHA1 = rsa.Decrypt(sha1_value, false);
             var aesKey = rsa.Decrypt(aes_key_value, false);
             var aesIV = rsa.Decrypt(aes_iv_value, false);
+            var preserved = util.ReadBytes(fs_in, 2); //preserved for latter usage
 
             var decrypted_stream = Crypt.AES_StreamDecrypt(fs_in, aesKey, CipherMode.CFB, aesIV);
             int nread = 0;
@@ -163,6 +171,8 @@ namespace GlobalUtil
                 fs_out.Close();
                 throw new InvalidDataException("格式错误：该文件不是采用静态加密的文件");
             }
+            var preserved = util.ReadBytes(fs_in, 2); //preserved for latter usage
+
             var decrypted_stream = Crypt.AES_StreamDecrypt(fs_in, aesKey, CipherMode.CFB, aesIV);
             int nread = 0;
             const int buffer_size = 4096;

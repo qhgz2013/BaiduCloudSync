@@ -16,6 +16,8 @@ namespace BaiduCloudSync
         private const bool _enable_tracing = false;
         //文件大小
         private ulong _length;
+        //已经记录的下载完成的长度
+        private ulong _complete_length;
         //线程锁
         private object _data_lck;
         //最小分配大小，小于该值的区段将不会分配地址
@@ -40,6 +42,7 @@ namespace BaiduCloudSync
         {
             if (length == 0) throw new ArgumentOutOfRangeException("length");
             _length = length;
+            _complete_length = 0;
             _data_lck = new object();
 
             _segment_list = new SortedList<ulong, _t_struct>();
@@ -62,38 +65,62 @@ namespace BaiduCloudSync
                 {
                     if (!_debug_check())
                     {
-
+                        throw new Exception("Debug check failed");
                     }
-                    //找到最大的空间进行分配
+
                     ulong max_length = _segment_list.First().Key;
                     beg_position = 0;
                     int last_index = -1;
-                    for (int i = 1; i < _segment_list.Count; i++)
+                    //减小分段的优化模式
+                    if (_segment_list.Count == _guid_begpos_mapping.Count + 1)
                     {
-                        var tmp_length = _segment_list.ElementAt(i).Key - _segment_list.ElementAt(i - 1).Value.end_pos;
-                        //last_index = i - 1;
-                        var last_index_has_task = _segment_list.ElementAt(i - 1).Value.id != Guid.Empty;
-                        if (last_index_has_task)
+
+                        //找到最大的空间进行分配
+                        for (int i = 1; i < _segment_list.Count; i++)
                         {
-                            //上一片段已经有执行中的任务就从中间分配
-                            var allocated_length = tmp_length >> 1;
-                            if (allocated_length > max_length)
+                            var tmp_length = _segment_list.ElementAt(i).Key - _segment_list.ElementAt(i - 1).Value.end_pos;
+                            //last_index = i - 1;
+                            var last_index_has_task = _segment_list.ElementAt(i - 1).Value.id != Guid.Empty;
+                            if (last_index_has_task)
                             {
-                                last_index = -1;
-                                //beg_position = _segment_list.ElementAt(i - 1).Key;
-                                beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
-                                beg_position += (tmp_length - allocated_length);
-                                max_length = allocated_length;
+                                //上一片段已经有执行中的任务就从中间分配
+                                var allocated_length = tmp_length >> 1;
+                                if (allocated_length > max_length)
+                                {
+                                    last_index = -1;
+                                    //beg_position = _segment_list.ElementAt(i - 1).Key;
+                                    beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
+                                    beg_position += (tmp_length - allocated_length);
+                                    max_length = allocated_length;
+                                }
+                            }
+                            else
+                            {
+                                //没有的话从头开始分配
+                                if (tmp_length > max_length)
+                                {
+                                    last_index = i - 1;
+                                    beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
+                                    max_length = tmp_length;
+                                }
                             }
                         }
-                        else
+                    }
+                    else
+                    {
+                        //找到最大的空间进行分配，跳过已经有任务的
+                        for (int i = 1; i < _segment_list.Count; i++)
                         {
-                            //没有的话从头开始分配
-                            if (tmp_length > max_length)
+                            var tmp_length = _segment_list.ElementAt(i).Key - _segment_list.ElementAt(i - 1).Value.end_pos;
+                            var last_index_has_task = _segment_list.ElementAt(i - 1).Value.id != Guid.Empty;
+                            if (!last_index_has_task)
                             {
-                                last_index = i - 1;
-                                beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
-                                max_length = tmp_length;
+                                if (tmp_length > max_length)
+                                {
+                                    last_index = i - 1;
+                                    beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
+                                    max_length = tmp_length;
+                                }
                             }
                         }
                     }
@@ -195,25 +222,27 @@ namespace BaiduCloudSync
                         throw new ArgumentException("Decreasing position is forbidden");
 
                     //修改当前数据
+                    _complete_length += (current_position - segment_data.end_pos);
                     _segment_list[beg_pos] = new _t_struct(id, current_position);
 
                     //下一分段数据
                     var next_segment_index = _segment_list.IndexOfKey(beg_pos) + 1;
-                    if (next_segment_index == _segment_list.Count - 1)
-                    {
-                        //在获取下一分段之前，为了不影响最后一个标记文件结束位置segment，加入以下判断
-                        if (current_position >= _length)
-                        {
-                            current_position = _length;
-                            _segment_list[beg_pos] = new _t_struct(Guid.Empty, _length);
-                            _guid_begpos_mapping.Remove(id);
-                            return false;
-                        }
-                        else
-                            return true;
-                    }
                     do
                     {
+                        if (next_segment_index == _segment_list.Count - 1)
+                        {
+                            //在获取下一分段之前，为了不影响最后一个标记文件结束位置segment，加入以下判断
+                            if (current_position >= _length)
+                            {
+                                current_position = _length;
+                                _segment_list[beg_pos] = new _t_struct(Guid.Empty, _length);
+                                _complete_length -= current_position - _length;
+                                _guid_begpos_mapping.Remove(id);
+                                return false;
+                            }
+                            else
+                                return true;
+                        }
                         var next_segment_data = _segment_list.ElementAt(next_segment_index);
 
                         //合并检测
@@ -222,6 +251,7 @@ namespace BaiduCloudSync
                             if (current_position >= next_segment_data.Value.end_pos)
                             {
                                 //直接吞掉下一段的数据
+                                _complete_length -= next_segment_data.Value.end_pos - next_segment_data.Key;
                                 var next_guid = next_segment_data.Value.id;
                                 _segment_list.RemoveAt(next_segment_index);
                                 if (next_guid != Guid.Empty)
@@ -236,6 +266,7 @@ namespace BaiduCloudSync
                             else
                             {
                                 //这一段宣告死亡，由下一段接管
+                                _complete_length -= next_segment_data.Key - current_position;
                                 current_position = next_segment_data.Key;
                                 _segment_list[beg_pos] = next_segment_data.Value;
                                 var next_guid = next_segment_data.Value.id;
@@ -373,6 +404,10 @@ namespace BaiduCloudSync
             return true;
 #pragma warning restore
         }
+
+        public ulong Length { get { return _length; } }
+        public int SegmentCount { get { return _segment_list.Count; } }
+        public ulong CompletedLength { get { return _complete_length; } }
     }
 
 }

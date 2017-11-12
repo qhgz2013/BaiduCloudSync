@@ -39,35 +39,19 @@ namespace BaiduCloudSync
                     Environment.Exit(0);
             }
             _pcsAPI = new BaiduPCS(_auth);
-            _file_list = new FileListCacher(_pcsAPI);
+            _remote_file_list = new RemoteFileCacher();
+            if (_remote_file_list.GetAllAccounts().Length == 0)
+                _remote_file_list.AddAccount(_pcsAPI);
             _local_file_list = new LocalFileCacher();
             StaticConfig.LoadStaticConfig();
 
-            //test code
-            //var test = new RemoteFileCacher();
-            //var test = new CLocalFileCacher();
-            //test.LocalFileIOUpdate += (path, cur, len) =>
-            //{
-            //    //Debug.Print("File IO Update: " + path + " (" + cur + "/" + len + ")");
-            //};
-            //test.LocalFileIOFinish += (data) =>
-            //{
-            //    Debug.Print("File IO Finish:"
-            //        + "\r\nPath: " + data.Path
-            //        + "\r\nPath_SHA1: " + data.Path_SHA1
-            //        + "\r\nCRC32: " + data.CRC32
-            //        + "\r\nSHA1: " + data.SHA1
-            //        + "\r\nMD5: " + data.MD5
-            //        + "\r\nSlice_MD5: " + data.Slice_MD5
-            //        + "\r\nSize: " + data.Size
-            //        + "\r\nCTime: " + data.CTime.ToString()
-            //        + "\r\nMTime: " + data.MTime.ToString()
-            //        );
-            //    //ThreadPool.QueueUserWorkItem(delegate { test.Dispose(); });
-            //};
-            //test.FileIORequest("D:\\download\\qt-opensource-windows-x86-msvc2015-5.7.0.exe");
-            //Thread.Sleep(15000);
-            //test.Dispose();
+            var test = new TaskDispatcher(1024000);
+            ulong temp1, temp2;
+            var id1 = test.AllocateNewTask(out temp1);
+            var id2 = test.AllocateNewTask(out temp2);
+            test.UpdateTaskSituation(id2, test.Length - 2);
+            test.ReleaseTask(id2);
+            id2 = test.AllocateNewTask(out temp2);
         }
         private void Form1_Load(object sender, EventArgs e)
         {
@@ -124,6 +108,8 @@ namespace BaiduCloudSync
         {
             GlobalUtil.NetUtils.NetStream.SaveCookie();
             StaticConfig.SaveStaticConfig();
+
+            _local_file_list.Dispose();
         }
 
         //变量命名规定 (非UI部分)
@@ -134,7 +120,7 @@ namespace BaiduCloudSync
 
         #region main data
         private BaiduPCS _pcsAPI;
-        private FileListCacher _file_list;
+        private RemoteFileCacher _remote_file_list;
         private LocalFileCacher _local_file_list;
         #endregion
 
@@ -346,7 +332,7 @@ namespace BaiduCloudSync
         {
 
             if (path == null) path = __current_treeview_path;
-            if (!FileListCacher.DirValidating(path)) return;
+            //if (!FileListCacher.DirValidating(path)) return;
 
             //storing the selected node
             TreeNode selectednode = null;
@@ -362,7 +348,19 @@ namespace BaiduCloudSync
             for (int i = 0; i < paths.Length - 1; i++)
             {
                 cur_path += paths[i] + "/";
-                var files = _file_list.GetFileList(cur_path).ToList();
+                List<ObjectMetadata> files = null;
+                var sync_thread = Thread.CurrentThread;
+                _remote_file_list.GetFileListAsync(cur_path, (suc, result, state) =>
+                {
+                    files = result.ToList();
+                    sync_thread.Interrupt();
+                });
+                try
+                {
+                    Thread.Sleep(Timeout.Infinite);
+                }
+                catch { }
+                //var files = _remote_file_list.GetFileList(cur_path).ToList();
                 files.Sort((a, b) => a.ServerFileName.CompareTo(b.ServerFileName));
 
                 //Invoke(new NoArgSTA(delegate { cur_node.Nodes.Clear(); }));
@@ -427,12 +425,23 @@ namespace BaiduCloudSync
         private void __update_listview_data(string path = null, SortBase sort_type = SortBase.FileName, bool asc = true)
         {
             if (path == null) path = __current_listview_path;
-            if (!FileListCacher.DirValidating(path)) return;
+            //if (!FileListCacher.DirValidating(path)) return;
             __current_listview_path = path;
             IEnumerable<ObjectMetadata> file_list = null;
             try
             {
-                file_list = _file_list.GetFileList(path);
+                //file_list = _remote_file_list.GetFileList(path);
+                var sync_thread = Thread.CurrentThread;
+                _remote_file_list.GetFileListAsync(path, (suc, result, state) =>
+                {
+                    file_list = result;
+                    sync_thread.Interrupt();
+                });
+                try
+                {
+                    Thread.Sleep(Timeout.Infinite);
+                }
+                catch { }
             }
             catch (Exception)
             {
@@ -581,7 +590,18 @@ namespace BaiduCloudSync
                     if (node.Nodes.ContainsKey("<temp_node>"))
                     {
                         //__update_treeview_data(__get_dir_path_from_node(node));
-                        var new_files = _file_list.GetFileList(__get_dir_path_from_node(node));
+                        ObjectMetadata[] new_files = null; //_remote_file_list.GetFileList(__get_dir_path_from_node(node));
+                        var sync_thread = Thread.CurrentThread;
+                        _remote_file_list.GetFileListAsync(__get_dir_path_from_node(node), (suc, result, state) =>
+                        {
+                            new_files = result;
+                            sync_thread.Interrupt();
+                        });
+                        try
+                        {
+                            Thread.Sleep(Timeout.Infinite);
+                        }
+                        catch { }
 
                         Invoke(new NoArgSTA(delegate
                         {
@@ -618,7 +638,18 @@ namespace BaiduCloudSync
                     if (e.Node.Nodes.ContainsKey("<temp_node>"))
                     {
                         var node = e.Node;
-                        var new_files = _file_list.GetFileList(__get_dir_path_from_node(node));
+                        ObjectMetadata[] new_files = null; // _remote_file_list.GetFileList(__get_dir_path_from_node(node));
+                        var sync_thread = Thread.CurrentThread;
+                        _remote_file_list.GetFileListAsync(__get_dir_path_from_node(node), (suc, result, state) =>
+                        {
+                            new_files = result;
+                            sync_thread.Interrupt();
+                        });
+                        try
+                        {
+                            Thread.Sleep(Timeout.Infinite);
+                        }
+                        catch { }
 
                         Invoke(new NoArgSTA(delegate
                         {
@@ -645,34 +676,34 @@ namespace BaiduCloudSync
         //创建整个目录及子目录的文件链接 (throwable)
         private void create_symbollink(string path)
         {
-            var data = _file_list.GetData(path);
-            if (data.IsDir)
-            {
-                var files = _file_list.GetFileList(path);
-                foreach (var item in files)
-                {
-                    create_symbollink(item.Path + (item.IsDir ? "/" : ""));
-                }
-            }
-            else
-            {
-                ObjectMetadata meta = new ObjectMetadata();
-                try { meta = _pcsAPI.ConvertToSymbolLink(data.Path, data.FS_ID); }
-                catch (ErrnoException ex)
-                {
-                    Invoke(new NoArgSTA(delegate
-                    {
-                        MessageBox.Show(this, "转换失败: 错误代码: " + ex.Errno, "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }));
-                }
-                if (meta.FS_ID == 0)
-                {
-                    Invoke(new NoArgSTA(delegate
-                    {
-                        MessageBox.Show(this, "转换失败", "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }));
-                }
-            }
+            //var data = _remote_file_list.GetData(path);
+            //if (data.IsDir)
+            //{
+            //    var files = _remote_file_list.GetFileList(path);
+            //    foreach (var item in files)
+            //    {
+            //        create_symbollink(item.Path + (item.IsDir ? "/" : ""));
+            //    }
+            //}
+            //else
+            //{
+            //    ObjectMetadata meta = new ObjectMetadata();
+            //    try { meta = _pcsAPI.ConvertToSymbolLink(data.Path, data.FS_ID); }
+            //    catch (ErrnoException ex)
+            //    {
+            //        Invoke(new NoArgSTA(delegate
+            //        {
+            //            MessageBox.Show(this, "转换失败: 错误代码: " + ex.Errno, "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            //        }));
+            //    }
+            //    if (meta.FS_ID == 0)
+            //    {
+            //        Invoke(new NoArgSTA(delegate
+            //        {
+            //            MessageBox.Show(this, "转换失败", "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            //        }));
+            //    }
+            //}
         }
         //UI: 创建文件链接
         private void 创建文件链接ToolStripMenuItem_Click(object sender, EventArgs e)
@@ -722,18 +753,18 @@ namespace BaiduCloudSync
         }
         private void delete_path(IEnumerable<string> paths)
         {
-            _pcsAPI.DeletePath(paths);
-            List<string> parent_data = new List<string>();
-            foreach (var item in paths)
-            {
-                var parent = FileListCacher.GetParentDir(item);
-                if (!parent_data.Contains(parent))
-                    parent_data.Add(parent);
-            }
-            foreach (var item in paths)
-            {
-                _file_list.RemoveFileCache(item);
-            }
+            //_pcsAPI.DeletePath(paths);
+            //List<string> parent_data = new List<string>();
+            //foreach (var item in paths)
+            //{
+            //    var parent = FileListCacher.GetParentDir(item);
+            //    if (!parent_data.Contains(parent))
+            //        parent_data.Add(parent);
+            //}
+            //foreach (var item in paths)
+            //{
+            //    _remote_file_list.RemoveFileCache(item);
+            //}
         }
         //UI: 删除文件
         private void 删除ToolStripMenuItem_Click(object sender, EventArgs e)
@@ -787,36 +818,36 @@ namespace BaiduCloudSync
         //UI: 属性
         private void 属性ToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrEmpty(__current_listview_path)) return;
-            var selected_item = listView_DirData.SelectedItems;
-            Form property_form = null;
-            if (selected_item == null || selected_item.Count == 0)
-            {
-                if (__current_listview_path == "/")
-                {
-                    //root dir
-                    property_form = new frmProperty(_file_list.GetFileList("/"), _file_list);
-                }
-                else
-                {
-                    //normal dir
-                    property_form = new frmProperty(new ObjectMetadata[] { _file_list.GetData(__current_listview_path) }, _file_list);
-                }
-            }
-            else
-            {
-                var ls = new List<ObjectMetadata>(selected_item.Count);
-                foreach (ListViewItem item in selected_item)
-                {
-                    if (item.ImageKey == ":/dir/")
-                        ls.Add(_file_list.GetData(__current_listview_path + item.Text + "/"));
-                    else
-                        ls.Add(_file_list.GetData(__current_listview_path + item.Text));
+            //if (string.IsNullOrEmpty(__current_listview_path)) return;
+            //var selected_item = listView_DirData.SelectedItems;
+            //Form property_form = null;
+            //if (selected_item == null || selected_item.Count == 0)
+            //{
+            //    if (__current_listview_path == "/")
+            //    {
+            //        //root dir
+            //        property_form = new frmProperty(_remote_file_list.GetFileList("/"), _remote_file_list);
+            //    }
+            //    else
+            //    {
+            //        //normal dir
+            //        property_form = new frmProperty(new ObjectMetadata[] { _remote_file_list.GetData(__current_listview_path) }, _remote_file_list);
+            //    }
+            //}
+            //else
+            //{
+            //    var ls = new List<ObjectMetadata>(selected_item.Count);
+            //    foreach (ListViewItem item in selected_item)
+            //    {
+            //        if (item.ImageKey == ":/dir/")
+            //            ls.Add(_remote_file_list.GetData(__current_listview_path + item.Text + "/"));
+            //        else
+            //            ls.Add(_remote_file_list.GetData(__current_listview_path + item.Text));
 
-                }
-                property_form = new frmProperty(ls, _file_list);
-            }
-            property_form.Show(this);
+            //    }
+            //    property_form = new frmProperty(ls, _remote_file_list);
+            //}
+            //property_form.Show(this);
         }
         //todo: 移除该代码
         private void treeView_DirList_KeyUp(object sender, KeyEventArgs e)
@@ -828,34 +859,34 @@ namespace BaiduCloudSync
         }
         private void recreate_symbollink(string path)
         {
-            var data = _file_list.GetData(path);
-            if (data.IsDir)
-            {
-                var files = _file_list.GetFileList(path);
-                foreach (var item in files)
-                {
-                    recreate_symbollink(item.Path + (item.IsDir ? "/" : ""));
-                }
-            }
-            else
-            {
-                ObjectMetadata meta = new ObjectMetadata();
-                try { meta = _pcsAPI.ConvertFromSymbolLink(data.Path, data.FS_ID); }
-                catch (ErrnoException ex)
-                {
-                    Invoke(new NoArgSTA(delegate
-                    {
-                        MessageBox.Show(this, "转换失败: 错误代码: " + ex.Errno, "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }));
-                }
-                if (meta.FS_ID == 0)
-                {
-                    Invoke(new NoArgSTA(delegate
-                    {
-                        MessageBox.Show(this, "转换失败", "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }));
-                }
-            }
+            //var data = _remote_file_list.GetData(path);
+            //if (data.IsDir)
+            //{
+            //    var files = _remote_file_list.GetFileList(path);
+            //    foreach (var item in files)
+            //    {
+            //        recreate_symbollink(item.Path + (item.IsDir ? "/" : ""));
+            //    }
+            //}
+            //else
+            //{
+            //    ObjectMetadata meta = new ObjectMetadata();
+            //    try { meta = _pcsAPI.ConvertFromSymbolLink(data.Path, data.FS_ID); }
+            //    catch (ErrnoException ex)
+            //    {
+            //        Invoke(new NoArgSTA(delegate
+            //        {
+            //            MessageBox.Show(this, "转换失败: 错误代码: " + ex.Errno, "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            //        }));
+            //    }
+            //    if (meta.FS_ID == 0)
+            //    {
+            //        Invoke(new NoArgSTA(delegate
+            //        {
+            //            MessageBox.Show(this, "转换失败", "出错了", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            //        }));
+            //    }
+            //}
         }
         //UI: 生成文件
         private void 由链接生成文件ToolStripMenuItem_Click(object sender, EventArgs e)
@@ -901,7 +932,7 @@ namespace BaiduCloudSync
                     //更新内容
                     foreach (var item in dir_list)
                     {
-                        _file_list.RemoveFileCache(item);
+                        //remote_file_list.RemoveFileCache(item);
                     }
                     刷新EToolStripMenuItem_Click(sender, e);
                 }
@@ -911,26 +942,26 @@ namespace BaiduCloudSync
         private void _download_files(string path, string save_path)
         {
             //getting data from local cache
-            var file_data = _file_list.GetFileList(path);
-            foreach (var item in file_data)
-            {
-                var dst_path = save_path;
-                if (dst_path.Last() != '/' && dst_path.Last() != '\\') dst_path += "/";
-                dst_path += item.ServerFileName;
-                if (dst_path.EndsWith(".bcsd")) dst_path = dst_path.Substring(0, dst_path.Length - 5);
-                if (item.IsDir)
-                {
-                    _download_files(item.Path + "/", dst_path);
-                }
-                else
-                {
-                    Invoke(new NoArgSTA(delegate
-                    {
-                        var frm = new frmDownload(_pcsAPI, item, dst_path);
-                        downloadTransferList1.AddTask(frm);
-                    }));
-                }
-            }
+            //var file_data = _remote_file_list.GetFileList(path);
+            //foreach (var item in file_data)
+            //{
+            //    var dst_path = save_path;
+            //    if (dst_path.Last() != '/' && dst_path.Last() != '\\') dst_path += "/";
+            //    dst_path += item.ServerFileName;
+            //    if (dst_path.EndsWith(".bcsd")) dst_path = dst_path.Substring(0, dst_path.Length - 5);
+            //    if (item.IsDir)
+            //    {
+            //        _download_files(item.Path + "/", dst_path);
+            //    }
+            //    else
+            //    {
+            //        Invoke(new NoArgSTA(delegate
+            //        {
+            //            var frm = new frmDownload(_pcsAPI, item, dst_path);
+            //            downloadTransferList1.AddTask(frm);
+            //        }));
+            //    }
+            //}
         }
         //UI: 下载
         private void 下载ToolStripMenuItem_Click(object sender, EventArgs e)
@@ -943,7 +974,7 @@ namespace BaiduCloudSync
 
             foreach (ListViewItem item in selected_item)
             {
-                data_list.Add(_file_list.GetData(node_path + item.Text + (item.ImageKey == ":/dir/" ? "/" : "")));
+                //data_list.Add(_remote_file_list.GetData(node_path + item.Text + (item.ImageKey == ":/dir/" ? "/" : "")));
             }
 
             //single file
@@ -953,8 +984,8 @@ namespace BaiduCloudSync
                 if (data_list[0].ServerFileName.EndsWith(".bcsd")) downloadFilePath.FileName = downloadFilePath.FileName.Substring(0, downloadFilePath.FileName.Length - 5);
                 if (downloadFilePath.ShowDialog() != DialogResult.OK) return;
                 var save_path = downloadFilePath.FileName;
-                var frm = new frmDownload(_pcsAPI, data_list[0], save_path);
-                downloadTransferList1.AddTask(frm);
+                //var frm = new frmDownload(_pcsAPI, data_list[0], save_path);
+                //downloadTransferList1.AddTask(frm);
             }
             //multi files / dirs
             else
@@ -976,8 +1007,8 @@ namespace BaiduCloudSync
                     }
                     else
                     {
-                        var frm = new frmDownload(_pcsAPI, item, path);
-                        downloadTransferList1.AddTask(frm);
+                        //var frm = new frmDownload(_pcsAPI, item, path);
+                        //downloadTransferList1.AddTask(frm);
                     }
                 }
             }
@@ -1046,15 +1077,15 @@ namespace BaiduCloudSync
             {
                 //退格
                 if (string.IsNullOrEmpty(__current_listview_path)) return;
-                var parent_dir = FileListCacher.GetParentDir(__current_listview_path);
-                if (string.IsNullOrEmpty(parent_dir)) return;
-                _asyncCall(delegate
-                {
-                    lock (__thd_lck)
-                    {
-                        __update_listview_data(parent_dir, __sortType, __asc);
-                    }
-                }, "获取文件信息...");
+                //var parent_dir = FileListCacher.GetParentDir(__current_listview_path);
+                //if (string.IsNullOrEmpty(parent_dir)) return;
+                //_asyncCall(delegate
+                //{
+                //    lock (__thd_lck)
+                //    {
+                //        __update_listview_data(parent_dir, __sortType, __asc);
+                //    }
+                //}, "获取文件信息...");
             }
             else if (e.KeyChar == 1)
             {
@@ -1086,7 +1117,7 @@ namespace BaiduCloudSync
             _asyncCall(delegate
             {
                 if (string.IsNullOrEmpty(__current_listview_path)) __current_listview_path = "/";
-                _file_list.RemoveFileCache(__current_listview_path);
+                //_remote_file_list.RemoveFileCache(__current_listview_path);
                 __update_listview_data(null, __sortType, __asc);
                 __update_treeview_data(__current_listview_path);
                 _update_quota();
@@ -1129,27 +1160,27 @@ namespace BaiduCloudSync
 
                         var remote_path = __current_listview_path + file_name;
 
-                        var data = _file_list.GetData(remote_path);
-                        if (data.FS_ID != 0 && !always)
-                        {
-                            skip = false;
-                            Invoke(new NoArgSTA(delegate
-                            {
-                                var frmQuery = new frmOverwrite(remote_path);
-                                frmQuery.ShowDialog(this);
-                                if (frmQuery.Cancelled) cancelled = true;
-                                if (frmQuery.Always) always = true;
-                                if (frmQuery.Confirmed) o = ondup.overwrite;
-                                else if (frmQuery.SaveAsNew) o = ondup.newcopy;
-                                else skip = true;
-                            }));
+                        //var data = _remote_file_list.GetData(remote_path);
+                        //if (data.FS_ID != 0 && !always)
+                        //{
+                        //    skip = false;
+                        //    Invoke(new NoArgSTA(delegate
+                        //    {
+                        //        var frmQuery = new frmOverwrite(remote_path);
+                        //        frmQuery.ShowDialog(this);
+                        //        if (frmQuery.Cancelled) cancelled = true;
+                        //        if (frmQuery.Always) always = true;
+                        //        if (frmQuery.Confirmed) o = ondup.overwrite;
+                        //        else if (frmQuery.SaveAsNew) o = ondup.newcopy;
+                        //        else skip = true;
+                        //    }));
 
-                            if (cancelled) return;
-                        }
-                        if (skip && data.FS_ID != 0) continue;
-                        var new_class = new Uploader(this, _pcsAPI, remote_path, _local_file_list, local_path, o);
-                        new_class.TaskFinished += _on_upload_finished;
-                        uploadTransferList1.AddTask(new_class);
+                        //    if (cancelled) return;
+                        //}
+                        //if (skip && data.FS_ID != 0) continue;
+                        //var new_class = new Uploader(this, _pcsAPI, remote_path, _local_file_list, local_path, o);
+                        //new_class.TaskFinished += _on_upload_finished;
+                        //uploadTransferList1.AddTask(new_class);
                     }
                 }
             }, "获取文件信息...");
@@ -1158,14 +1189,14 @@ namespace BaiduCloudSync
         private void upload_files(string local_path, string remote_path, bool encrypt = false, bool always = false, bool skip = false)
         {
             var dir_info = new DirectoryInfo(local_path);
-            var data = _file_list.GetFileList(remote_path).ToList();
+            //var data = _remote_file_list.GetFileList(remote_path).ToList();
             bool cancelled = false;
             ondup o = ondup.newcopy;
             foreach (var item in dir_info.GetFiles())
             {
                 var cur_remote_path = remote_path + item.Name;
                 if (encrypt && !cur_remote_path.EndsWith(".bcsd")) cur_remote_path += ".bcsd";
-                var exist = data.FindIndex(x => { return x.Path == cur_remote_path; }) != -1;
+                var exist = false;// data.FindIndex(x => { return x.Path == cur_remote_path; }) != -1;
                 if (!always && exist)
                 {
                     skip = false;
@@ -1253,25 +1284,25 @@ namespace BaiduCloudSync
                 lock (__thd_lck)
                 {
                     var path = __current_listview_path + name;
-                    var srcData = _file_list.GetData(path + (isdir ? "/" : ""));
-                    var dstData = _file_list.GetData(FileListCacher.GetParentDir(path) + frm.FileName + (isdir ? "/" : ""));
-                    if (dstData.FS_ID != 0)
-                    {
-                        Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "重命名错误：目标文件已存在，请删除该文件或者刷新来解决", "犯错了", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
-                        return;
-                    }
-                    bool data = false;
-                    try { data = _pcsAPI.Rename(path, frm.FileName); }
-                    catch (ErrnoException ex)
-                    {
-                        Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "重命名出错: 错误代码: " + ex.Errno, "又是错误，崩溃了", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
-                    }
-                    if (!data)
-                    {
-                        Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "重命名失败", "又是错误，崩溃了", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
-                    }
+                    //var srcData = _remote_file_list.GetData(path + (isdir ? "/" : ""));
+                    //var dstData = _remote_file_list.GetData(FileListCacher.GetParentDir(path) + frm.FileName + (isdir ? "/" : ""));
+                    //if (dstData.FS_ID != 0)
+                    //{
+                    //    Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "重命名错误：目标文件已存在，请删除该文件或者刷新来解决", "犯错了", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
+                    //    return;
+                    //}
+                    //bool data = false;
+                    //try { data = _pcsAPI.Rename(path, frm.FileName); }
+                    //catch (ErrnoException ex)
+                    //{
+                    //    Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "重命名出错: 错误代码: " + ex.Errno, "又是错误，崩溃了", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
+                    //}
+                    //if (!data)
+                    //{
+                    //    Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "重命名失败", "又是错误，崩溃了", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
+                    //}
 
-                    刷新EToolStripMenuItem_Click(sender, e);
+                    //刷新EToolStripMenuItem_Click(sender, e);
                 }
             }, "重命名...");
         }
@@ -1342,23 +1373,23 @@ namespace BaiduCloudSync
             var src_parent_list = new List<string>();
             for (int i = 0; i < _clipboard_path.Count; i++)
             {
-                var parent_path = FileListCacher.GetParentDir(_clipboard_path[i]);
-                if (!src_parent_list.Contains(parent_path)) src_parent_list.Add(parent_path);
-                //跳过相同文件夹的文件
-                if (parent_path == __current_listview_path)
-                {
-                    _clipboard_path.RemoveAt(i);
-                    i--;
-                    continue;
-                }
-                else
-                {
-                    var name = _clipboard_path[i].Substring(parent_path.Length);
-                    dest_list.Add(__current_listview_path + name);
-                }
+                //var parent_path = FileListCacher.GetParentDir(_clipboard_path[i]);
+                //if (!src_parent_list.Contains(parent_path)) src_parent_list.Add(parent_path);
+                ////跳过相同文件夹的文件
+                //if (parent_path == __current_listview_path)
+                //{
+                //    _clipboard_path.RemoveAt(i);
+                //    i--;
+                //    continue;
+                //}
+                //else
+                //{
+                //    var name = _clipboard_path[i].Substring(parent_path.Length);
+                //    dest_list.Add(__current_listview_path + name);
+                //}
 
-                if (_clipboard_path[i].EndsWith("/")) _clipboard_path[i] = _clipboard_path[i].Substring(0, _clipboard_path[i].Length - 1);
-                if (dest_list[i].EndsWith("/")) dest_list[i] = dest_list[i].Substring(0, dest_list[i].Length - 1);
+                //if (_clipboard_path[i].EndsWith("/")) _clipboard_path[i] = _clipboard_path[i].Substring(0, _clipboard_path[i].Length - 1);
+                //if (dest_list[i].EndsWith("/")) dest_list[i] = dest_list[i].Substring(0, dest_list[i].Length - 1);
             }
 
             var src_list = _clipboard_path;
@@ -1397,7 +1428,7 @@ namespace BaiduCloudSync
                             Invoke(new NoArgSTA(delegate { MessageBox.Show(this, "移动文件出错", "错误了……", MessageBoxButtons.OK, MessageBoxIcon.Error); }));
                         }
                     }
-                    foreach (var item in src_parent_list) { _file_list.RemoveFileCache(item); }
+                    //foreach (var item in src_parent_list) { _remote_file_list.RemoveFileCache(item); }
 
                     刷新EToolStripMenuItem_Click(sender, e);
                 }
@@ -1582,7 +1613,7 @@ namespace BaiduCloudSync
                 var data = new List<ulong>();
                 foreach (var item in item_names)
                 {
-                    data.Add(_file_list.GetData(path + item).FS_ID);
+                    //data.Add(_remote_file_list.GetData(path + item).FS_ID);
                 }
                 Invoke(new NoArgSTA(delegate
                 {
@@ -1665,28 +1696,28 @@ namespace BaiduCloudSync
                         if (!remote_path.EndsWith(".bcsd"))
                             remote_path += ".bcsd";
 
-                        var data = _file_list.GetData(remote_path);
-                        if (data.FS_ID != 0 && !always)
-                        {
-                            skip = false;
-                            Invoke(new NoArgSTA(delegate
-                            {
-                                var frmQuery = new frmOverwrite(remote_path);
-                                frmQuery.ShowDialog(this);
-                                if (frmQuery.Cancelled) cancelled = true;
-                                if (frmQuery.Always) always = true;
-                                if (frmQuery.Confirmed) o = ondup.overwrite;
-                                else if (frmQuery.SaveAsNew) o = ondup.newcopy;
-                                else skip = true;
-                            }));
+                        //var data = _remote_file_list.GetData(remote_path);
+                        //if (data.FS_ID != 0 && !always)
+                        //{
+                        //    skip = false;
+                        //    Invoke(new NoArgSTA(delegate
+                        //    {
+                        //        var frmQuery = new frmOverwrite(remote_path);
+                        //        frmQuery.ShowDialog(this);
+                        //        if (frmQuery.Cancelled) cancelled = true;
+                        //        if (frmQuery.Always) always = true;
+                        //        if (frmQuery.Confirmed) o = ondup.overwrite;
+                        //        else if (frmQuery.SaveAsNew) o = ondup.newcopy;
+                        //        else skip = true;
+                        //    }));
 
-                            if (cancelled) return;
-                        }
-                        if (skip && data.FS_ID != 0) continue;
+                        //    if (cancelled) return;
+                        //}
+                        //if (skip && data.FS_ID != 0) continue;
 
-                        var new_class = new Uploader(this, _pcsAPI, remote_path, _local_file_list, local_path, o, true);
-                        new_class.TaskFinished += _on_upload_finished;
-                        uploadTransferList1.AddTask(new_class);
+                        //var new_class = new Uploader(this, _pcsAPI, remote_path, _local_file_list, local_path, o, true);
+                        //new_class.TaskFinished += _on_upload_finished;
+                        //uploadTransferList1.AddTask(new_class);
                     }
                 }
             }, "获取文件信息...");

@@ -48,7 +48,7 @@ namespace BaiduCloudSync
 
         private void tPath_TextChanged(object sender, EventArgs e)
         {
-            _is_valid = FileListCacher.PathValidating("/" + tPath.Text);
+            _is_valid = true;// FileListCacher.PathValidating("/" + tPath.Text);
         }
 
         private void tPath_KeyPress(object sender, KeyPressEventArgs e)

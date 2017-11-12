@@ -60,7 +60,7 @@ namespace BaiduCloudSync
             data = new byte[5242880];
             rnd.NextBytes(data);
             var ms2 = new MemoryStream(data);
-            var filedata = new BaiduPCS.ObjectMetadata();
+            var filedata = new ObjectMetadata();
             try
             {
                 var temp_file = api.UploadRaw(ms2, (ulong)data.Length, "/pcsapi_testbench/5mb_file.dat", BaiduPCS.ondup.overwrite); //meta: /pcsapi_testbench/5mb_file.dat

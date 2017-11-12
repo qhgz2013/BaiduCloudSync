@@ -210,10 +210,10 @@ namespace BaiduCloudSync
 
         //sql数据缓存
         private string _sql_cache_path; //缓存路径
-        private List<BaiduPCS.ObjectMetadata> _sql_query_result;
+        private List<ObjectMetadata> _sql_query_result;
 
         #region comparison classes implement
-        private class _sort_meta : IComparer<BaiduPCS.ObjectMetadata>
+        private class _sort_meta : IComparer<ObjectMetadata>
         {
             private BaiduPCS.FileOrder _order;
             private bool _asc;
@@ -222,7 +222,7 @@ namespace BaiduCloudSync
                 _order = order;
                 _asc = asc;
             }
-            int IComparer<BaiduPCS.ObjectMetadata>.Compare(BaiduPCS.ObjectMetadata x, BaiduPCS.ObjectMetadata y)
+            int IComparer<ObjectMetadata>.Compare(ObjectMetadata x, ObjectMetadata y)
             {
                 if (x.IsDir != y.IsDir)
                 {
@@ -329,7 +329,7 @@ namespace BaiduCloudSync
             }
         }
         //http异步请求线程回调
-        private void _file_diff_data_callback(bool suc, bool has_more, bool reset, string next_cursor, BaiduPCS.ObjectMetadata[] result, object state)
+        private void _file_diff_data_callback(bool suc, bool has_more, bool reset, string next_cursor, ObjectMetadata[] result, object state)
         {
             if (!suc)
             {
@@ -472,7 +472,7 @@ namespace BaiduCloudSync
 
             ThreadPool.QueueUserWorkItem(delegate
             {
-                var ret = new List<BaiduPCS.ObjectMetadata>();
+                var ret = new List<ObjectMetadata>();
                 //to memory cache
                 lock (_sql_lock)
                 {
@@ -481,10 +481,10 @@ namespace BaiduCloudSync
                         _sql_cache_path = path;
                         _sql_cmd.CommandText = sql_text;
                         var dr = _sql_cmd.ExecuteReader();
-                        var meta_list = new List<BaiduPCS.ObjectMetadata>();
+                        var meta_list = new List<ObjectMetadata>();
                         while (dr.Read())
                         {
-                            var new_meta = new BaiduPCS.ObjectMetadata();
+                            var new_meta = new ObjectMetadata();
                             if (!dr.IsDBNull(0)) new_meta.FS_ID = (ulong)(long)dr[0];
                             if (!dr.IsDBNull(1)) new_meta.Category = (uint)(int)dr[1];
                             if (!dr.IsDBNull(2)) new_meta.IsDir = (byte)dr[2] != 0;
@@ -498,6 +498,7 @@ namespace BaiduCloudSync
                             if (!dr.IsDBNull(10)) new_meta.Size = (ulong)(long)dr[10];
                             if (!dr.IsDBNull(11)) new_meta.Unlist = (uint)(int)dr[11];
                             if (!dr.IsDBNull(12)) new_meta.MD5 = util.Hex((byte[])dr[12]);
+                            new_meta.AccountID = account_id;
                             meta_list.Add(new_meta);
                         }
                         dr.Close();
@@ -569,6 +570,20 @@ namespace BaiduCloudSync
                 return _account_data[id].enabled;
             }
         }
+        /// <summary>
+        /// 获取指定id下的pcs api
+        /// </summary>
+        /// <param name="id">账号id</param>
+        /// <returns></returns>
+        public BaiduPCS GetAccount(int id)
+        {
+            lock (_account_data_external_lock)
+            {
+                if (!_account_data.ContainsKey(id)) throw new KeyNotFoundException("id不存在");
+                return _account_data[id].pcs;
+            }
+        }
+
         /// <summary>
         /// 设置该账号是否开启文件读写权限
         /// </summary>
@@ -686,9 +701,18 @@ namespace BaiduCloudSync
         public void GetFileListAsync(string path, BaiduPCS.MultiObjectMetaCallback callback, int account_id = 0, BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name, bool asc = true, int page = 1, int size = 1000)
         {
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
+            if (path.EndsWith("/")) path = path.Substring(0, path.Length - 1);
             if (_is_file_diff_working || _account_changed)
             {
-                _account_data[account_id].pcs.GetFileListAsync(path, callback, order, asc, page, size);
+                _account_data[account_id].pcs.GetFileListAsync(path, (suc, data, s) =>
+                {
+                    for (int i = 0; i < data.Length; i++)
+                    {
+                        data[i].AccountID = account_id;
+                    }
+                    try { callback?.Invoke(suc, data, s); }
+                    catch { }
+                }, order, asc, page, size);
             }
             else
             {
@@ -704,6 +728,7 @@ namespace BaiduCloudSync
         public void CreateDirectoryAsync(string path, BaiduPCS.ObjectMetaCallback callback, int account_id = 0)
         {
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
+            if (path.EndsWith("/")) path = path.Substring(0, path.Length - 1);
             lock (_account_data_external_lock)
             {
                 lock (_file_diff_thread_fetching_head_lock)
@@ -720,6 +745,8 @@ namespace BaiduCloudSync
 
         public void MovePathAsync(string source, string destination, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
+            if (source.EndsWith("/")) source = source.Substring(0, source.Length - 1);
+            if (destination.EndsWith("/")) destination = destination.Substring(0, destination.Length - 1);
             MovePathAsync(new string[] { source }, new string[] { destination }, callback, account_id);
         }
         public void MovePathAsync(IEnumerable<string> source, IEnumerable<string> destination, BaiduPCS.OperationCallback callback, int account_id = 0)
@@ -738,6 +765,8 @@ namespace BaiduCloudSync
         }
         public void CopyPathAsync(string source, string destination, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
+            if (source.EndsWith("/")) source = source.Substring(0, source.Length - 1);
+            if (destination.EndsWith("/")) destination = destination.Substring(0, destination.Length - 1);
             CopyPathAsync(new string[] { source }, new string[] { destination }, callback, account_id);
         }
         public void CopyPathAsync(IEnumerable<string> source, IEnumerable<string> destination, BaiduPCS.OperationCallback callback, int account_id = 0)
@@ -756,6 +785,7 @@ namespace BaiduCloudSync
         }
         public void RenameAsync(string source, string new_name, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
+            if (source.EndsWith("/")) source = source.Substring(0, source.Length - 1);
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
             RenameAsync(new string[] { source }, new string[] { new_name }, callback, account_id);
         }
@@ -775,6 +805,7 @@ namespace BaiduCloudSync
         }
         public void DeletePathAsync(string path, BaiduPCS.OperationCallback callback, int account_id = 0)
         {
+            if (path.EndsWith("/")) path = path.Substring(0, path.Length - 1);
             DeletePathAsync(path, callback, account_id);
         }
         public void DeletePathAsync(IEnumerable<string> path, BaiduPCS.OperationCallback callback, int account_id = 0)

@@ -484,6 +484,10 @@ namespace BaiduCloudSync
             _io_thread.Name = "后台IO线程";
             _io_thread.Start();
         }
+        ~LocalFileCacher()
+        {
+            Dispose();
+        }
 
         public event LocalFileIOCallback LocalFileIOUpdate;
         public event LocalFileIOFinishCallback LocalFileIOFinish;

@@ -15,7 +15,7 @@ namespace BaiduCloudSync
     //todo: using FileListCacher to reuse cached file data
     public partial class frmProperty : Form
     {
-        public frmProperty(IEnumerable<ObjectMetadata> data, FileListCacher list = null)
+        public frmProperty(IEnumerable<ObjectMetadata> data, RemoteFileCacher list = null)
         {
             InitializeComponent();
             _data = new List<ObjectMetadata>();
@@ -27,7 +27,7 @@ namespace BaiduCloudSync
             if (_data.Count == 0) throw new ArgumentNullException("data");
         }
         List<ObjectMetadata> _data;
-        FileListCacher _list;
+        RemoteFileCacher _list;
         private void frmProperty_Load(object sender, EventArgs e)
         {
             if (_data.Count == 1)
@@ -160,7 +160,18 @@ namespace BaiduCloudSync
         private Thread _bgThd;
         private void _calculate_size(string path, ref ulong size, ref ulong dir_count, ref ulong file_count)
         {
-            var ls = _list.GetFileList(path);
+            ObjectMetadata[] ls = null;
+            var sync_thread = Thread.CurrentThread;
+            _list.GetFileListAsync(path, (suc, data, s) =>
+            {
+                ls = data;
+                sync_thread.Interrupt();
+            });
+            try
+            {
+                Thread.Sleep(Timeout.Infinite);
+            }
+            catch { }
             foreach (var item in ls)
             {
                 if (item.IsDir)
