@@ -152,6 +152,7 @@
     <Compile Include="transfer\downloader-pool.cs" />
     <Compile Include="transfer\downloader.cs" />
     <Compile Include="util\icon-extractor.cs" />
+    <Compile Include="util\queue-stream.cs" />
     <Compile Include="util\secure\common-file-encrypt.cs" />
     <Compile Include="util\secure\crc32.cs" />
     <Compile Include="util\secure\crypt-aes.cs" />

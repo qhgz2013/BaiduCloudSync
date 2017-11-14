@@ -651,7 +651,7 @@ namespace BaiduCloudSync
         {
             lock (_external_auth_lock)
             {
-                if (!string.IsNullOrEmpty(_sign2)) return;
+                //if (!string.IsNullOrEmpty(_sign2)) return;
                 Tracer.GlobalTracer.TraceInfo("BaiduOAuth._init_pcs_auth_data called: void");
                 try
                 {
@@ -715,10 +715,10 @@ namespace BaiduCloudSync
                     }
                     __next_update_thread = new Thread(() =>
                     {
-                        var ts = TimeSpan.FromHours(1);
+                        var ts = TimeSpan.FromMinutes(10);
                         Thread.Sleep(ts);
-                        _init_login_data();
                         __next_update_thread = null;
+                        _init_pcs_auth_data();
                     });
                     __next_update_thread.IsBackground = true;
                     __next_update_thread.Name = "网盘登陆数据刷新线程";

@@ -45,13 +45,27 @@ namespace BaiduCloudSync
             _local_file_list = new LocalFileCacher();
             StaticConfig.LoadStaticConfig();
 
-            var test = new TaskDispatcher(1024000);
-            ulong temp1, temp2;
-            var id1 = test.AllocateNewTask(out temp1);
-            var id2 = test.AllocateNewTask(out temp2);
-            test.UpdateTaskSituation(id2, test.Length - 2);
-            test.ReleaseTask(id2);
-            id2 = test.AllocateNewTask(out temp2);
+            var data = new ObjectMetadata();
+            data.FS_ID = 1;
+            data.Path = "/[伯里曼人.体结构绘画教学].(美)乔治.伯里曼.中文.清晰扫描版.pdf ";
+            data.AccountID = 0;
+            data.Size = 64988882;
+
+            var test_downloader = new Downloader(_remote_file_list, data, "D:\\testpause.pdf", 16);
+
+            //test_downloader.Start();
+            //Thread.Sleep(60000);
+            //test_downloader.Pause();
+
+            //test_downloader.Start();
+            //Thread.Sleep(60000);
+            //test_downloader.Pause();
+            while (test_downloader.TaskState != Downloader.State.FINISHED)
+            {
+                test_downloader.Start();
+                Thread.Sleep(30000);
+                test_downloader.Pause();
+            }
         }
         private void Form1_Load(object sender, EventArgs e)
         {

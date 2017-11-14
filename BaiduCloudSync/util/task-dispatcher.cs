@@ -40,7 +40,7 @@ namespace BaiduCloudSync
 
         public TaskDispatcher(ulong length)
         {
-            if (length == 0) throw new ArgumentOutOfRangeException("length");
+            //if (length == 0) throw new ArgumentOutOfRangeException("length");
             _length = length;
             _complete_length = 0;
             _data_lck = new object();
@@ -72,58 +72,58 @@ namespace BaiduCloudSync
                     beg_position = 0;
                     int last_index = -1;
                     //减小分段的优化模式
-                    if (_segment_list.Count == _guid_begpos_mapping.Count + 1)
-                    {
+                    //if (_segment_list.Count == _guid_begpos_mapping.Count + 1)
+                    //{
 
-                        //找到最大的空间进行分配
-                        for (int i = 1; i < _segment_list.Count; i++)
-                        {
-                            var tmp_length = _segment_list.ElementAt(i).Key - _segment_list.ElementAt(i - 1).Value.end_pos;
-                            //last_index = i - 1;
-                            var last_index_has_task = _segment_list.ElementAt(i - 1).Value.id != Guid.Empty;
-                            if (last_index_has_task)
-                            {
-                                //上一片段已经有执行中的任务就从中间分配
-                                var allocated_length = tmp_length >> 1;
-                                if (allocated_length > max_length)
-                                {
-                                    last_index = -1;
-                                    //beg_position = _segment_list.ElementAt(i - 1).Key;
-                                    beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
-                                    beg_position += (tmp_length - allocated_length);
-                                    max_length = allocated_length;
-                                }
-                            }
-                            else
-                            {
-                                //没有的话从头开始分配
-                                if (tmp_length > max_length)
-                                {
-                                    last_index = i - 1;
-                                    beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
-                                    max_length = tmp_length;
-                                }
-                            }
-                        }
-                    }
-                    else
+                    //找到最大的空间进行分配
+                    for (int i = 1; i < _segment_list.Count; i++)
                     {
-                        //找到最大的空间进行分配，跳过已经有任务的
-                        for (int i = 1; i < _segment_list.Count; i++)
+                        var tmp_length = _segment_list.ElementAt(i).Key - _segment_list.ElementAt(i - 1).Value.end_pos;
+                        //last_index = i - 1;
+                        var last_index_has_task = _segment_list.ElementAt(i - 1).Value.id != Guid.Empty;
+                        if (last_index_has_task)
                         {
-                            var tmp_length = _segment_list.ElementAt(i).Key - _segment_list.ElementAt(i - 1).Value.end_pos;
-                            var last_index_has_task = _segment_list.ElementAt(i - 1).Value.id != Guid.Empty;
-                            if (!last_index_has_task)
+                            //上一片段已经有执行中的任务就从中间分配
+                            var allocated_length = tmp_length >> 1;
+                            if (allocated_length > max_length)
                             {
-                                if (tmp_length > max_length)
-                                {
-                                    last_index = i - 1;
-                                    beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
-                                    max_length = tmp_length;
-                                }
+                                last_index = -1;
+                                //beg_position = _segment_list.ElementAt(i - 1).Key;
+                                beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
+                                beg_position += (tmp_length - allocated_length);
+                                max_length = allocated_length;
+                            }
+                        }
+                        else
+                        {
+                            //没有的话从头开始分配
+                            if (tmp_length > max_length)
+                            {
+                                last_index = i - 1;
+                                beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
+                                max_length = tmp_length;
                             }
                         }
                     }
+                    //}
+                    //else
+                    //{
+                    //    //找到最大的空间进行分配，跳过已经有任务的
+                    //    for (int i = 1; i < _segment_list.Count; i++)
+                    //    {
+                    //        var tmp_length = _segment_list.ElementAt(i).Key - _segment_list.ElementAt(i - 1).Value.end_pos;
+                    //        var last_index_has_task = _segment_list.ElementAt(i - 1).Value.id != Guid.Empty;
+                    //        if (!last_index_has_task)
+                    //        {
+                    //            if (tmp_length > max_length)
+                    //            {
+                    //                last_index = i - 1;
+                    //                beg_position = _segment_list.ElementAt(i - 1).Value.end_pos;
+                    //                max_length = tmp_length;
+                    //            }
+                    //        }
+                    //    }
+                    //}
 
                     //length is too small, ignored
                     if (max_length == 0 || (max_length < _MIN_DISPATCH_LENGTH && last_index == -1 && _segment_list.Count > 1))
@@ -210,9 +210,9 @@ namespace BaiduCloudSync
             try
             {
                 if (id == Guid.Empty) return false;
+
                 lock (_data_lck)
-                {
-                    //合理性检测
+                {//合理性检测
                     if (!_guid_begpos_mapping.ContainsKey(id)) return false;
                     var beg_pos = _guid_begpos_mapping[id];
                     //当前分段数据
@@ -234,9 +234,9 @@ namespace BaiduCloudSync
                             //在获取下一分段之前，为了不影响最后一个标记文件结束位置segment，加入以下判断
                             if (current_position >= _length)
                             {
+                                _complete_length -= current_position - _length;
                                 current_position = _length;
                                 _segment_list[beg_pos] = new _t_struct(Guid.Empty, _length);
-                                _complete_length -= current_position - _length;
                                 _guid_begpos_mapping.Remove(id);
                                 return false;
                             }
@@ -266,7 +266,7 @@ namespace BaiduCloudSync
                             else
                             {
                                 //这一段宣告死亡，由下一段接管
-                                _complete_length -= next_segment_data.Key - current_position;
+                                _complete_length -= current_position - next_segment_data.Key;
                                 current_position = next_segment_data.Key;
                                 _segment_list[beg_pos] = next_segment_data.Value;
                                 var next_guid = next_segment_data.Value.id;
@@ -407,7 +407,7 @@ namespace BaiduCloudSync
 
         public ulong Length { get { return _length; } }
         public int SegmentCount { get { return _segment_list.Count; } }
-        public ulong CompletedLength { get { return _complete_length; } }
+        public ulong CompletedLength { get { lock (_data_lck) return _complete_length; } }
     }
 
 }

@@ -208,19 +208,14 @@ namespace BaiduCloudSync
         public Quota GetQuota()
         {
             _trace.TraceInfo("BaiduPCS.GetQuota called: void");
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             Quota ret = new Quota();
             GetQuotaAsync((suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             });
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
 
@@ -244,19 +239,14 @@ namespace BaiduCloudSync
         public bool DeletePath(IEnumerable<string> paths)
         {
             _trace.TraceInfo("BaiduPCS.DeletePath called: IEnumerable<string> paths=[count=" + paths.Count() + "]");
-            var sync_thread = Thread.CurrentThread;
             bool ret = false;
+            var set_event = new ManualResetEventSlim();
             DeletePathAsync(paths, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             });
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
         /// <summary>
@@ -281,19 +271,14 @@ namespace BaiduCloudSync
         public bool MovePath(IEnumerable<string> source, IEnumerable<string> destination, ondup ondup = ondup.overwrite)
         {
             _trace.TraceInfo("BaiduPCS.MovePath called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], ondup ondup=" + ondup);
-            var sync_thread = Thread.CurrentThread;
             bool ret = false;
+            var set_event = new ManualResetEventSlim();
             MovePathAsync(source, destination, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             }, ondup);
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
 
@@ -319,19 +304,14 @@ namespace BaiduCloudSync
         public bool CopyPath(IEnumerable<string> source, IEnumerable<string> destination, ondup ondup = ondup.overwrite)
         {
             _trace.TraceInfo("BaiduPCS.CopyPath called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], ondup ondup=" + ondup);
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             bool ret = false;
             CopyPathAsync(source, destination, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             }, ondup);
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
         /// <summary>
@@ -354,19 +334,14 @@ namespace BaiduCloudSync
         public bool Rename(IEnumerable<string> source, IEnumerable<string> new_name)
         {
             _trace.TraceInfo("BaiduPCS.Rename called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> new_name=[count=" + new_name.Count() + "]");
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             bool ret = false;
             RenameAsync(source, new_name, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             });
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
         /// <summary>
@@ -377,19 +352,14 @@ namespace BaiduCloudSync
         public ObjectMetadata CreateDirectory(string path)
         {
             _trace.TraceInfo("BaiduPCS.CreateDirectory called: string path=" + path);
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             ObjectMetadata ret = new ObjectMetadata();
             CreateDirectoryAsync(path, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             });
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
 
@@ -406,18 +376,13 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.GetFileList called: string path=" + path + ", FileOrder order=" + order + ", bool asc=" + asc + ", int page=" + page + ", int count=" + count);
             ObjectMetadata[] ret = null;
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             GetFileListAsync(path, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             }, order, asc, page, count);
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
         /// <summary>
@@ -430,7 +395,7 @@ namespace BaiduCloudSync
         public ObjectMetadata[] GetFileDiff(out string next_cursor, out bool has_more, out bool reset, string cursor = null)
         {
             ObjectMetadata[] ret = null;
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             string arg1 = null;
             bool arg2 = false, arg3 = false;
             GetFileDiffAsync(cursor, (suc, hasmore, rst, nextcursor, data, s) =>
@@ -439,14 +404,9 @@ namespace BaiduCloudSync
                 arg1 = nextcursor;
                 arg2 = rst;
                 arg3 = hasmore;
-                sync_thread.Interrupt();
+                set_event.Set();
             });
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             next_cursor = arg1;
             has_more = arg2;
             reset = arg3;
@@ -456,7 +416,7 @@ namespace BaiduCloudSync
 
 
         #region Upload
-        
+
         /// <summary>
         /// 秒传文件，失败时返回fs_id为0
         /// </summary>
@@ -470,20 +430,14 @@ namespace BaiduCloudSync
         public ObjectMetadata RapidUploadRaw(string path, ulong content_length, string content_md5, string content_crc, string slice_md5, ondup ondup = ondup.overwrite)
         {
             _trace.TraceInfo("BaiduPCS.RapidUploadRaw called: string path=" + path + ", ulong content_length=" + content_length + ", string content_md5=" + content_md5 + ", string content_crc=" + content_crc + ", string slice_md5=" + slice_md5 + ", ondup ondup=" + ondup);
-
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             ObjectMetadata ret = new ObjectMetadata();
             RapidUploadAsync(path, content_length, content_md5, content_crc, slice_md5, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             }, ondup);
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
         /// <summary>
@@ -500,7 +454,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.UploadRaw called: Stream stream_in=" + stream_in.ToString() + ", ulong content_length=" + content_length + ", string path=" + path + ", ondup ondup=" + ondup + ", UploadStatusCallback callback=" + callback?.ToString());
 
             ObjectMetadata ret = new ObjectMetadata();
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             Guid task_id;
             UploadBeginAsync(content_length, path, (suc, id, data, s) =>
             {
@@ -521,22 +475,16 @@ namespace BaiduCloudSync
                     UploadEndAsync(id, (suc2, data2, s2) =>
                     {
                         ret = data2;
-                        sync_thread.Interrupt();
+                        set_event.Set();
                     });
                 }
                 catch (Exception ex)
                 {
                     _trace.TraceError(ex);
-                    sync_thread.Interrupt();
+                    set_event.Set();
                 }
             }, ondup);
-
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
 
@@ -550,22 +498,15 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.PreCreateFile called: string path=" + path + ", int block_count=" + block_count);
             var ret = new PreCreateResult();
-
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             PreCreateFileAsync(path, block_count, (suc, block_count2, uploadid, s) =>
             {
                 ret.BlockCount = block_count2;
                 ret.ReturnType = 0;
                 ret.UploadId = uploadid;
-                sync_thread.Interrupt();
+                set_event.Set();
             });
-
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
         /// <summary>
@@ -582,12 +523,11 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.UploadSliceRaw called: Stream stream_in=" + stream_in.ToString() + ", string uploadid=" + uploadid + ", int sequence=" + sequence + ", UploadStatusCallback callback=" + callback.ToString());
 
             string ret = null;
-            var sync_thread = Thread.CurrentThread;
             Guid task_id;
             var upload_data = util.ReadBytes(stream_in, UPLOAD_SLICE_SIZE);
             var memory_buffer = new MemoryStream(upload_data);
             upload_data = null;
-
+            var set_event = new ManualResetEventSlim();
             UploadSliceBeginAsync((ulong)memory_buffer.Length, path, uploadid, sequence, (suc, id, data, s) =>
             {
                 task_id = id;
@@ -605,16 +545,10 @@ namespace BaiduCloudSync
                 UploadSliceEndAsync(id, (suc2, data2, s2) =>
                 {
                     ret = data2;
-                    sync_thread.Interrupt();
+                    set_event.Set();
                 });
             });
-
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
         /// <summary>
@@ -629,18 +563,13 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.CreateSuperFile called: string path=" + path + ", string uploadid=" + uploadid + ", Ienumerable<string> block_list=[count=" + block_list.Count() + "]");
             ObjectMetadata ret = new ObjectMetadata();
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             CreateSuperFileAsync(path, uploadid, block_list, file_size, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             });
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
         #endregion
@@ -679,21 +608,15 @@ namespace BaiduCloudSync
         public string GetDownloadLink(ulong fs_id, bool over_https = true)
         {
             _trace.TraceInfo("BaiduPCS.GetDownloadLink called: ulong fs_id=" + fs_id + ", bool over_https=" + over_https);
-
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             string[] ret = null;
             GetDownloadLinkAsync(fs_id, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             }, over_https);
 
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
 
             if (ret == null || ret.Length == 0) return string.Empty;
             return ret[0];
@@ -706,21 +629,15 @@ namespace BaiduCloudSync
         public string[] GetLocateDownloadLink(string path)
         {
             _trace.TraceInfo("BaiduPCS.GetLocateDownloadLink called: string path=" + path);
-
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             string[] ret = null;
             GetLocateDownloadLinkAsync(path, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             });
 
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
 
             if (ret == null) return new string[0];
             return ret;
@@ -780,20 +697,14 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.CreatePublicShare called: IEnumerable<ulong> fs_ids=[count=" + fs_ids.Count() + "]" + ", int expireTime=" + expireTime);
             var ret = new ShareData();
-
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             CreatePublicShareAsync(fs_ids, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             }, expireTime);
 
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
 
             return ret;
         }
@@ -820,20 +731,14 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.CreatePrivateShare called: Ienumerable<ulong> fs_ids=[count=" + fs_ids.Count() + "], string password=" + password + ", int expireTime=" + expireTime);
             var ret = new ShareData();
-
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             CreatePublicShareAsync(fs_ids, (suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             }, expireTime);
 
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
 
             return ret;
         }
@@ -854,17 +759,12 @@ namespace BaiduCloudSync
         public void CancelShare(IEnumerable<ulong> share_ids)
         {
             _trace.TraceInfo("BaiduPCS.CancelShare called: IEnumerable<ulong> share_ids=[count=" + share_ids.Count() + "]");
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             CancelShareAsync(share_ids, (suc, data, s) =>
             {
-                sync_thread.Interrupt();
+                set_event.Set();
             });
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
         }
         public struct ShareRecord
         {
@@ -941,18 +841,13 @@ namespace BaiduCloudSync
         {
             _trace.TraceInfo("BaiduPCS.GetShareRecords called: void");
             ShareRecord[] ret = null;
-            var sync_thread = Thread.CurrentThread;
+            var set_event = new ManualResetEventSlim();
             GetShareRecordsAsync((suc, data, s) =>
             {
                 ret = data;
-                sync_thread.Interrupt();
+                set_event.Set();
             });
-            try
-            {
-                Thread.Sleep(Timeout.Infinite);
-            }
-            catch (ThreadInterruptedException) { }
-            catch (Exception ex) { throw ex; }
+            set_event.Wait();
             return ret;
         }
 

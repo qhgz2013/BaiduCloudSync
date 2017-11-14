@@ -701,7 +701,7 @@ namespace BaiduCloudSync
         public void GetFileListAsync(string path, BaiduPCS.MultiObjectMetaCallback callback, int account_id = 0, BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name, bool asc = true, int page = 1, int size = 1000)
         {
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-            if (path.EndsWith("/")) path = path.Substring(0, path.Length - 1);
+            if (path.EndsWith("/") && path != "/") path = path.Substring(0, path.Length - 1);
             if (_is_file_diff_working || _account_changed)
             {
                 _account_data[account_id].pcs.GetFileListAsync(path, (suc, data, s) =>

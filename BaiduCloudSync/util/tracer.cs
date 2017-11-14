@@ -16,19 +16,22 @@ namespace GlobalUtil
 
         private ReaderWriterLock _lock;
         private StreamWriter _writer;
+        private bool _output_debug_message;
         private string _default_trace_fmt = "[{0}] [{1}] [{2} - {3}] {4}";
 
         private void write_trace(string fmt, params object[] args)
         {
             _lock.AcquireWriterLock(Timeout.Infinite);
             _writer?.WriteLine(fmt, args);
-            Debug.Print(fmt, args);
+            if (_output_debug_message)
+                Debug.Print(fmt, args);
             _lock.ReleaseWriterLock();
         }
-        public Tracer(string log_path = null)
+        public Tracer(string log_path = null, bool output_debug_message = true)
         {
             _lock = new ReaderWriterLock();
             _writer = null;
+            _output_debug_message = output_debug_message;
             if (!string.IsNullOrEmpty(log_path))
             {
                 try

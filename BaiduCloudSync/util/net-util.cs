@@ -816,7 +816,7 @@ namespace GlobalUtil
                 try
                 {
                     _lock.AcquireWriterLock(Timeout.Infinite);
-                    if (HTTP_Request == null) return;
+                    if (HTTP_Request == null) throw new ArgumentNullException("HTTP_Request");
                     HTTP_Response = (HttpWebResponse)HTTP_Request.EndGetResponse(iar);
                     if (HTTP_Response != null)
                     {
@@ -865,7 +865,7 @@ namespace GlobalUtil
                 catch (ThreadAbortException) { throw; }
                 catch (WebException ex)
                 {
-                    if (ex.Status == WebExceptionStatus.RequestCanceled) return;
+                    if (ex.Status == WebExceptionStatus.RequestCanceled) return;// throw ex;
 
                     if (_enableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
 
@@ -1277,16 +1277,10 @@ namespace GlobalUtil
             /// <param name="range">文件范围（该功能不一定支持）</param>
             public void HttpGet(string url, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
             {
-                _sync_thread = Thread.CurrentThread;
-                var iar = HttpGetAsync(url, (ns, state) => { _sync_thread.Interrupt(); }, null, headerParam, urlParam, range);
-                try
-                {
-                    iar.AsyncWaitHandle.WaitOne();
-                    Thread.Sleep(Timeout.Infinite);
-                }
-                catch (ThreadInterruptedException) { }
-                catch (ThreadAbortException) { throw; }
-                catch (Exception) { throw; }
+                var set_event = new ManualResetEventSlim();
+                var iar = HttpGetAsync(url, (ns, state) => { set_event.Set(); }, null, headerParam, urlParam, range);
+                iar.AsyncWaitHandle.WaitOne();
+                set_event.Wait();
             }
             /// <summary>
             /// 同步发送HTTP post请求
@@ -1300,16 +1294,10 @@ namespace GlobalUtil
             /// <returns></returns>
             public Stream HttpPost(string url, long length, string contentType = DEFAULT_CONTENT_TYPE_BINARY, Parameters headerParam = null, Parameters urlParam = null, long range = -1)
             {
-                _sync_thread = Thread.CurrentThread;
-                var iar = HttpPostAsync(url, length, (ns, state) => { _sync_thread.Interrupt(); }, null, contentType, headerParam, urlParam, range);
-                try
-                {
-                    iar.AsyncWaitHandle.WaitOne();
-                    Thread.Sleep(Timeout.Infinite);
-                }
-                catch (ThreadInterruptedException) { }
-                catch (ThreadAbortException) { throw; }
-                catch (Exception) { throw; }
+                var set_event = new ManualResetEventSlim();
+                var iar = HttpPostAsync(url, length, (ns, state) => { set_event.Set(); }, null, contentType, headerParam, urlParam, range);
+                iar.AsyncWaitHandle.WaitOne();
+                set_event.Wait();
                 return RequestStream;
             }
             /// <summary>
@@ -1317,16 +1305,10 @@ namespace GlobalUtil
             /// </summary>
             public void HttpPostClose()
             {
-                _sync_thread = Thread.CurrentThread;
-                var iar = HttpPostResponseAsync((ns, state) => { _sync_thread.Interrupt(); }, null);
-                try
-                {
-                    iar.AsyncWaitHandle.WaitOne();
-                    Thread.Sleep(Timeout.Infinite);
-                }
-                catch (ThreadInterruptedException) { }
-                catch (ThreadAbortException) { throw; }
-                catch (Exception) { throw; }
+                var set_event = new ManualResetEventSlim();
+                var iar = HttpPostResponseAsync((ns, state) => { set_event.Set(); }, null);
+                iar.AsyncWaitHandle.WaitOne();
+                set_event.Wait();
             }
             /// <summary>
             /// 同步获取HTTP post响应
