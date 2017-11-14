@@ -47,25 +47,25 @@ namespace BaiduCloudSync
 
             var data = new ObjectMetadata();
             data.FS_ID = 1;
-            data.Path = "/[伯里曼人.体结构绘画教学].(美)乔治.伯里曼.中文.清晰扫描版.pdf ";
+            data.Path = "/qt-opensource-windows-x86-msvc2015-5.7.0.exe ";
             data.AccountID = 0;
-            data.Size = 64988882;
+            data.Size = 968695896;
 
-            var test_downloader = new Downloader(_remote_file_list, data, "D:\\testpause.pdf", 16);
+            var test_downloader = new Downloader(_remote_file_list, data, "D:\\testpause.exe", 96);
 
-            //test_downloader.Start();
-            //Thread.Sleep(60000);
-            //test_downloader.Pause();
-
-            //test_downloader.Start();
-            //Thread.Sleep(60000);
-            //test_downloader.Pause();
-            while (test_downloader.TaskState != Downloader.State.FINISHED)
-            {
-                test_downloader.Start();
-                Thread.Sleep(30000);
-                test_downloader.Pause();
-            }
+            test_downloader.Start();
+            Debug.Print(test_downloader.TaskState.ToString());
+            test_downloader.Pause();
+            Debug.Print(test_downloader.TaskState.ToString());
+            test_downloader.Start();
+            Thread.Sleep(1000);
+            Debug.Print(test_downloader.TaskState.ToString());
+            test_downloader.Cancel();
+            Debug.Print(test_downloader.TaskState.ToString());
+            test_downloader.Start();
+            Debug.Print(test_downloader.TaskState.ToString());
+            test_downloader.Pause();
+            Debug.Print(test_downloader.TaskState.ToString());
         }
         private void Form1_Load(object sender, EventArgs e)
         {
