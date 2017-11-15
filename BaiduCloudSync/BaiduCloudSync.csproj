@@ -151,6 +151,8 @@
     <Compile Include="form\static-config.cs" />
     <Compile Include="transfer\downloader-pool.cs" />
     <Compile Include="transfer\downloader.cs" />
+    <Compile Include="transfer\uploader-pool.cs" />
+    <Compile Include="transfer\uploader.cs" />
     <Compile Include="util\icon-extractor.cs" />
     <Compile Include="util\queue-stream.cs" />
     <Compile Include="util\secure\common-file-encrypt.cs" />
@@ -171,7 +173,6 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="util\uploader.cs" />
     <Compile Include="util\util.cs" />
     <EmbeddedResource Include="form\controls\ctl-debug-output.resx">
       <DependentUpon>ctl-debug-output.cs</DependentUpon>

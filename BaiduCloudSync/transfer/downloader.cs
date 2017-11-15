@@ -23,7 +23,7 @@ namespace BaiduCloudSync
         private const int _PARALLEL_START_REQUEST_COUNT = 2;
         //每个缓存段进行IO写入时需要达到的数据量
         private const int _MIN_IO_FLUSH_DATA_LENGTH = 32768; //32KB
-        
+
         //api请求，用于获得下载链接
         private RemoteFileCacher _api;
         //下载文件的数据
@@ -34,7 +34,7 @@ namespace BaiduCloudSync
 
         //线程标识
         private volatile int _download_thread_flag;
-        private const int _DOWNLOAD_THREAD_FLAG_READY = int.MinValue;
+        private const int _DOWNLOAD_THREAD_FLAG_READY = 128;
         private const int _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED = 1;
         private const int _DOWNLOAD_THREAD_FLAG_PAUSED = 2;
         private const int _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED = 4;
@@ -42,12 +42,15 @@ namespace BaiduCloudSync
         private const int _DOWNLOAD_THREAD_FLAG_START_REQUESTED = 16;
         private const int _DOWNLOAD_THREAD_FLAG_STARTED = 32;
         private const int _DOWNLOAD_THREAD_FLAG_FINISHED = 64;
+        private const int _DOWNLOAD_THREAD_FLAG_ERROR = int.MinValue;
 
         //单任务最大连接数
         private int _max_thread;
 
         private TaskDispatcher _dispatcher; //分段分配
         private string[] _urls; //url
+        private int _url_fail_to_fetch_count; //连续获取url失败次数
+        private const int _MAX_URL_FAIL_COUNT = 3; //达到此数值时会标志为错误
 
         private Guid[] _guid_list; //分段的id
         private DateTime[] _last_receive; //分段最后接收数据的时间，用于主动模式下的timeout
@@ -117,14 +120,20 @@ namespace BaiduCloudSync
             {
                 lock (_thread_flag_lock)
                 {
-                    if ((_download_thread_flag & (_DOWNLOAD_THREAD_FLAG_READY | _DOWNLOAD_THREAD_FLAG_PAUSED)) != 0)
+                    //clear error flag
+                    _download_thread_flag = _download_thread_flag & ~_DOWNLOAD_THREAD_FLAG_ERROR;
+
+                    if (((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_READY | _DOWNLOAD_THREAD_FLAG_PAUSED)) != 0)
                     {
                         Tracer.GlobalTracer.TraceInfo("---STARTED---");
                         _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_START_REQUESTED) & ~_DOWNLOAD_THREAD_FLAG_READY;
+                        _url_fail_to_fetch_count = 0;
                         _api.GetAccount(_data.AccountID).GetLocateDownloadLinkAsync(_data.Path, _main_url_request_callback);
                     }
                 }
             }
+            try { TaskStarted?.Invoke(this, new EventArgs()); }
+            catch { }
         }
         /// <summary>
         /// 暂停下载任务
@@ -135,7 +144,15 @@ namespace BaiduCloudSync
             {
                 lock (_thread_flag_lock)
                 {
-                    if ((_download_thread_flag & (_DOWNLOAD_THREAD_FLAG_START_REQUESTED | _DOWNLOAD_THREAD_FLAG_STARTED)) != 0)
+                    if (((_download_thread_flag & 0xffffff) & _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED) != 0)
+                        return;
+
+                    if ((_download_thread_flag & 0xffffff) == _DOWNLOAD_THREAD_FLAG_READY)
+                    {
+                        _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_PAUSED) & ~_DOWNLOAD_THREAD_FLAG_READY;
+                        return;
+                    }
+                    if (((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_START_REQUESTED | _DOWNLOAD_THREAD_FLAG_STARTED)) != 0)
                     {
                         Tracer.GlobalTracer.TraceInfo("---PAUSED---");
                         _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED;
@@ -147,6 +164,8 @@ namespace BaiduCloudSync
                 _monitor_thread.Join();
                 _monitor_thread_created.Reset();
             }
+            try { TaskPaused?.Invoke(this, new EventArgs()); }
+            catch { }
         }
         /// <summary>
         /// 取消下载任务
@@ -158,12 +177,12 @@ namespace BaiduCloudSync
                 lock (_thread_flag_lock)
                 {
                     Tracer.GlobalTracer.TraceInfo("---CANCELLED---");
-                    if (_download_thread_flag == _DOWNLOAD_THREAD_FLAG_READY)
+                    if ((_download_thread_flag & 0xffffff) == _DOWNLOAD_THREAD_FLAG_READY)
                     {
-                        _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_STOPPED;
+                        _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_STOPPED) & ~_DOWNLOAD_THREAD_FLAG_READY;
                         return;
                     }
-                    else if ((_download_thread_flag & (_DOWNLOAD_THREAD_FLAG_PAUSED | _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED | _DOWNLOAD_THREAD_FLAG_STARTED | _DOWNLOAD_THREAD_FLAG_START_REQUESTED)) != 0)
+                    else if (((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_PAUSED | _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED | _DOWNLOAD_THREAD_FLAG_STARTED | _DOWNLOAD_THREAD_FLAG_START_REQUESTED)) != 0)
                     {
                         _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED;
                     }
@@ -172,6 +191,8 @@ namespace BaiduCloudSync
                 _monitor_thread.Join();
                 _monitor_thread_created.Reset();
             }
+            try { TaskCancelled?.Invoke(this, new EventArgs()); }
+            catch { }
         }
         #endregion
 
@@ -218,7 +239,8 @@ namespace BaiduCloudSync
             PAUSED = _DOWNLOAD_THREAD_FLAG_PAUSED,
             CANCEL_REQUEST = _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED,
             CANCELLED = _DOWNLOAD_THREAD_FLAG_STOPPED,
-            FINISHED = _DOWNLOAD_THREAD_FLAG_FINISHED
+            FINISHED = _DOWNLOAD_THREAD_FLAG_FINISHED,
+            ERROR = _DOWNLOAD_THREAD_FLAG_ERROR
         }
         /// <summary>
         /// 任务状态
@@ -228,7 +250,16 @@ namespace BaiduCloudSync
         /// 速度限制，单位：B/s
         /// </summary>
         public int SpeedLimit { get { return _speed_limit; } set { _speed_limit = value; } }
+        /// <summary>
+        /// 下载器附加数据
+        /// </summary>
+        public object Tag { get; set; }
         #endregion
+
+        #region Event handler
+        public event EventHandler TaskStarted, TaskFinished, TaskPaused, TaskCancelled, TaskError;
+        #endregion
+
         private struct _temp_strcut
         {
             public Guid id;
@@ -257,8 +288,18 @@ namespace BaiduCloudSync
                 }
             else
             {
-                Thread.Sleep(1000);
-                _api.GetAccount(_data.AccountID).GetLocateDownloadLinkAsync(_data.Path, _main_url_refresh_callback);
+                Thread.Sleep(3000);
+                _url_fail_to_fetch_count++;
+                if (_url_fail_to_fetch_count < _MAX_URL_FAIL_COUNT)
+                    _api.GetAccount(_data.AccountID).GetLocateDownloadLinkAsync(_data.Path, _main_url_refresh_callback);
+                else
+                {
+                    lock (_thread_flag_lock)
+                        _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_ERROR;
+                    Pause();
+                    try { TaskError?.Invoke(this, new EventArgs()); }
+                    catch { }
+                }
             }
         }
         //RAM stream -> File stream
@@ -268,8 +309,8 @@ namespace BaiduCloudSync
             bool pause_to_start = false, stop_to_start = false;
             lock (_thread_flag_lock)
             {
-                pause_to_start = (_download_thread_flag & (_DOWNLOAD_THREAD_FLAG_PAUSED | _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED)) != 0;
-                stop_to_start = (_download_thread_flag & (_DOWNLOAD_THREAD_FLAG_STOPPED | _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED)) != 0;
+                pause_to_start = ((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_PAUSED | _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED)) != 0;
+                stop_to_start = ((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_STOPPED | _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED)) != 0;
                 if (stop_to_start) return; //could not start from stopped state
                 _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_STARTED) & ~_DOWNLOAD_THREAD_FLAG_START_REQUESTED;
                 if (pause_to_start)
@@ -293,7 +334,7 @@ namespace BaiduCloudSync
                         write_length = (long)_data.Size - _file_stream.Length;
                         int len = (int)Math.Min(_MIN_IO_FLUSH_DATA_LENGTH, write_length);
                         _file_stream.Write(blank_buffer, 0, len);
-                    } while (write_length > 0 && (_download_thread_flag & (_DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED | _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED)) == 0);
+                    } while (write_length > 0 && ((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED | _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED)) == 0);
                 }
                 _file_stream.Seek(0, SeekOrigin.Begin);
             }
@@ -334,15 +375,16 @@ namespace BaiduCloudSync
                 if (_url_expire_time < DateTime.Now)
                 {
                     _url_expire_time = _url_expire_time.AddSeconds(30);
+                    _url_fail_to_fetch_count = 0;
                     _api.GetAccount(_data.AccountID).GetLocateDownloadLinkAsync(_data.Path, _main_url_refresh_callback);
                 }
 
                 #region thread flag handling
                 bool ispause = false, iscancel = false;
 
-                if ((_download_thread_flag & _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED) != 0)
+                if (((_download_thread_flag & 0xffffff) & _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED) != 0)
                     ispause = true;
-                if ((_download_thread_flag & _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED) != 0)
+                if (((_download_thread_flag & 0xffffff) & _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED) != 0)
                     iscancel = true;
 
                 if (ispause)
@@ -510,7 +552,9 @@ namespace BaiduCloudSync
             _file_stream = null;
             _monitor_thread = null;
             _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_FINISHED) & ~_DOWNLOAD_THREAD_FLAG_STARTED;
-            Tracer.GlobalTracer.TraceInfo("Download finished");
+            //Tracer.GlobalTracer.TraceInfo("Download finished");
+            try { TaskFinished?.Invoke(this, new EventArgs()); }
+            catch { }
         }
 
         //TCP stream -> RAM stream
@@ -540,7 +584,7 @@ namespace BaiduCloudSync
                 do
                 {
                     //state check
-                    if ((_download_thread_flag & ~(_DOWNLOAD_THREAD_FLAG_STARTED | _DOWNLOAD_THREAD_FLAG_START_REQUESTED)) != 0)
+                    if (((_download_thread_flag & 0xffffff) & ~(_DOWNLOAD_THREAD_FLAG_STARTED | _DOWNLOAD_THREAD_FLAG_START_REQUESTED)) != 0)
                     {
                         //exit
                         break;

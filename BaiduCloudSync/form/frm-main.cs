@@ -47,18 +47,17 @@ namespace BaiduCloudSync
 
             var data = new ObjectMetadata();
             data.FS_ID = 1;
-            data.Path = "/我的资源/Tsumamigui3_Chs.7z";
+            data.Path = "/qt-opensource-windows-x86-msvc2015-5.7.0.exe ";
             data.AccountID = 0;
-            data.Size = 2245716640;
+            data.Size = 968695896;
 
-            var test_downloader = new Downloader(_remote_file_list, data, "D:\\testpause.7z", 96);
-            test_downloader.SpeedLimit =  1024 * 300;
-            //while (test_downloader.TaskState != Downloader.State.FINISHED)
+            var down = new DownloaderPool(_remote_file_list);
+            down.Start();
+            down.QueueTask(data, "D:\\testdl3.exe");
+            down.TaskFinished += (a, b) =>
             {
-                test_downloader.Start();
-                Thread.Sleep(180000);
-                test_downloader.Pause();
-            }
+                Tracer.GlobalTracer.TraceInfo("Download completed");
+            };
         }
         private void Form1_Load(object sender, EventArgs e)
         {
