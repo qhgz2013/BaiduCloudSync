@@ -10,6 +10,9 @@ using System.Threading;
 
 namespace BaiduCloudSync
 {
+    /// <summary>
+    /// 百度网盘的文件下载器类，用于进行多线程并行下载。
+    /// </summary>
     public class Downloader : IDisposable
     {
         //错误输出
@@ -20,10 +23,7 @@ namespace BaiduCloudSync
         private const int _PARALLEL_START_REQUEST_COUNT = 2;
         //每个缓存段进行IO写入时需要达到的数据量
         private const int _MIN_IO_FLUSH_DATA_LENGTH = 32768; //32KB
-
-        //private const int _buffer_pool_size = 0x80000; //8MB buffering size
-
-        //necessary vars
+        
         //api请求，用于获得下载链接
         private RemoteFileCacher _api;
         //下载文件的数据
@@ -53,7 +53,6 @@ namespace BaiduCloudSync
         private DateTime[] _last_receive; //分段最后接收数据的时间，用于主动模式下的timeout
         private QueueStream[] _buffer_stream; //缓存数据流
         private NetStream[] _request; //分段的http请求
-        private ManualResetEventSlim[] _request_cancel; //每个分段的线程是否已经退出
         private ulong[] _position; //分段的位置
         private long[] _io_position; //分段的写入位置 (seek _io_position->write data)
         private FileStream _file_stream; //本地文件数据流
@@ -65,16 +64,16 @@ namespace BaiduCloudSync
         private double _average_speed_5s; //5秒内的平均速度
         private LinkedList<ulong> _last_5s_length;
         private long _downloaded_size; //已下载的字节数
-        private long[] _remote_io_size;
-        private long[] _local_io_size;
-        private DateTime _url_expire_time;
+        private DateTime _url_expire_time; //url失效时间
 
+        private long _current_bytes; //当前时间下载的字节数
+        private int _speed_limit; //速度显示，单位为Bps，0为无限制
         //locks
         private object _external_lock;
         private object[] _thread_data_lock;
         private object _url_lock;
         private object _thread_flag_lock;
-        public Downloader(RemoteFileCacher pcs, ObjectMetadata remote_file, string local_file, int max_thread = DEFAULT_MAX_THREAD)
+        public Downloader(RemoteFileCacher pcs, ObjectMetadata remote_file, string local_file, int max_thread = DEFAULT_MAX_THREAD, int speed_limit = 0)
         {
             if (pcs == null) throw new ArgumentNullException("pcs");
             if (string.IsNullOrEmpty(remote_file.Path)) throw new ArgumentNullException("remote_file.Path");
@@ -95,9 +94,12 @@ namespace BaiduCloudSync
             _monitor_thread_created = new ManualResetEventSlim();
 
             _last_5s_length = new LinkedList<ulong>();
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 6; i++)
                 _last_5s_length.AddFirst(0);
             _cookie_key = _api.GetAccount(_data.AccountID).Auth.CookieIdentifier;
+
+            _current_bytes = 0;
+            _speed_limit = speed_limit;
         }
 
         ~Downloader()
@@ -106,6 +108,9 @@ namespace BaiduCloudSync
         }
 
         #region public func
+        /// <summary>
+        /// 开始下载任务
+        /// </summary>
         public void Start()
         {
             lock (_external_lock)
@@ -121,7 +126,9 @@ namespace BaiduCloudSync
                 }
             }
         }
-
+        /// <summary>
+        /// 暂停下载任务
+        /// </summary>
         public void Pause()
         {
             lock (_external_lock)
@@ -141,7 +148,9 @@ namespace BaiduCloudSync
                 _monitor_thread_created.Reset();
             }
         }
-
+        /// <summary>
+        /// 取消下载任务
+        /// </summary>
         public void Cancel()
         {
             lock (_external_lock)
@@ -167,13 +176,37 @@ namespace BaiduCloudSync
         #endregion
 
         #region public properties
+        /// <summary>
+        /// 网盘的文件信息
+        /// </summary>
         public ObjectMetadata RemoteFile { get { return _data; } }
+        /// <summary>
+        /// 任务开始时间
+        /// </summary>
         public DateTime StartTime { get { return _start_time; } }
+        /// <summary>
+        /// 任务经历的时间
+        /// </summary>
         public TimeSpan EllapsedTime { get { return DateTime.Now - _start_time; } }
+        /// <summary>
+        /// 总平均速率
+        /// </summary>
         public double AverageSpeedTotal { get { return _average_speed_total; } }
+        /// <summary>
+        /// 过去5秒的平均速率
+        /// </summary>
         public double AverageSpeed5s { get { return _average_speed_5s; } }
+        /// <summary>
+        /// 已下载大小
+        /// </summary>
         public long DownloadedSize { get { return _downloaded_size; } }
+        /// <summary>
+        /// 下载最大的线程数
+        /// </summary>
         public int MaxThread { get { return _max_thread; } set { _max_thread = value; } }
+        /// <summary>
+        /// 本地文件的完整文件路径
+        /// </summary>
         public string LocalFilePath { get { return _output_path; } }
         [Flags]
         public enum State
@@ -187,8 +220,14 @@ namespace BaiduCloudSync
             CANCELLED = _DOWNLOAD_THREAD_FLAG_STOPPED,
             FINISHED = _DOWNLOAD_THREAD_FLAG_FINISHED
         }
-
+        /// <summary>
+        /// 任务状态
+        /// </summary>
         public State TaskState { get { return (State)_download_thread_flag; } }
+        /// <summary>
+        /// 速度限制，单位：B/s
+        /// </summary>
+        public int SpeedLimit { get { return _speed_limit; } set { _speed_limit = value; } }
         #endregion
         private struct _temp_strcut
         {
@@ -266,14 +305,10 @@ namespace BaiduCloudSync
             _thread_data_lock = new object[max_thread];
             _request = new NetStream[max_thread];
             _position = new ulong[max_thread];
-            _request_cancel = new ManualResetEventSlim[max_thread];
             _io_position = new long[max_thread];
-            _remote_io_size = new long[max_thread];
-            _local_io_size = new long[max_thread];
             for (int i = 0; i < max_thread; i++)
             {
                 _buffer_stream[i] = new QueueStream();
-                _request_cancel[i] = new ManualResetEventSlim();
                 _thread_data_lock[i] = new object();
                 _request[i] = new NetStream();
                 _request[i].CookieKey = _cookie_key;
@@ -332,7 +367,6 @@ namespace BaiduCloudSync
                                     int rc = _buffer_stream[i].Read(buffer, 0, _MIN_IO_FLUSH_DATA_LENGTH);
                                     _file_stream.Write(buffer, 0, rc);
                                     _io_position[i] += rc;
-                                    _local_io_size[i] += rc;
                                 }
                             }
                         }
@@ -340,7 +374,6 @@ namespace BaiduCloudSync
                         _file_stream.Flush();
                     }
                     _request = null;
-                    _request_cancel = null;
                     _urls = null;
                     _guid_list = null;
                     _last_receive = null;
@@ -368,7 +401,6 @@ namespace BaiduCloudSync
 
                     }
                     _request = null;
-                    _request_cancel = null;
                     _urls = null;
                     _guid_list = null;
                     _last_receive = null;
@@ -382,6 +414,12 @@ namespace BaiduCloudSync
                 }
                 #endregion
 
+                //url check
+                if (_urls == null || _urls.Length == 0)
+                {
+                    Thread.Sleep(100);
+                    continue;
+                }
 
                 int started_tasks = 0;
                 for (int i = 0; i < _request.Length; i++)
@@ -397,16 +435,6 @@ namespace BaiduCloudSync
                                 int rc = _buffer_stream[i].Read(buffer, 0, _MIN_IO_FLUSH_DATA_LENGTH);
                                 _file_stream.Write(buffer, 0, rc);
                                 _io_position[i] += rc;
-                                _local_io_size[i] += rc;
-                            }
-                        }
-
-                        //auto starting new task
-                        if (_guid_list[i] == Guid.Empty)
-                        {
-                            if (_remote_io_size[i] != _local_io_size[i])
-                            {
-
                             }
                         }
 
@@ -417,15 +445,16 @@ namespace BaiduCloudSync
                                 _guid_list[i] = _dispatcher.AllocateNewTask(out _position[i]);
                                 if (_guid_list[i] != Guid.Empty)
                                 {
-                                    _remote_io_size[i] = 0;
-                                    _local_io_size[i] = 0;
-                                    _request_cancel[i].Reset();
-                                    Tracer.GlobalTracer.TraceInfo("data request begin: #" + i);
+                                    //Tracer.GlobalTracer.TraceInfo("data request begin: #" + i);
                                     _last_receive[i] = DateTime.Now;
-                                    try { _request[i].HttpGetAsync(_urls[i % _urls.Length], _data_transfer_callback, new _temp_strcut { id = _guid_list[i], index = i }, range: (long)_position[i]); }
+                                    try
+                                    {
+                                        _request[i].HttpGetAsync(_urls[i % _urls.Length], _data_transfer_callback, new _temp_strcut { id = _guid_list[i], index = i }, range: (long)_position[i]);
+                                        _io_position[i] = (long)_position[i];
+                                    }
                                     catch { }
-                                    _io_position[i] = (long)_position[i];
-                                    Tracer.GlobalTracer.TraceInfo("seeking io position #" + i + " to " + _io_position[i]);
+
+                                    //Tracer.GlobalTracer.TraceInfo("seeking io position #" + i + " to " + _io_position[i]);
                                     started_tasks++;
                                 }
                             }
@@ -434,7 +463,7 @@ namespace BaiduCloudSync
                         else if ((DateTime.Now - _last_receive[i]).TotalSeconds > 35.0)
                         {
                             _request[i].Close();
-                            Tracer.GlobalTracer.TraceInfo("data request cancelled (request timed out): #" + i);
+                            //Tracer.GlobalTracer.TraceInfo("data request cancelled (request timed out): #" + i);
                             _request[i] = new NetStream();
                             _dispatcher.ReleaseTask(_guid_list[i]);
                             _guid_list[i] = Guid.Empty;
@@ -442,7 +471,7 @@ namespace BaiduCloudSync
                     }
                 }
 
-
+                _current_bytes = 0;
 
                 //speed update
                 var cur_len = _dispatcher.CompletedLength;
@@ -454,7 +483,7 @@ namespace BaiduCloudSync
                 _downloaded_size = (long)cur_len;
                 Tracer.GlobalTracer.TraceInfo("Downloading: " + cur_len + "/" + _data.Size + " [" + (_average_speed_5s / 1024).ToString("0.00") + "KB/s]");
 
-                if (_last_5s_length.Last.Value == _data.Size) break;
+                if (cur_len == _data.Size) break;
                 //timer interval
                 var ts = (next_loop_time - DateTime.Now).TotalMilliseconds;
                 next_loop_time = next_loop_time.AddSeconds(1);
@@ -472,7 +501,6 @@ namespace BaiduCloudSync
                 }
             }
             _request = null;
-            _request_cancel = null;
             _urls = null;
             _guid_list = null;
             _last_receive = null;
@@ -497,7 +525,7 @@ namespace BaiduCloudSync
             {
                 lock (_thread_data_lock[index])
                     if (id != _guid_list[index])
-                        throw new Exception("Guid mismatched, ignored");
+                        throw new InvalidDataException("Guid mismatched, ignored");
                 if (ns.HTTP_Response == null) return;
                 if (ns.HTTP_Response.StatusCode != System.Net.HttpStatusCode.OK && ns.HTTP_Response.StatusCode != System.Net.HttpStatusCode.PartialContent)
                     throw new InvalidDataException("Status code check failed");
@@ -519,23 +547,44 @@ namespace BaiduCloudSync
                     }
 
                     //loop for reading data
-                    bytes_read = istream.Read(buffer, 0, buffer_size);
+                    var cur_bytes = Interlocked.Read(ref _current_bytes);
+                    if (_speed_limit == 0 || cur_bytes < _speed_limit)
+                    {
+                        bytes_read = istream.Read(buffer, 0, buffer_size);
+                        Interlocked.Add(ref _current_bytes, bytes_read);
+                    }
+                    else
+                    {
+                        Thread.Sleep(10);
+                        continue;
+                    }
 
                     //overwriting data, no exception allowed here!
                     lock (_thread_data_lock[index])
                     {
                         if (_guid_list[index] == Guid.Empty || _guid_list[index] != id)
-                            throw new Exception("Guid mismatch!");
-                        _remote_io_size[index] += bytes_read;
+                            throw new InvalidDataException("Guid mismatch!");
                         ostream.Write(buffer, 0, bytes_read);
                         _last_receive[index] = DateTime.Now;
                     }
                     total_read += (ulong)bytes_read;
                 } while (_dispatcher.UpdateTaskSituation(_guid_list[index], _position[index] + total_read) && bytes_read > 0);
             }
+            catch (InvalidDataException)
+            {
+                //Invalid GUID or StatusCode
+            }
+            catch (IOException)
+            {
+                //IO exception in SOCKET connection
+            }
+            catch (System.Net.WebException)
+            {
+                //HTTP Exception (timed out)
+            }
             catch (Exception ex)
             {
-
+                //general exception
                 Tracer.GlobalTracer.TraceError("ERROR #" + index + "\r\n" + ex);
             }
             finally
@@ -546,7 +595,6 @@ namespace BaiduCloudSync
                     _guid_list[index] = Guid.Empty;
                     _request[index].Close();
                 }
-                _request_cancel[index].Set();
             }
         }
         #endregion

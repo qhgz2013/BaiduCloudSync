@@ -47,25 +47,18 @@ namespace BaiduCloudSync
 
             var data = new ObjectMetadata();
             data.FS_ID = 1;
-            data.Path = "/qt-opensource-windows-x86-msvc2015-5.7.0.exe ";
+            data.Path = "/我的资源/Tsumamigui3_Chs.7z";
             data.AccountID = 0;
-            data.Size = 968695896;
+            data.Size = 2245716640;
 
-            var test_downloader = new Downloader(_remote_file_list, data, "D:\\testpause.exe", 96);
-
-            test_downloader.Start();
-            Debug.Print(test_downloader.TaskState.ToString());
-            test_downloader.Pause();
-            Debug.Print(test_downloader.TaskState.ToString());
-            test_downloader.Start();
-            Thread.Sleep(1000);
-            Debug.Print(test_downloader.TaskState.ToString());
-            test_downloader.Cancel();
-            Debug.Print(test_downloader.TaskState.ToString());
-            test_downloader.Start();
-            Debug.Print(test_downloader.TaskState.ToString());
-            test_downloader.Pause();
-            Debug.Print(test_downloader.TaskState.ToString());
+            var test_downloader = new Downloader(_remote_file_list, data, "D:\\testpause.7z", 96);
+            test_downloader.SpeedLimit =  1024 * 300;
+            //while (test_downloader.TaskState != Downloader.State.FINISHED)
+            {
+                test_downloader.Start();
+                Thread.Sleep(180000);
+                test_downloader.Pause();
+            }
         }
         private void Form1_Load(object sender, EventArgs e)
         {
