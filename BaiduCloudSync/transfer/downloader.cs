@@ -10,6 +10,7 @@ using System.Threading;
 
 namespace BaiduCloudSync
 {
+    //TODO: 接入自动解密模块
     /// <summary>
     /// 百度网盘的文件下载器类，用于进行多线程并行下载。
     /// </summary>
@@ -43,6 +44,7 @@ namespace BaiduCloudSync
         private const int _DOWNLOAD_THREAD_FLAG_STARTED = 32;
         private const int _DOWNLOAD_THREAD_FLAG_FINISHED = 64;
         private const int _DOWNLOAD_THREAD_FLAG_ERROR = int.MinValue;
+        private const int _DOWNLOAD_THREAD_FLAG_DECRYPTING = 0x40000000;
 
         //单任务最大连接数
         private int _max_thread;
@@ -128,7 +130,13 @@ namespace BaiduCloudSync
                         Tracer.GlobalTracer.TraceInfo("---STARTED---");
                         _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_START_REQUESTED) & ~_DOWNLOAD_THREAD_FLAG_READY;
                         _url_fail_to_fetch_count = 0;
-                        _api.GetAccount(_data.AccountID).GetLocateDownloadLinkAsync(_data.Path, _main_url_request_callback);
+                        //_api.GetAccount(_data.AccountID).GetLocateDownloadLinkAsync(_data.Path, _main_url_request_callback);
+                        _url_expire_time = DateTime.Now;
+                        _monitor_thread = new Thread(_monitor_thread_callback);
+                        _monitor_thread.Name = "Download Monitor";
+                        _monitor_thread.IsBackground = false;
+                        _monitor_thread.Start();
+                        
                     }
                 }
             }
@@ -177,12 +185,19 @@ namespace BaiduCloudSync
                 lock (_thread_flag_lock)
                 {
                     Tracer.GlobalTracer.TraceInfo("---CANCELLED---");
+                    if ((_download_thread_flag & 0xffffff) == _DOWNLOAD_THREAD_FLAG_STOPPED)
+                        return;
                     if ((_download_thread_flag & 0xffffff) == _DOWNLOAD_THREAD_FLAG_READY)
                     {
                         _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_STOPPED) & ~_DOWNLOAD_THREAD_FLAG_READY;
                         return;
                     }
-                    else if (((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_PAUSED | _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED | _DOWNLOAD_THREAD_FLAG_STARTED | _DOWNLOAD_THREAD_FLAG_START_REQUESTED)) != 0)
+                    else if ((_download_thread_flag & 0xffffff) == _DOWNLOAD_THREAD_FLAG_PAUSED)
+                    {
+                        _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_STOPPED) & ~_DOWNLOAD_THREAD_FLAG_PAUSED;
+                        return;
+                    }
+                    else if (((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED | _DOWNLOAD_THREAD_FLAG_STARTED | _DOWNLOAD_THREAD_FLAG_START_REQUESTED)) != 0)
                     {
                         _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED;
                     }
@@ -240,7 +255,8 @@ namespace BaiduCloudSync
             CANCEL_REQUEST = _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED,
             CANCELLED = _DOWNLOAD_THREAD_FLAG_STOPPED,
             FINISHED = _DOWNLOAD_THREAD_FLAG_FINISHED,
-            ERROR = _DOWNLOAD_THREAD_FLAG_ERROR
+            ERROR = _DOWNLOAD_THREAD_FLAG_ERROR,
+            DECRYPTING = _DOWNLOAD_THREAD_FLAG_DECRYPTING
         }
         /// <summary>
         /// 任务状态
@@ -268,15 +284,16 @@ namespace BaiduCloudSync
 
         #region callbacks
         //PCS API -> Locate url
-        private void _main_url_request_callback(bool suc, string[] urls, object state)
-        {
-            _main_url_refresh_callback(suc, urls, state);
-            _monitor_thread = new Thread(_monitor_thread_callback);
-            _monitor_thread.Name = "Download Monitor";
-            _monitor_thread.IsBackground = false;
-            _monitor_thread.Start();
+        //private void _main_url_request_callback(bool suc, string[] urls, object state)
+        //{
+        //    _url_expire_time = DateTime.Now.AddSeconds(30);
+        //    _main_url_refresh_callback(suc, urls, state);
+        //    _monitor_thread = new Thread(_monitor_thread_callback);
+        //    _monitor_thread.Name = "Download Monitor";
+        //    _monitor_thread.IsBackground = false;
+        //    _monitor_thread.Start();
 
-        }
+        //}
 
         private void _main_url_refresh_callback(bool suc, string[] urls, object state)
         {
@@ -288,9 +305,10 @@ namespace BaiduCloudSync
                 }
             else
             {
+                _url_expire_time = DateTime.Now.AddSeconds(30);
                 Thread.Sleep(3000);
                 _url_fail_to_fetch_count++;
-                if (_url_fail_to_fetch_count < _MAX_URL_FAIL_COUNT)
+                if (_url_fail_to_fetch_count < _MAX_URL_FAIL_COUNT && (_download_thread_flag & _DOWNLOAD_THREAD_FLAG_STARTED) != 0)
                     _api.GetAccount(_data.AccountID).GetLocateDownloadLinkAsync(_data.Path, _main_url_refresh_callback);
                 else
                 {

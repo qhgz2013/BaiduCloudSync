@@ -14,16 +14,6 @@
 12. 多账号网盘RAID
 
 *.  支持从cookie.txt中读取账号信息（用于控制台模式）
+*2. 重写加密管理模块，整合到LocalIO中
 
-
-Add R0, (R1)+
-Decrement R2
-BNE
-
-int* R1 = xxxx
-int R0 = 0
-int R2 = 3
-
-R0 += *R1++;
-R2--
-if (R2) goto
+//无视之前的汇编指令吧，给别人讲解作业的时候打开了txt示范，保存后忘记删了= =

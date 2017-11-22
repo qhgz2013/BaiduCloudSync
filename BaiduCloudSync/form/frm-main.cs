@@ -47,17 +47,18 @@ namespace BaiduCloudSync
 
             var data = new ObjectMetadata();
             data.FS_ID = 1;
-            data.Path = "/qt-opensource-windows-x86-msvc2015-5.7.0.exe ";
+            data.Path = "/helloworld";
             data.AccountID = 0;
-            data.Size = 968695896;
+            data.Size = 1024;
+            var test = new Downloader(_remote_file_list, data, "D:\\testnotexist");
+            test.Start();
 
-            var down = new DownloaderPool(_remote_file_list);
-            down.Start();
-            down.QueueTask(data, "D:\\testdl3.exe");
-            down.TaskFinished += (a, b) =>
-            {
-                Tracer.GlobalTracer.TraceInfo("Download completed");
-            };
+            while ((test.TaskState & Downloader.State.ERROR) == 0)
+                Thread.Sleep(100);
+
+            test.Cancel();
+            Thread.Sleep(1500);
+            //test.Pause();
         }
         private void Form1_Load(object sender, EventArgs e)
         {
@@ -1137,13 +1138,13 @@ namespace BaiduCloudSync
             }
         }
         //UI: 上传文件
-        private void _on_upload_finished(object sender, UploadResultEventArgs e)
-        {
-            _asyncCall(delegate
-            {
-                刷新EToolStripMenuItem_Click(sender, e);
-            }, "更新文件信息...");
-        }
+        //private void _on_upload_finished(object sender, UploadResultEventArgs e)
+        //{
+        //    _asyncCall(delegate
+        //    {
+        //        刷新EToolStripMenuItem_Click(sender, e);
+        //    }, "更新文件信息...");
+        //}
         private void 上传文件ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(__current_listview_path)) return;
@@ -1221,9 +1222,9 @@ namespace BaiduCloudSync
                     if (cancelled) return;
                 }
                 if (skip && exist) continue;
-                var new_class = new Uploader(this, _pcsAPI, cur_remote_path, _local_file_list, item.FullName, o, encrypt);
-                new_class.TaskFinished += _on_upload_finished;
-                uploadTransferList1.AddTask(new_class);
+                //var new_class = new Uploader(this, _pcsAPI, cur_remote_path, _local_file_list, item.FullName, o, encrypt);
+                //new_class.TaskFinished += _on_upload_finished;
+                //uploadTransferList1.AddTask(new_class);
             }
             foreach (var item in dir_info.GetDirectories())
             {
