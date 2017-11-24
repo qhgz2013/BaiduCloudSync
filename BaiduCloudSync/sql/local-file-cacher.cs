@@ -123,6 +123,7 @@ namespace BaiduCloudSync
                     {
                         queue_empty = false;
                         next_path = _io_queue[0];
+                        _io_queue.RemoveAt(0);
                     }
                 }
 
@@ -480,6 +481,7 @@ namespace BaiduCloudSync
             _sql_lock = new object();
             _io_queue_lock = new object();
             _io_queue = new List<string>();
+            _io_wait = new ManualResetEventSlim();
 
             _initialize_sql_tables();
             _io_thread = new Thread(_io_thread_callback);

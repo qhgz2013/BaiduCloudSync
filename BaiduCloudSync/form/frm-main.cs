@@ -45,19 +45,8 @@ namespace BaiduCloudSync
             _local_file_list = new LocalFileCacher();
             StaticConfig.LoadStaticConfig();
 
-            var data = new ObjectMetadata();
-            data.FS_ID = 1;
-            data.Path = "/helloworld";
-            data.AccountID = 0;
-            data.Size = 1024;
-            var test = new Downloader(_remote_file_list, data, "D:\\testnotexist");
+            var test = new Uploader(_local_file_list, _remote_file_list, "D:\\output.csv", "/testupload.csv", 0, max_thread: 1);
             test.Start();
-
-            while ((test.TaskState & Downloader.State.ERROR) == 0)
-                Thread.Sleep(100);
-
-            test.Cancel();
-            Thread.Sleep(1500);
             //test.Pause();
         }
         private void Form1_Load(object sender, EventArgs e)

@@ -984,6 +984,19 @@ namespace BaiduCloudSync
             }
         }
 
+        public void UploadCancelAsync(Guid task_id)
+        {
+            lock (_upload_external_lock)
+            {
+                if (_upload_queue.ContainsKey(task_id))
+                {
+                    var data = _upload_queue[task_id];
+                    data.stream.Close();
+                    data.stream.Dispose();
+                    _upload_queue.Remove(task_id);
+                }
+            }
+        }
         /// <summary>
         /// 异步结束上传文件
         /// </summary>
@@ -1193,6 +1206,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             var boundary = util.GenerateFormDataBoundary();
 
 
@@ -1297,6 +1311,24 @@ namespace BaiduCloudSync
             }
         }
 
+        /// <summary>
+        /// 异步取消上传分段数据
+        /// </summary>
+        /// <param name="task_id">分配到的任务id</param>
+        public void UploadSliceCancelAsync(Guid task_id)
+        {
+            _trace.TraceInfo("BaiduPCS.UploadSliceCancelAsync called: Guid task_id=" + task_id.ToString());
+            lock (_upload_external_lock)
+            {
+                if (_slice_upload_queue.ContainsKey(task_id))
+                {
+                    var data = _slice_upload_queue[task_id];
+                    data.stream.Close();
+                    data.stream.Dispose();
+                    _slice_upload_queue.Remove(task_id);
+                }
+            }
+        }
         /// <summary>
         /// 异步合并分段数据（注意：分段数大于1时返回的MD5值有很大几率是错误的）
         /// </summary>

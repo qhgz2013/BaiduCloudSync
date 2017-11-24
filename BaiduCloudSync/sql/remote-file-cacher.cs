@@ -714,7 +714,7 @@ namespace BaiduCloudSync
         /// <param name="asc">正序</param>
         /// <param name="page">页数</param>
         /// <param name="size">每页大小</param>
-        public void GetFileListAsync(string path, BaiduPCS.MultiObjectMetaCallback callback, int account_id = 0, BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name, bool asc = true, int page = 1, int size = 1000)
+        public void GetFileListAsync(string path, BaiduPCS.MultiObjectMetaCallback callback, int account_id = 0, BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name, bool asc = true, int page = 1, int size = 1000, object state = null)
         {
             if (path.EndsWith("/") && path != "/") path = path.Substring(0, path.Length - 1);
             if (_is_file_diff_working || _account_changed)
@@ -728,7 +728,7 @@ namespace BaiduCloudSync
                     }
                     try { callback?.Invoke(suc, data, s); }
                     catch { }
-                }, order, asc, page, size);
+                }, order, asc, page, size, state);
             }
             else
             {
@@ -741,13 +741,13 @@ namespace BaiduCloudSync
         /// <param name="path">文件路径</param>
         /// <param name="callback">回调函数</param>
         /// <param name="account_id">账号id</param>
-        public void CreateDirectoryAsync(string path, BaiduPCS.ObjectMetaCallback callback, int account_id = 0)
+        public void CreateDirectoryAsync(string path, BaiduPCS.ObjectMetaCallback callback, int account_id = 0, object state = null)
         {
             if (path.EndsWith("/")) path = path.Substring(0, path.Length - 1);
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.CreateDirectoryAsync(path, callback);
+                _account_data[account_id].pcs.CreateDirectoryAsync(path, callback, state);
                 lock (_file_diff_thread_fetching_head_lock)
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
@@ -759,18 +759,18 @@ namespace BaiduCloudSync
             }
         }
 
-        public void MovePathAsync(string source, string destination, BaiduPCS.OperationCallback callback, int account_id = 0)
+        public void MovePathAsync(string source, string destination, BaiduPCS.OperationCallback callback, int account_id = 0, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite, object state = null)
         {
             if (source.EndsWith("/")) source = source.Substring(0, source.Length - 1);
             if (destination.EndsWith("/")) destination = destination.Substring(0, destination.Length - 1);
-            MovePathAsync(new string[] { source }, new string[] { destination }, callback, account_id);
+            MovePathAsync(new string[] { source }, new string[] { destination }, callback, account_id, ondup, state);
         }
-        public void MovePathAsync(IEnumerable<string> source, IEnumerable<string> destination, BaiduPCS.OperationCallback callback, int account_id = 0)
+        public void MovePathAsync(IEnumerable<string> source, IEnumerable<string> destination, BaiduPCS.OperationCallback callback, int account_id = 0, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.MovePathAsync(source, destination, callback);
+                _account_data[account_id].pcs.MovePathAsync(source, destination, callback, ondup, state);
                 lock (_file_diff_thread_fetching_head_lock)
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
@@ -779,18 +779,18 @@ namespace BaiduCloudSync
                 }
             }
         }
-        public void CopyPathAsync(string source, string destination, BaiduPCS.OperationCallback callback, int account_id = 0)
+        public void CopyPathAsync(string source, string destination, BaiduPCS.OperationCallback callback, int account_id = 0, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite, object state = null)
         {
             if (source.EndsWith("/")) source = source.Substring(0, source.Length - 1);
             if (destination.EndsWith("/")) destination = destination.Substring(0, destination.Length - 1);
-            CopyPathAsync(new string[] { source }, new string[] { destination }, callback, account_id);
+            CopyPathAsync(new string[] { source }, new string[] { destination }, callback, account_id, ondup, state);
         }
-        public void CopyPathAsync(IEnumerable<string> source, IEnumerable<string> destination, BaiduPCS.OperationCallback callback, int account_id = 0)
+        public void CopyPathAsync(IEnumerable<string> source, IEnumerable<string> destination, BaiduPCS.OperationCallback callback, int account_id = 0, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.CopyPathAsync(source, destination, callback);
+                _account_data[account_id].pcs.CopyPathAsync(source, destination, callback, ondup, state);
                 lock (_file_diff_thread_fetching_head_lock)
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
@@ -799,18 +799,18 @@ namespace BaiduCloudSync
                 }
             }
         }
-        public void RenameAsync(string source, string new_name, BaiduPCS.OperationCallback callback, int account_id = 0)
+        public void RenameAsync(string source, string new_name, BaiduPCS.OperationCallback callback, int account_id = 0, object state = null)
         {
             if (source.EndsWith("/")) source = source.Substring(0, source.Length - 1);
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-            RenameAsync(new string[] { source }, new string[] { new_name }, callback, account_id);
+            RenameAsync(new string[] { source }, new string[] { new_name }, callback, account_id, state);
         }
-        public void RenameAsync(IEnumerable<string> source, IEnumerable<string> new_name, BaiduPCS.OperationCallback callback, int account_id = 0)
+        public void RenameAsync(IEnumerable<string> source, IEnumerable<string> new_name, BaiduPCS.OperationCallback callback, int account_id = 0, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.RenameAsync(source, new_name, callback);
+                _account_data[account_id].pcs.RenameAsync(source, new_name, callback, state);
                 lock (_file_diff_thread_fetching_head_lock)
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
@@ -819,17 +819,17 @@ namespace BaiduCloudSync
                 }
             }
         }
-        public void DeletePathAsync(string path, BaiduPCS.OperationCallback callback, int account_id = 0)
+        public void DeletePathAsync(string path, BaiduPCS.OperationCallback callback, int account_id = 0, object state = null)
         {
             if (path.EndsWith("/")) path = path.Substring(0, path.Length - 1);
-            DeletePathAsync(path, callback, account_id);
+            DeletePathAsync(path, callback, account_id, state);
         }
-        public void DeletePathAsync(IEnumerable<string> path, BaiduPCS.OperationCallback callback, int account_id = 0)
+        public void DeletePathAsync(IEnumerable<string> path, BaiduPCS.OperationCallback callback, int account_id = 0, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.DeletePathAsync(path, callback);
+                _account_data[account_id].pcs.DeletePathAsync(path, callback, state);
                 lock (_file_diff_thread_fetching_head_lock)
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
@@ -839,12 +839,12 @@ namespace BaiduCloudSync
             }
         }
 
-        public void RapidUploadAsync(string path, ulong content_length, string content_md5, string content_crc32, string slice_md5, BaiduPCS.ObjectMetaCallback callback, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite, int account_id = 0)
+        public void RapidUploadAsync(string path, ulong content_length, string content_md5, string content_crc32, string slice_md5, BaiduPCS.ObjectMetaCallback callback, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite, int account_id = 0, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.RapidUploadAsync(path, content_length, content_md5, content_crc32, slice_md5, callback, ondup);
+                _account_data[account_id].pcs.RapidUploadAsync(path, content_length, content_md5, content_crc32, slice_md5, callback, ondup, state);
                 lock (_file_diff_thread_fetching_head_lock)
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
@@ -854,47 +854,54 @@ namespace BaiduCloudSync
             }
         }
 
-        public void PreCreateFileAsync(string path, int block_count, BaiduPCS.PreCreateCallback callback, int account_id = 0)
+        public void PreCreateFileAsync(string path, int block_count, BaiduPCS.PreCreateCallback callback, int account_id = 0, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.PreCreateFileAsync(path, block_count, callback);
+                _account_data[account_id].pcs.PreCreateFileAsync(path, block_count, callback, state);
             }
         }
 
-        public void UploadSliceBeginAsync(ulong content_length, string path, string uploadid, int sequence, BaiduPCS.UploadCallback callback, int account_id = 0)
+        public void UploadSliceBeginAsync(ulong content_length, string path, string uploadid, int sequence, BaiduPCS.UploadCallback callback, int account_id = 0, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.UploadSliceBeginAsync(content_length, path, uploadid, sequence, callback);
+                _account_data[account_id].pcs.UploadSliceBeginAsync(content_length, path, uploadid, sequence, callback, state);
+            }
+        }
+        public void UploadSliceCancelAsync(Guid task_id, int account_id = 0)
+        {
+            lock (_account_data_external_lock)
+            {
+                if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
+                _account_data[account_id].pcs.UploadSliceCancelAsync(task_id);
+            }
+        }
+        public void UploadSliceEndAsync(Guid task_id, BaiduPCS.SliceUploadCallback callback, int account_id = 0, object state = null)
+        {
+            lock (_account_data_external_lock)
+            {
+                if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
+                _account_data[account_id].pcs.UploadSliceEndAsync(task_id, callback, state);
             }
         }
 
-        public void UploadSliceEndAsync(Guid task_id, BaiduPCS.SliceUploadCallback callback, int account_id = 0)
+        public void UploadBeginAsync(ulong content_length, string path, BaiduPCS.UploadCallback callback, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite, int account_id = 0, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.UploadSliceEndAsync(task_id, callback);
+                _account_data[account_id].pcs.UploadBeginAsync(content_length, path, callback, ondup, state);
             }
         }
-
-        public void UploadBeginAsync(ulong content_length, string path, BaiduPCS.UploadCallback callback, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite, int account_id = 0)
+        public void UploadEndAsync(Guid task_id, BaiduPCS.ObjectMetaCallback callback, int account_id = 0, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.UploadBeginAsync(content_length, path, callback, ondup);
-            }
-        }
-        public void UploadEndAsync(Guid task_id, BaiduPCS.ObjectMetaCallback callback, int account_id = 0)
-        {
-            lock (_account_data_external_lock)
-            {
-                if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.UploadEndAsync(task_id, callback);
+                _account_data[account_id].pcs.UploadEndAsync(task_id, callback, state);
                 lock (_file_diff_thread_fetching_head_lock)
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
@@ -904,12 +911,12 @@ namespace BaiduCloudSync
             }
         }
 
-        public void CreteSuperFileAsync(string path, string uploadid, IEnumerable<string> block_list, ulong file_size, BaiduPCS.ObjectMetaCallback callback, int account_id = 0)
+        public void CreteSuperFileAsync(string path, string uploadid, IEnumerable<string> block_list, ulong file_size, BaiduPCS.ObjectMetaCallback callback, int account_id = 0, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.CreateSuperFileAsync(path, uploadid, block_list, file_size, callback);
+                _account_data[account_id].pcs.CreateSuperFileAsync(path, uploadid, block_list, file_size, callback, state);
                 lock (_file_diff_thread_fetching_head_lock)
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
