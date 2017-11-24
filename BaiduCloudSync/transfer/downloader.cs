@@ -205,6 +205,7 @@ namespace BaiduCloudSync
                 _monitor_thread_created.Wait();
                 _monitor_thread.Join();
                 _monitor_thread_created.Reset();
+                Dispose();
             }
             try { TaskCancelled?.Invoke(this, new EventArgs()); }
             catch { }

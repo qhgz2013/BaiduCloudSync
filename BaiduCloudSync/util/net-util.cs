@@ -545,7 +545,8 @@ namespace GlobalUtil
                                 c.Expires = DateTime.Now.AddSeconds(int.Parse(arg["maxage"]));
                             else if (arg.ContainsKey("expires"))
                                 c.Expires = _parseCookieExpireTime(arg["expires"]);
-                            else skipflg = true;
+                            else
+                                c.Expires = DateTime.MinValue; //session cookie
 
                             if (!skipflg) ret.Add(c);
                         }
@@ -825,7 +826,7 @@ namespace GlobalUtil
                             _slock.AcquireWriterLock(Timeout.Infinite);
                             if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
                                 DefaultCookieContainer.Add(CookieKey, new CookieContainer());
-                            DefaultCookieContainer[CookieKey].Add(ParseCookie(HTTP_Response.Headers[STR_COOKIE], HTTP_Response.ResponseUri.Host));
+                            DefaultCookieContainer[CookieKey].Add(ParseCookie(HTTP_Response.Headers[STR_SETCOOKIE], HTTP_Response.ResponseUri.Host));
                             _slock.ReleaseWriterLock();
                         }
 
@@ -877,7 +878,7 @@ namespace GlobalUtil
                             HTTP_Response = (HttpWebResponse)ex.Response;
                             if (!string.IsNullOrEmpty(CookieKey) && !DefaultCookieContainer.ContainsKey(CookieKey))
                                 DefaultCookieContainer.Add(CookieKey, new CookieContainer());
-                            DefaultCookieContainer[CookieKey].Add(ParseCookie(HTTP_Response.Headers[STR_COOKIE], HTTP_Response.ResponseUri.Host));
+                            DefaultCookieContainer[CookieKey].Add(ParseCookie(HTTP_Response.Headers[STR_SETCOOKIE], HTTP_Response.ResponseUri.Host));
                             _slock.ReleaseWriterLock();
 
                             switch (HTTP_Response.ContentEncoding)

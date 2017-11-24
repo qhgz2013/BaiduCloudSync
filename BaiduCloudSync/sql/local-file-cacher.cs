@@ -24,7 +24,7 @@ namespace BaiduCloudSync
         public DateTime MTime;
     }
     public delegate void LocalFileIOFinishCallback(LocalFileData data);
-
+    public delegate void LocalFileIOAbortedCallback(string path);
     //todo: 增加缓存大小修改
     public class LocalFileCacher : IDisposable
     {
@@ -43,7 +43,7 @@ namespace BaiduCloudSync
         private SQLiteTransaction _sql_trs;
         private object _sql_lock;
 
-        private Queue<string> _io_queue;
+        private List<string> _io_queue;
         private object _io_queue_lock;
 
         private Thread _io_thread;
@@ -107,7 +107,10 @@ namespace BaiduCloudSync
         private volatile int _io_thread_flags;
         private const int _IO_THREAD_ABORT_REQUEST = 0x1;
         private const int _IO_THREAD_ABORTED = 0x2;
+        private ManualResetEventSlim _io_wait;
 
+        private string _current_io_file;
+        private int _current_io_file_flag; //norm:0, pause:1, abort:2
         private void _io_thread_callback()
         {
             while (_io_thread_flags == 0)
@@ -119,25 +122,21 @@ namespace BaiduCloudSync
                     if (_io_queue.Count > 0)
                     {
                         queue_empty = false;
-                        next_path = _io_queue.Dequeue();
+                        next_path = _io_queue[0];
                     }
                 }
 
-                if (queue_empty)
+                if (queue_empty || _current_io_file_flag == 1)
                 {
-                    try
-                    {
-                        Thread.Sleep(3000);
-                    }
-                    catch (ThreadInterruptedException) { }
-                    catch (ThreadAbortException) { _io_thread_flags = _IO_THREAD_ABORTED; return; }
-                    catch (Exception) { throw; }
+                    _io_wait.Reset();
+                    _io_wait.Wait();
                     continue;
                 }
 
                 try
                 {
                     var fileinfo = new FileInfo(next_path);
+                    _current_io_file = next_path;
                     var origin_file_length = fileinfo.Length;
 
                     if (fileinfo.Exists == false)
@@ -199,7 +198,6 @@ namespace BaiduCloudSync
                     }
 
                     int io_state = 0;
-                    long total_length = 0; //should be equal to origin_file_length * 3 + min(origin_file_length, 256K)
                     //4 thread parallel read
                     Parallel.For(0, 4, (i) =>
                     {
@@ -272,13 +270,12 @@ namespace BaiduCloudSync
                                             throw new InvalidOperationException();
                                     }
 
-                                    total_length += current;
                                     length += current;
                                 }
                                 catch { break; }
 
 
-                            } while (is_file_changed == false && _io_thread_flags == 0 && current > 0 && fs.CanRead);
+                            } while (is_file_changed == false && _current_io_file_flag == 0 && _io_thread_flags == 0 && current > 0 && fs.CanRead);
 
                         }
                         finally
@@ -308,6 +305,7 @@ namespace BaiduCloudSync
                     //handling file changed
                     if (is_file_changed)
                     {
+                        try { LocalFileIOAbort?.Invoke(next_path); } catch { }
                         continue;
                     }
 
@@ -370,11 +368,12 @@ namespace BaiduCloudSync
                             _sql_cmd.Parameters.Clear();
                         }
 
-                        LocalFileIOFinish?.Invoke(local_data);
+                        try { LocalFileIOFinish?.Invoke(local_data); }
+                        catch { }
                     }
 
                     //handling thread flags
-                    if (_io_thread_flags == _IO_THREAD_ABORT_REQUEST)
+                    if (_io_thread_flags == _IO_THREAD_ABORT_REQUEST || _current_io_file_flag == 1)
                     {
 
                         //handling non-completed io calculation
@@ -408,7 +407,7 @@ namespace BaiduCloudSync
                                 _sql_cmd.Parameters["@CRC32"].Value = util.ReadBytes(ms_crc32, (int)ms_crc32.Length);
                                 _sql_cmd.Parameters.Add("@MD5_Slice", System.Data.DbType.Binary);
                                 _sql_cmd.Parameters["@MD5_Slice"].Value = util.ReadBytes(ms_md5_slice, (int)ms_md5_slice.Length);
-                                
+
                                 var count = Convert.ToInt32(_sql_cmd.ExecuteScalar());
                                 if (count == 0)
                                 {
@@ -421,6 +420,9 @@ namespace BaiduCloudSync
                                 _sql_cmd.ExecuteNonQuery();
                                 _sql_cmd.Parameters.Clear();
                             }
+
+                            try { LocalFileIOAbort?.Invoke(next_path); }
+                            catch { }
                         }
 
                         //commiting sql data
@@ -450,6 +452,7 @@ namespace BaiduCloudSync
             if (_io_thread != null)
             {
                 _io_thread_flags = _IO_THREAD_ABORT_REQUEST;
+                _io_wait.Set();
                 _io_thread.Join();
                 _io_thread = null;
             }
@@ -476,7 +479,7 @@ namespace BaiduCloudSync
         {
             _sql_lock = new object();
             _io_queue_lock = new object();
-            _io_queue = new Queue<string>();
+            _io_queue = new List<string>();
 
             _initialize_sql_tables();
             _io_thread = new Thread(_io_thread_callback);
@@ -491,7 +494,11 @@ namespace BaiduCloudSync
 
         public event LocalFileIOCallback LocalFileIOUpdate;
         public event LocalFileIOFinishCallback LocalFileIOFinish;
-
+        public event LocalFileIOAbortedCallback LocalFileIOAbort;
+        /// <summary>
+        /// 将文件的特征I/O任务添加到执行队列中
+        /// </summary>
+        /// <param name="path">文件路径</param>
         public void FileIORequest(string path)
         {
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
@@ -550,14 +557,36 @@ namespace BaiduCloudSync
 
                 lock (_io_queue_lock)
                 {
-                    _io_queue.Enqueue(path);
-                    if ((_io_thread.ThreadState & ThreadState.WaitSleepJoin) != 0)
-                    {
-                        //wake up from sleep state
-                        _io_thread.Interrupt();
-                    }
+                    _io_queue.Add(path);
+                    _io_wait.Set();
                 }
             });
+        }
+        //TODO: debug check: sync variable boundary
+        public void FileIOAbort(string path)
+        {
+            if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
+
+#pragma warning disable CS0162
+            if (!_FILE_SYSTEM_CASE_SENSITIVE)
+                path = path.ToLower();
+#pragma warning restore
+
+            if (_current_io_file == path)
+                _current_io_file_flag = 2;
+            else
+            {
+                lock (_io_queue_lock)
+                {
+                    if (_io_queue.Contains(path))
+                        _io_queue.Remove(path);
+                    ThreadPool.QueueUserWorkItem(delegate
+                    {
+                        try { LocalFileIOAbort?.Invoke(path); }
+                        catch { }
+                    });
+                }
+            }
         }
     }
 }
