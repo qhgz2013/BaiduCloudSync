@@ -248,6 +248,8 @@ namespace BaiduCloudSync
                     data_offset += length;
                     Interlocked.Add(ref _uploaded_size, length);
                     _last_sent[index] = DateTime.Now;
+                    if (_upload_thread_flag != _UPLOAD_THREAD_FLAG_STARTED)
+                        return;
                 }
 
                 _remote_cacher.UploadSliceEndAsync(task_id, (suc2, data2, e2) =>
@@ -323,14 +325,14 @@ namespace BaiduCloudSync
                 var sync_lock = new ManualResetEventSlim();
                 var rapid_param = _local_data;
                 bool rapid_upload_suc = false;
-                _remote_cacher.RapidUploadAsync(_remote_path, (ulong)rapid_param.Size, rapid_param.MD5, rapid_param.CRC32.ToString("X2").ToLower(), rapid_param.Slice_MD5, (suc, data, e) =>
-                {
-                    rapid_upload_suc = suc;
-                    _remote_data = data;
-                    sync_lock.Set();
-                }, _overwrite ? BaiduPCS.ondup.overwrite : BaiduPCS.ondup.newcopy, _selected_account_id);
-                sync_lock.Wait();
-                sync_lock.Reset();
+                //_remote_cacher.RapidUploadAsync(_remote_path, (ulong)rapid_param.Size, rapid_param.MD5, rapid_param.CRC32.ToString("X2").ToLower(), rapid_param.Slice_MD5, (suc, data, e) =>
+                //{
+                //    rapid_upload_suc = suc;
+                //    _remote_data = data;
+                //    sync_lock.Set();
+                //}, _overwrite ? BaiduPCS.ondup.overwrite : BaiduPCS.ondup.newcopy, _selected_account_id);
+                //sync_lock.Wait();
+                //sync_lock.Reset();
 
                 if (rapid_upload_suc == false)
                 {
@@ -416,6 +418,11 @@ namespace BaiduCloudSync
                                     if (_task_id[i] != Guid.Empty)
                                         _remote_cacher.UploadSliceCancelAsync(_task_id[i]);
                                 }
+                                return;
+                            }
+                            if ((_upload_thread_flag & (_UPLOAD_THREAD_FLAG_ERROR | _UPLOAD_THREAD_FLAG_FILE_MODIFIED)) != 0)
+                                {
+                                _upload_thread_flag = _upload_thread_flag & ~_UPLOAD_THREAD_FLAG_STARTED;
                                 return;
                             }
                         }
