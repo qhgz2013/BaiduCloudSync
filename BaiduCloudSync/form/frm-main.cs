@@ -45,16 +45,25 @@ namespace BaiduCloudSync
             _local_file_list = new LocalFileCacher();
             StaticConfig.LoadStaticConfig();
 
-            var test = new Uploader(_local_file_list, _remote_file_list, "D:\\output.csv", "/testupload.csv", 0, max_thread: 3);
-            test.Start();
-            //test.Pause();
+            //var test = new Uploader(_local_file_list, _remote_file_list, "D:\\output.csv", "/testupload.csv", 0, max_thread: 1, overwriting_exist_file: true);
+            //Tracer.GlobalTracer.TraceInfo("state: " + test.TaskState.ToString());
 
-            //var obj = new ObjectMetadata();
-            //obj.AccountID = 0;
-            //obj.Path = "/testupload(5).csv";
-            //obj.Size = 25250709;
-            //var test2 = new Downloader(_remote_file_list, obj, "D:\\test_upload.csv");
-            //test2.Start();
+            //while (test.TaskState != Uploader.State.FINISHED)
+            //{
+            //    test.Start();
+            //    Tracer.GlobalTracer.TraceInfo("state: " + test.TaskState.ToString());
+            //    Thread.Sleep(15000);
+            //    test.Pause();
+            //    Tracer.GlobalTracer.TraceInfo("state: " + test.TaskState.ToString());
+            //}
+            //Tracer.GlobalTracer.TraceInfo("state: " + test.TaskState.ToString());
+
+            var obj = new ObjectMetadata();
+            obj.AccountID = 0;
+            obj.Path = "/testupload.csv";
+            obj.Size = 25250709;
+            var test2 = new Downloader(_remote_file_list, obj, "D:\\test_upload.csv");
+            test2.Start();
         }
         private void Form1_Load(object sender, EventArgs e)
         {

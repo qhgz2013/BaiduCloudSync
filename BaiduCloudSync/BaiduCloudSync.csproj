@@ -151,6 +151,7 @@
     <Compile Include="form\static-config.cs" />
     <Compile Include="transfer\downloader-pool.cs" />
     <Compile Include="transfer\downloader.cs" />
+    <Compile Include="transfer\itransfer.cs" />
     <Compile Include="transfer\uploader-pool.cs" />
     <Compile Include="transfer\uploader.cs" />
     <Compile Include="util\icon-extractor.cs" />

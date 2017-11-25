@@ -822,7 +822,7 @@ namespace BaiduCloudSync
         public void DeletePathAsync(string path, BaiduPCS.OperationCallback callback, int account_id = 0, object state = null)
         {
             if (path.EndsWith("/")) path = path.Substring(0, path.Length - 1);
-            DeletePathAsync(path, callback, account_id, state);
+            DeletePathAsync(new string[] { path }, callback, account_id, state);
         }
         public void DeletePathAsync(IEnumerable<string> path, BaiduPCS.OperationCallback callback, int account_id = 0, object state = null)
         {

@@ -14,7 +14,7 @@ namespace BaiduCloudSync
     /// <summary>
     /// 百度网盘的文件下载器类，用于进行多线程并行下载。
     /// </summary>
-    public class Downloader : IDisposable
+    public class Downloader : IDisposable, ITransfer
     {
         //错误输出
         private const bool _enable_error_tracing = true;
@@ -127,7 +127,7 @@ namespace BaiduCloudSync
 
                     if (((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_READY | _DOWNLOAD_THREAD_FLAG_PAUSED)) != 0)
                     {
-                        Tracer.GlobalTracer.TraceInfo("---STARTED---");
+                        //Tracer.GlobalTracer.TraceInfo("---STARTED---");
                         _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_START_REQUESTED) & ~_DOWNLOAD_THREAD_FLAG_READY;
                         _url_fail_to_fetch_count = 0;
                         //_api.GetAccount(_data.AccountID).GetLocateDownloadLinkAsync(_data.Path, _main_url_request_callback);
@@ -136,7 +136,7 @@ namespace BaiduCloudSync
                         _monitor_thread.Name = "Download Monitor";
                         _monitor_thread.IsBackground = false;
                         _monitor_thread.Start();
-                        
+
                     }
                 }
             }
@@ -152,9 +152,6 @@ namespace BaiduCloudSync
             {
                 lock (_thread_flag_lock)
                 {
-                    if (((_download_thread_flag & 0xffffff) & _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED) != 0)
-                        return;
-
                     if ((_download_thread_flag & 0xffffff) == _DOWNLOAD_THREAD_FLAG_READY)
                     {
                         _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_PAUSED) & ~_DOWNLOAD_THREAD_FLAG_READY;
@@ -162,7 +159,7 @@ namespace BaiduCloudSync
                     }
                     if (((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_START_REQUESTED | _DOWNLOAD_THREAD_FLAG_STARTED)) != 0)
                     {
-                        Tracer.GlobalTracer.TraceInfo("---PAUSED---");
+                        //Tracer.GlobalTracer.TraceInfo("---PAUSED---");
                         _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED;
                     }
                     else
@@ -184,8 +181,8 @@ namespace BaiduCloudSync
             {
                 lock (_thread_flag_lock)
                 {
-                    Tracer.GlobalTracer.TraceInfo("---CANCELLED---");
-                    if ((_download_thread_flag & 0xffffff) == _DOWNLOAD_THREAD_FLAG_STOPPED)
+                    //Tracer.GlobalTracer.TraceInfo("---CANCELLED---");
+                    if (((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_STOPPED | _DOWNLOAD_THREAD_FLAG_FINISHED)) != 0)
                         return;
                     if ((_download_thread_flag & 0xffffff) == _DOWNLOAD_THREAD_FLAG_READY)
                     {
@@ -197,7 +194,7 @@ namespace BaiduCloudSync
                         _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_STOPPED) & ~_DOWNLOAD_THREAD_FLAG_PAUSED;
                         return;
                     }
-                    else if (((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED | _DOWNLOAD_THREAD_FLAG_STARTED | _DOWNLOAD_THREAD_FLAG_START_REQUESTED)) != 0)
+                    else if (((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_STARTED | _DOWNLOAD_THREAD_FLAG_START_REQUESTED)) != 0)
                     {
                         _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED;
                     }
@@ -542,7 +539,7 @@ namespace BaiduCloudSync
                 _average_speed_total = cur_len / (DateTime.Now - _start_time).TotalSeconds;
                 _average_speed_5s = (_last_5s_length.Last.Value - _last_5s_length.First.Value) / 5.0;
                 _downloaded_size = (long)cur_len;
-                Tracer.GlobalTracer.TraceInfo("Downloading: " + cur_len + "/" + _data.Size + " [" + (_average_speed_5s / 1024).ToString("0.00") + "KB/s]");
+                //Tracer.GlobalTracer.TraceInfo("Downloading: " + cur_len + "/" + _data.Size + " [" + (_average_speed_5s / 1024).ToString("0.00") + "KB/s]");
 
                 if (cur_len == _data.Size) break;
                 //timer interval
@@ -648,7 +645,7 @@ namespace BaiduCloudSync
             catch (Exception ex)
             {
                 //general exception
-                Tracer.GlobalTracer.TraceError("ERROR #" + index + "\r\n" + ex);
+                //Tracer.GlobalTracer.TraceError("ERROR #" + index + "\r\n" + ex);
             }
             finally
             {
