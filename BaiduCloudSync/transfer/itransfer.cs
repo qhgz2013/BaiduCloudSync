@@ -11,5 +11,6 @@ namespace BaiduCloudSync
         void Pause();
         void Cancel();
         event EventHandler TaskStarted, TaskFinished, TaskPaused, TaskCancelled, TaskError;
+        object Tag { get; set; }
     }
 }

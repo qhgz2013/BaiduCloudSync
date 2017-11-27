@@ -64,7 +64,7 @@ namespace BaiduCloudSync
         private Thread _monitor_thread; //后台监控线程
         private ManualResetEventSlim _monitor_thread_created; //是否已创建监控线程
         //status
-        private DateTime _start_time; //任务开始时间
+        private DateTime _start_time, _end_time; //任务开始时间
         private double _average_speed_total; //全局平均速度
         private double _average_speed_5s; //5秒内的平均速度
         private LinkedList<ulong> _last_5s_length;
@@ -221,7 +221,7 @@ namespace BaiduCloudSync
         /// <summary>
         /// 任务经历的时间
         /// </summary>
-        public TimeSpan EllapsedTime { get { return DateTime.Now - _start_time; } }
+        public TimeSpan EllapsedTime { get { return ((_download_thread_flag & _DOWNLOAD_THREAD_FLAG_STARTED) != 0) ? (DateTime.Now - _start_time) : (_end_time - _start_time); } }
         /// <summary>
         /// 总平均速率
         /// </summary>
@@ -237,7 +237,7 @@ namespace BaiduCloudSync
         /// <summary>
         /// 下载最大的线程数
         /// </summary>
-        public int MaxThread { get { return _max_thread; } set { _max_thread = value; } }
+        public int MaxThread { get { return _max_thread; } set { if (value <= 0) throw new ArgumentOutOfRangeException("MaxThread"); _max_thread = value; } }
         /// <summary>
         /// 本地文件的完整文件路径
         /// </summary>
@@ -263,7 +263,7 @@ namespace BaiduCloudSync
         /// <summary>
         /// 速度限制，单位：B/s
         /// </summary>
-        public int SpeedLimit { get { return _speed_limit; } set { _speed_limit = value; } }
+        public int SpeedLimit { get { return _speed_limit; } set { if (value < 0) throw new ArgumentOutOfRangeException("SpeedLimit"); _speed_limit = value; } }
         /// <summary>
         /// 下载器附加数据
         /// </summary>
@@ -322,17 +322,15 @@ namespace BaiduCloudSync
         private void _monitor_thread_callback()
         {
             _monitor_thread_created.Set();
-            bool pause_to_start = false, stop_to_start = false;
+            _start_time = DateTime.Now;
+            bool pause_to_start = false;
             lock (_thread_flag_lock)
             {
                 pause_to_start = ((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_PAUSED | _DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED)) != 0;
-                stop_to_start = ((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_STOPPED | _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED)) != 0;
-                if (stop_to_start) return; //could not start from stopped state
                 _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_STARTED) & ~_DOWNLOAD_THREAD_FLAG_START_REQUESTED;
                 if (pause_to_start)
                     _download_thread_flag = (_download_thread_flag & ~_DOWNLOAD_THREAD_FLAG_PAUSED);
             }
-            _start_time = DateTime.Now;
             var max_thread = _max_thread;
 
             //pre allocating file
@@ -438,6 +436,7 @@ namespace BaiduCloudSync
                     _position = null;
                     _thread_data_lock = null;
                     _monitor_thread = null;
+                    _end_time = DateTime.Now;
                     _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_PAUSED) & ~(_DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED | _DOWNLOAD_THREAD_FLAG_STARTED);
                     return;
                 }
@@ -467,6 +466,7 @@ namespace BaiduCloudSync
                     _file_stream.Dispose();
                     _file_stream = null;
                     _monitor_thread = null;
+                    _end_time = DateTime.Now;
                     _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_STOPPED) & ~(_DOWNLOAD_THREAD_FLAG_STOP_REQUESTED | _DOWNLOAD_THREAD_FLAG_STARTED);
                     return;
                 }
@@ -567,6 +567,7 @@ namespace BaiduCloudSync
             _file_stream.Dispose();
             _file_stream = null;
             _monitor_thread = null;
+            _end_time = DateTime.Now;
             _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_FINISHED) & ~_DOWNLOAD_THREAD_FLAG_STARTED;
             //Tracer.GlobalTracer.TraceInfo("Download finished");
             try { TaskFinished?.Invoke(this, new EventArgs()); }
@@ -633,14 +634,17 @@ namespace BaiduCloudSync
             catch (InvalidDataException)
             {
                 //Invalid GUID or StatusCode
+                Thread.Sleep(10000);
             }
             catch (IOException)
             {
                 //IO exception in SOCKET connection
+                Thread.Sleep(5000);
             }
             catch (System.Net.WebException)
             {
                 //HTTP Exception (timed out)
+                Thread.Sleep(5000);
             }
             catch (Exception ex)
             {

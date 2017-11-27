@@ -900,11 +900,11 @@ namespace BaiduCloudSync
             public string boundary;
         }
         //分配的上传guid表
-        private static Dictionary<Guid, _upload_data> _upload_queue = new Dictionary<Guid, _upload_data>();
+        private Dictionary<Guid, _upload_data> _upload_queue = new Dictionary<Guid, _upload_data>();
         //多线程的互斥锁
-        private static object _upload_external_lock = new object();
+        private object _upload_external_lock = new object();
         //关闭所有上传的链接并且清空上传列表
-        private static void _clear_upload_queue()
+        private void _clear_upload_queue()
         {
             lock (_upload_external_lock)
             {
@@ -1164,9 +1164,9 @@ namespace BaiduCloudSync
             public NetStream stream;
             public int index;
         }
-        private static Dictionary<Guid, _upload_data2> _slice_upload_queue = new Dictionary<Guid, _upload_data2>();
-        private static object _slice_upload_external_lock = new object();
-        private static void _clear_slice_upload_queue()
+        private Dictionary<Guid, _upload_data2> _slice_upload_queue = new Dictionary<Guid, _upload_data2>();
+        private object _slice_upload_external_lock = new object();
+        private void _clear_slice_upload_queue()
         {
             lock (_slice_upload_external_lock)
             {

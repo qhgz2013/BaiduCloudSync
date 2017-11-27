@@ -47,7 +47,7 @@ namespace BaiduCloudSync
         private ObjectMetadata _remote_data;
 
         //开始时间
-        private DateTime _start_time;
+        private DateTime _start_time, _end_time;
 
         //平均时间
         private double _average_speed_total;
@@ -55,6 +55,9 @@ namespace BaiduCloudSync
         private LinkedList<long> _upload_size_5s;
         //已上传字节
         private long _uploaded_size;
+        //速度限制
+        private int _speed_limit;
+        private long _current_bytes;
 
         //线程标识
         private volatile int _upload_thread_flag;
@@ -116,6 +119,16 @@ namespace BaiduCloudSync
             FINISHED = _UPLOAD_THREAD_FLAG_FINISHED
         }
         public State TaskState { get { return (State)_upload_thread_flag; } }
+        public long UploadedSize { get { return _uploaded_size; } }
+        public DateTime StartTime { get { return _start_time; } }
+        public int SpeedLimit { get { return _speed_limit; } set { if (value < 0) throw new ArgumentOutOfRangeException("SpeedLimit"); _speed_limit = value; } }
+        public string LocalFilePath { get { return _local_path; } }
+        public string RemoteFilePath { get { return _remote_path; } }
+        public double AverageSpeed5s { get { return _average_speed_5s; } }
+        public double AverageSpeedTotal { get { return _average_speed_total; } }
+        public int MaxThread { get { return _max_thread; } set { if (value <= 0) throw new ArgumentOutOfRangeException("MaxThread"); _max_thread = value; } }
+        public object Tag { get; set; }
+        public TimeSpan EllapsedTime { get { return ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_STARTED) != 0) ? (DateTime.Now - _start_time) : (_end_time - _start_time); } }
 
         #endregion
 
@@ -280,7 +293,7 @@ namespace BaiduCloudSync
                     //paused state
                     if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_PAUSED) != 0)
                     {
-                        _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_CANCELLED) & _UPLOAD_THREAD_FLAG_PAUSED;
+                        _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_CANCELLED) & ~_UPLOAD_THREAD_FLAG_PAUSED;
                         return;
                     }
                     if ((_upload_thread_flag & (_UPLOAD_THREAD_FLAG_STARTED | _UPLOAD_THREAD_FLAG_START_REQUESTED)) != 0)
@@ -303,13 +316,11 @@ namespace BaiduCloudSync
 
         private void _on_file_deleted(object sender, FileSystemEventArgs e)
         {
-            lock (_thread_flag_lock)
-                _upload_thread_flag = _upload_thread_flag | _UPLOAD_THREAD_FLAG_ERROR | _UPLOAD_THREAD_FLAG_FILE_MODIFIED;
+            _upload_thread_flag = _upload_thread_flag | _UPLOAD_THREAD_FLAG_ERROR | _UPLOAD_THREAD_FLAG_FILE_MODIFIED;
         }
         private void _on_file_changed(object sender, FileSystemEventArgs e)
         {
-            lock (_thread_flag_lock)
-                _upload_thread_flag = _upload_thread_flag | _UPLOAD_THREAD_FLAG_ERROR | _UPLOAD_THREAD_FLAG_FILE_MODIFIED;
+            _upload_thread_flag = _upload_thread_flag | _UPLOAD_THREAD_FLAG_ERROR | _UPLOAD_THREAD_FLAG_FILE_MODIFIED;
         }
 
         private void _on_file_io_updated(string path, long current, long total)
@@ -317,12 +328,9 @@ namespace BaiduCloudSync
             //todo: updating io status
             if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED) != 0 && path == _local_path)
             {
-                lock (_thread_flag_lock)
+                if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED) != 0)
                 {
-                    if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED) != 0)
-                    {
-                        _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_DIGEST_CALCULATING) & ~_UPLOAD_THREAD_FLAG_DIGEST_REQUESTED;
-                    }
+                    _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_DIGEST_CALCULATING) & ~_UPLOAD_THREAD_FLAG_DIGEST_REQUESTED;
                 }
             }
         }
@@ -331,10 +339,7 @@ namespace BaiduCloudSync
             if (data.Path == _local_path)
             {
                 _local_data = data;
-                lock (_thread_flag_lock)
-                {
-                    _upload_thread_flag = _upload_thread_flag & ~(_UPLOAD_THREAD_FLAG_DIGEST_REQUESTED | _UPLOAD_THREAD_FLAG_DIGEST_CALCULATING);
-                }
+                _upload_thread_flag = _upload_thread_flag & ~(_UPLOAD_THREAD_FLAG_DIGEST_REQUESTED | _UPLOAD_THREAD_FLAG_DIGEST_CALCULATING);
                 _file_io_response.Set();
             }
         }
@@ -372,23 +377,30 @@ namespace BaiduCloudSync
                 const int transfer_size = 2048;
                 while (data_offset < data.Length)
                 {
+                    if (_speed_limit > 0 && _current_bytes >= _speed_limit)
+                    {
+                        Thread.Sleep(100);
+                        continue;
+                    }
+
                     int length = Math.Min(data.Length - data_offset, transfer_size);
                     connect_stream.Write(data, data_offset, length);
                     data_offset += length;
+                    _current_bytes += length;
                     Interlocked.Add(ref _uploaded_size, length);
+
                     _last_sent[index] = DateTime.Now;
-                    if (_upload_thread_flag != _UPLOAD_THREAD_FLAG_STARTED)
-                    {
-                        _remote_cacher.UploadSliceCancelAsync(task_id, _selected_account_id);
-                        return;
-                    }
+                    //if (_upload_thread_flag != _UPLOAD_THREAD_FLAG_STARTED)
+                    //{
+                    //    _remote_cacher.UploadSliceCancelAsync(task_id, _selected_account_id);
+                    //    return;
+                    //}
                 }
 
                 _remote_cacher.UploadSliceEndAsync(task_id, (suc2, data2, e2) =>
                 {
                     if (suc2)
                     {
-                        Tracer.GlobalTracer.TraceWarning("Adding #" + seq_id + " to MD5 dictionary!");
                         _slice_result.TryAdd(seq_id, data2);
                     }
                     else
@@ -425,10 +437,7 @@ namespace BaiduCloudSync
             _start_time = DateTime.Now;
             try
             {
-                //lock (_thread_flag_lock)
-                //{
                 _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_STARTED) & ~(_UPLOAD_THREAD_FLAG_START_REQUESTED | _UPLOAD_THREAD_FLAG_PAUSED);
-                //}
 
                 //TODO: add file encryption module here
                 if (_enable_file_encryption && string.IsNullOrEmpty(_local_encrypted_file_path))
@@ -438,39 +447,37 @@ namespace BaiduCloudSync
                 if (string.IsNullOrEmpty(_local_data.Path))
                 {
                     _local_cacher.FileIORequest(_local_path);
-                    //lock (_thread_flag_lock)
                     _upload_thread_flag |= _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED;
                     _file_io_response.Wait();
                 }
                 //status check
                 #region status check
-                //lock (_thread_flag_lock)
-                //{
                 if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_CANCEL_REQUESTED) != 0)
                 {
                     _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_CANCELLED) & ~(_UPLOAD_THREAD_FLAG_CANCEL_REQUESTED | _UPLOAD_THREAD_FLAG_STARTED);
+                    _end_time = DateTime.Now;
                     return;
                 }
                 if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_PAUSE_REQUESTED) != 0)
                 {
                     _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_PAUSED) & ~(_UPLOAD_THREAD_FLAG_PAUSE_REQUESTED | _UPLOAD_THREAD_FLAG_STARTED);
+                    _end_time = DateTime.Now;
                     return;
                 }
-                //}
                 #endregion
 
                 //rapid upload test
                 var sync_lock = new ManualResetEventSlim();
                 var rapid_param = _local_data;
                 bool rapid_upload_suc = false;
-                //_remote_cacher.RapidUploadAsync(_remote_path, (ulong)rapid_param.Size, rapid_param.MD5, rapid_param.CRC32.ToString("X2").ToLower(), rapid_param.Slice_MD5, (suc, data, e) =>
-                //{
-                //    rapid_upload_suc = suc;
-                //    _remote_data = data;
-                //    sync_lock.Set();
-                //}, _overwrite ? BaiduPCS.ondup.overwrite : BaiduPCS.ondup.newcopy, _selected_account_id);
-                //sync_lock.Wait();
-                //sync_lock.Reset();
+                _remote_cacher.RapidUploadAsync(_remote_path, (ulong)rapid_param.Size, rapid_param.MD5, rapid_param.CRC32.ToString("X2").ToLower(), rapid_param.Slice_MD5, (suc, data, e) =>
+                {
+                    rapid_upload_suc = suc;
+                    _remote_data = data;
+                    sync_lock.Set();
+                }, _overwrite ? BaiduPCS.ondup.overwrite : BaiduPCS.ondup.newcopy, _selected_account_id);
+                sync_lock.Wait();
+                sync_lock.Reset();
 
                 if (rapid_upload_suc == false)
                 {
@@ -494,23 +501,22 @@ namespace BaiduCloudSync
                         if (precreate_suc == false)
                         {
                             //precreate failed
-                            //lock (_thread_flag_lock)
                             _upload_thread_flag |= _UPLOAD_THREAD_FLAG_ERROR;
+                            _end_time = DateTime.Now;
                             return;
                         }
                         #region status check
-                        lock (_thread_flag_lock)
+                        if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_CANCEL_REQUESTED) != 0)
                         {
-                            if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_CANCEL_REQUESTED) != 0)
-                            {
-                                _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_CANCELLED) & ~(_UPLOAD_THREAD_FLAG_CANCEL_REQUESTED | _UPLOAD_THREAD_FLAG_STARTED);
-                                return;
-                            }
-                            if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_PAUSE_REQUESTED) != 0)
-                            {
-                                _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_PAUSED) & ~(_UPLOAD_THREAD_FLAG_PAUSE_REQUESTED | _UPLOAD_THREAD_FLAG_STARTED);
-                                return;
-                            }
+                            _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_CANCELLED) & ~(_UPLOAD_THREAD_FLAG_CANCEL_REQUESTED | _UPLOAD_THREAD_FLAG_STARTED);
+                            _end_time = DateTime.Now;
+                            return;
+                        }
+                        if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_PAUSE_REQUESTED) != 0)
+                        {
+                            _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_PAUSED) & ~(_UPLOAD_THREAD_FLAG_PAUSE_REQUESTED | _UPLOAD_THREAD_FLAG_STARTED);
+                            _end_time = DateTime.Now;
+                            return;
                         }
                         #endregion
                     }
@@ -539,8 +545,6 @@ namespace BaiduCloudSync
                         }
                         //handling other state
                         #region status check
-                        //lock (_thread_flag_lock)
-                        //{
                         if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_CANCEL_REQUESTED) != 0)
                         {
                             _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_CANCELLED) & ~(_UPLOAD_THREAD_FLAG_CANCEL_REQUESTED | _UPLOAD_THREAD_FLAG_STARTED);
@@ -549,6 +553,7 @@ namespace BaiduCloudSync
                                 if (_task_id[i] != Guid.Empty)
                                     _remote_cacher.UploadSliceCancelAsync(_task_id[i]);
                             }
+                            _end_time = DateTime.Now;
                             return;
                         }
                         if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_PAUSE_REQUESTED) != 0)
@@ -559,27 +564,34 @@ namespace BaiduCloudSync
                                 if (_task_id[i] != Guid.Empty)
                                     _remote_cacher.UploadSliceCancelAsync(_task_id[i]);
                             }
+                            _end_time = DateTime.Now;
                             return;
                         }
                         if ((_upload_thread_flag & (_UPLOAD_THREAD_FLAG_ERROR | _UPLOAD_THREAD_FLAG_FILE_MODIFIED)) != 0)
                         {
                             _upload_thread_flag = _upload_thread_flag & ~_UPLOAD_THREAD_FLAG_STARTED;
+                            _end_time = DateTime.Now;
                             return;
                         }
-                        //}
                         #endregion
 
                         lock (_thread_data_lock)
                         {
                             for (int i = 0; i < max_thread && _slice_seq.Count > 0; i++)
                             {
-                                if (_task_id[i] == Guid.Empty && (DateTime.Now - _last_sent[i]).TotalSeconds > 120)
+                                if (_task_id[i] == Guid.Empty || (DateTime.Now - _last_sent[i]).TotalSeconds > 120)
                                 {
+                                    if (_task_id[i] != Guid.Empty)
+                                    {
+                                        _remote_cacher.UploadSliceCancelAsync(_task_id[i], _selected_account_id);
+                                        _task_id[i] = Guid.Empty;
+                                    }
+
                                     //error handling for dequeue failure
                                     if (_slice_seq.TryDequeue(out _task_seq[i]) == false)
                                     {
-                                        //lock (_thread_flag_lock)
                                         _upload_thread_flag |= _UPLOAD_THREAD_FLAG_ERROR;
+                                        _end_time = DateTime.Now;
                                         return;
                                     }
                                     _remote_cacher.UploadSliceBeginAsync((ulong)Math.Min(_file_size - BaiduPCS.UPLOAD_SLICE_SIZE * _task_seq[i], BaiduPCS.UPLOAD_SLICE_SIZE), _remote_path, _upload_id, _task_seq[i], _on_slice_upload_request_callback, _selected_account_id, i);
@@ -594,6 +606,9 @@ namespace BaiduCloudSync
                         _upload_size_5s.AddLast(size);
                         _average_speed_5s = (_upload_size_5s.Last.Value - _upload_size_5s.First.Value) / 5.0;
                         _average_speed_total = size / (DateTime.Now - _start_time).TotalSeconds;
+
+                        _current_bytes = 0;
+                        Tracer.GlobalTracer.TraceInfo("Uploaded " + _uploaded_size + "/" + _file_size + " [" + (_average_speed_5s / 1024.0).ToString("0.00") + "KB/s]");
 
                         //monitor loop
                         var ts = next_time - DateTime.Now;
@@ -622,10 +637,13 @@ namespace BaiduCloudSync
                     {
                         _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_ERROR | _UPLOAD_THREAD_FLAG_PAUSED) & ~_UPLOAD_THREAD_FLAG_STARTED;
                     }
+                    _end_time = DateTime.Now;
                 }
                 else
                 {
                     //rapid upload succeeded
+                    _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_FINISHED) & ~_UPLOAD_THREAD_FLAG_STARTED;
+                    _end_time = DateTime.Now;
                 }
 
             }

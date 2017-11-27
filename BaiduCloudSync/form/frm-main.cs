@@ -45,25 +45,25 @@ namespace BaiduCloudSync
             _local_file_list = new LocalFileCacher();
             StaticConfig.LoadStaticConfig();
 
-            //var test = new Uploader(_local_file_list, _remote_file_list, "D:\\output.csv", "/testupload.csv", 0, max_thread: 1, overwriting_exist_file: true);
-            //Tracer.GlobalTracer.TraceInfo("state: " + test.TaskState.ToString());
-
-            //while (test.TaskState != Uploader.State.FINISHED)
-            //{
-            //    test.Start();
-            //    Tracer.GlobalTracer.TraceInfo("state: " + test.TaskState.ToString());
-            //    Thread.Sleep(15000);
-            //    test.Pause();
-            //    Tracer.GlobalTracer.TraceInfo("state: " + test.TaskState.ToString());
-            //}
-            //Tracer.GlobalTracer.TraceInfo("state: " + test.TaskState.ToString());
-
+            var dl = new DownloaderPool(_remote_file_list);
+            dl.PoolSize = 2;
             var obj = new ObjectMetadata();
-            obj.AccountID = 0;
             obj.Path = "/testupload.csv";
             obj.Size = 25250709;
-            var test2 = new Downloader(_remote_file_list, obj, "D:\\test_upload.csv");
-            test2.Start();
+            obj.AccountID = 0;
+            dl.Start();
+            dl.QueueTask(obj, "D:\\testupload(0).csv");
+            dl.QueueTask(obj, "D:\\testupload(1).csv");
+            dl.QueueTask(obj, "D:\\testupload(2).csv");
+            dl.QueueTask(obj, "D:\\testupload(3).csv");
+            dl.QueueTask(obj, "D:\\testupload(4).csv");
+
+            Thread.Sleep(35000);
+            dl.Pause();
+            Thread.Sleep(1000);
+            dl.Start();
+            Thread.Sleep(30000);
+            dl.Cancel();
         }
         private void Form1_Load(object sender, EventArgs e)
         {
