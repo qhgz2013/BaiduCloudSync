@@ -44,26 +44,7 @@ namespace BaiduCloudSync
                 _remote_file_list.AddAccount(_pcsAPI);
             _local_file_list = new LocalFileCacher();
             StaticConfig.LoadStaticConfig();
-
-            var dl = new DownloaderPool(_remote_file_list);
-            dl.PoolSize = 2;
-            var obj = new ObjectMetadata();
-            obj.Path = "/testupload.csv";
-            obj.Size = 25250709;
-            obj.AccountID = 0;
-            dl.Start();
-            dl.QueueTask(obj, "D:\\testupload(0).csv");
-            dl.QueueTask(obj, "D:\\testupload(1).csv");
-            dl.QueueTask(obj, "D:\\testupload(2).csv");
-            dl.QueueTask(obj, "D:\\testupload(3).csv");
-            dl.QueueTask(obj, "D:\\testupload(4).csv");
-
-            Thread.Sleep(35000);
-            dl.Pause();
-            Thread.Sleep(1000);
-            dl.Start();
-            Thread.Sleep(30000);
-            dl.Cancel();
+            
         }
         private void Form1_Load(object sender, EventArgs e)
         {

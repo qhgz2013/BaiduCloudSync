@@ -14,7 +14,7 @@ namespace BaiduCloudSync
     public class Uploader : IDisposable, ITransfer
     {
         //默认并行4线程上传
-        public const int DEFAULT_THREAD_SIZE = 4;
+        public const int DEFAULT_MAX_THREAD = 4;
         //是否允许分段上传
         private bool _enable_slice_upload = true;
         //是否开启文件加密
@@ -118,34 +118,66 @@ namespace BaiduCloudSync
             FILE_ENCRYPTING = _UPLOAD_THREAD_FLAG_FILE_ENCRYPTING,
             FINISHED = _UPLOAD_THREAD_FLAG_FINISHED
         }
+        /// <summary>
+        /// 任务状态
+        /// </summary>
         public State TaskState { get { return (State)_upload_thread_flag; } }
+        /// <summary>
+        /// 已上传字节数
+        /// </summary>
         public long UploadedSize { get { return _uploaded_size; } }
+        /// <summary>
+        /// 任务的开始时间
+        /// </summary>
         public DateTime StartTime { get { return _start_time; } }
+        /// <summary>
+        /// 任务的上传速度限制（单位：B/s）
+        /// </summary>
         public int SpeedLimit { get { return _speed_limit; } set { if (value < 0) throw new ArgumentOutOfRangeException("SpeedLimit"); _speed_limit = value; } }
+        /// <summary>
+        /// 本地文件路径
+        /// </summary>
         public string LocalFilePath { get { return _local_path; } }
+        /// <summary>
+        /// 网盘文件路径
+        /// </summary>
         public string RemoteFilePath { get { return _remote_path; } }
+        /// <summary>
+        /// 5秒内的平均上传速度
+        /// </summary>
         public double AverageSpeed5s { get { return _average_speed_5s; } }
+        /// <summary>
+        /// 总平均上传速度
+        /// </summary>
         public double AverageSpeedTotal { get { return _average_speed_total; } }
+        /// <summary>
+        /// 上传的并行线程数
+        /// </summary>
         public int MaxThread { get { return _max_thread; } set { if (value <= 0) throw new ArgumentOutOfRangeException("MaxThread"); _max_thread = value; } }
         public object Tag { get; set; }
+        /// <summary>
+        /// 任务的经历时间
+        /// </summary>
         public TimeSpan EllapsedTime { get { return ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_STARTED) != 0) ? (DateTime.Now - _start_time) : (_end_time - _start_time); } }
 
         #endregion
 
         //是否覆盖已有文件
         private bool _overwrite;
-        public Uploader(LocalFileCacher local_cacher, RemoteFileCacher remote_cacher, string local_path, string remote_path, int account_id, bool overwriting_exist_file = false, int max_thread = DEFAULT_THREAD_SIZE)
+        public Uploader(LocalFileCacher local_cacher, RemoteFileCacher remote_cacher, string local_path, string remote_path, int account_id, bool overwriting_exist_file = false, int max_thread = DEFAULT_MAX_THREAD, int speed_limit = 0)
         {
             if (local_cacher == null) throw new ArgumentNullException("local_cacher");
             if (remote_cacher == null) throw new ArgumentNullException("remote_cacher");
             if (string.IsNullOrEmpty(local_path)) throw new ArgumentNullException("local_path");
             if (string.IsNullOrEmpty(remote_path)) throw new ArgumentNullException("remote_path");
             if (remote_path.EndsWith("/")) throw new ArgumentException("remote_path非法：/不能在路径结束");
+            if (speed_limit < 0) throw new ArgumentOutOfRangeException("speed_limit");
             _overwrite = overwriting_exist_file;
             _local_cacher = local_cacher;
             _remote_cacher = remote_cacher;
             _local_path = local_path;
             _remote_path = remote_path;
+            _speed_limit = speed_limit;
 
             var file_info = new FileInfo(_local_path);
             //file monitor
@@ -244,9 +276,10 @@ namespace BaiduCloudSync
                             throw new NotImplementedException();
                         }
                     }
-
+                    else return;
                 }
             }
+            try { TaskStarted?.Invoke(this, new EventArgs()); } catch { }
         }
         public void Pause()
         {
@@ -274,6 +307,7 @@ namespace BaiduCloudSync
                     _monitor_thread_created.Reset();
                 }
             }
+            try { TaskPaused?.Invoke(this, new EventArgs()); } catch { }
         }
         public void Cancel()
         {
@@ -308,6 +342,7 @@ namespace BaiduCloudSync
                     Dispose();
                 }
             }
+            try { TaskCancelled?.Invoke(this, new EventArgs()); } catch { }
         }
 
         #region Event handler
@@ -632,6 +667,7 @@ namespace BaiduCloudSync
                     if (create_superfile_suc)
                     {
                         _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_FINISHED) & ~_UPLOAD_THREAD_FLAG_STARTED;
+                        try { TaskFinished?.Invoke(this, new EventArgs()); } catch { }
                     }
                     else
                     {
@@ -644,6 +680,7 @@ namespace BaiduCloudSync
                     //rapid upload succeeded
                     _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_FINISHED) & ~_UPLOAD_THREAD_FLAG_STARTED;
                     _end_time = DateTime.Now;
+                    try { TaskFinished?.Invoke(this, new EventArgs()); } catch { }
                 }
 
             }

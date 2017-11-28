@@ -569,6 +569,13 @@ namespace BaiduCloudSync
             _monitor_thread = null;
             _end_time = DateTime.Now;
             _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_FINISHED) & ~_DOWNLOAD_THREAD_FLAG_STARTED;
+
+            //file decryption
+            if (_data.Path.EndsWith(".bcsd"))
+            {
+                _decrypt_file();
+            }
+
             //Tracer.GlobalTracer.TraceInfo("Download finished");
             try { TaskFinished?.Invoke(this, new EventArgs()); }
             catch { }
@@ -660,6 +667,11 @@ namespace BaiduCloudSync
                     _request[index].Close();
                 }
             }
+        }
+
+        private void _decrypt_file()
+        {
+
         }
         #endregion
 
