@@ -19,6 +19,8 @@ namespace BaiduCloudSync
         private bool _enable_slice_upload = true;
         //是否开启文件加密
         private bool _enable_file_encryption = false;
+        //是否开启秒传
+        private bool _enable_rapid_upload = false;
 
         //api数据
         private LocalFileCacher _local_cacher;
@@ -499,20 +501,30 @@ namespace BaiduCloudSync
                     _end_time = DateTime.Now;
                     return;
                 }
+                if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_ERROR) != 0)
+                {
+                    _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_PAUSED) & ~_UPLOAD_THREAD_FLAG_STARTED;
+                    _end_time = DateTime.Now;
+                    try { TaskError?.Invoke(this, new EventArgs()); } catch { }
+                    return;
+                }
                 #endregion
 
                 //rapid upload test
                 var sync_lock = new ManualResetEventSlim();
                 var rapid_param = _local_data;
                 bool rapid_upload_suc = false;
-                _remote_cacher.RapidUploadAsync(_remote_path, (ulong)rapid_param.Size, rapid_param.MD5, rapid_param.CRC32.ToString("X2").ToLower(), rapid_param.Slice_MD5, (suc, data, e) =>
+                if (_enable_rapid_upload)
                 {
-                    rapid_upload_suc = suc;
-                    _remote_data = data;
-                    sync_lock.Set();
-                }, _overwrite ? BaiduPCS.ondup.overwrite : BaiduPCS.ondup.newcopy, _selected_account_id);
-                sync_lock.Wait();
-                sync_lock.Reset();
+                    _remote_cacher.RapidUploadAsync(_remote_path, (ulong)rapid_param.Size, rapid_param.MD5, rapid_param.CRC32.ToString("X2").ToLower(), rapid_param.Slice_MD5, (suc, data, e) =>
+                    {
+                        rapid_upload_suc = suc;
+                        _remote_data = data;
+                        sync_lock.Set();
+                    }, _overwrite ? BaiduPCS.ondup.overwrite : BaiduPCS.ondup.newcopy, _selected_account_id);
+                    sync_lock.Wait();
+                    sync_lock.Reset();
+                }
 
                 if (rapid_upload_suc == false)
                 {
@@ -538,6 +550,7 @@ namespace BaiduCloudSync
                             //precreate failed
                             _upload_thread_flag |= _UPLOAD_THREAD_FLAG_ERROR;
                             _end_time = DateTime.Now;
+                            try { TaskError?.Invoke(this, new EventArgs()); } catch { }
                             return;
                         }
                         #region status check
@@ -606,6 +619,7 @@ namespace BaiduCloudSync
                         {
                             _upload_thread_flag = _upload_thread_flag & ~_UPLOAD_THREAD_FLAG_STARTED;
                             _end_time = DateTime.Now;
+                            try { TaskError?.Invoke(this, new EventArgs()); } catch { }
                             return;
                         }
                         #endregion
@@ -627,6 +641,7 @@ namespace BaiduCloudSync
                                     {
                                         _upload_thread_flag |= _UPLOAD_THREAD_FLAG_ERROR;
                                         _end_time = DateTime.Now;
+                                        try { TaskError?.Invoke(this, new EventArgs()); } catch { }
                                         return;
                                     }
                                     _remote_cacher.UploadSliceBeginAsync((ulong)Math.Min(_file_size - BaiduPCS.UPLOAD_SLICE_SIZE * _task_seq[i], BaiduPCS.UPLOAD_SLICE_SIZE), _remote_path, _upload_id, _task_seq[i], _on_slice_upload_request_callback, _selected_account_id, i);
@@ -672,6 +687,7 @@ namespace BaiduCloudSync
                     else
                     {
                         _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_ERROR | _UPLOAD_THREAD_FLAG_PAUSED) & ~_UPLOAD_THREAD_FLAG_STARTED;
+                        try { TaskError?.Invoke(this, new EventArgs()); } catch { }
                     }
                     _end_time = DateTime.Now;
                 }

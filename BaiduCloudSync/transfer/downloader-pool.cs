@@ -66,9 +66,9 @@ namespace BaiduCloudSync
 
         private void _set_speed()
         {
-            for (int i = 0; i < _queue_data.Count; i++)
+            foreach (var item in _queue_data.Keys)
             {
-                _queue_data[i].SpeedLimit = _speed_limit / Math.Min(_queue_data.Count, _pool_size);
+                _queue_data[item].SpeedLimit = _speed_limit / Math.Min(_queue_data.Count, _pool_size);
             }
         }
 

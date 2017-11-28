@@ -71,9 +71,9 @@ namespace BaiduCloudSync
 
         private void _set_speed()
         {
-            for (int i = 0; i < _queue_data.Count; i++)
+            foreach (var item in _queue_data.Keys)
             {
-                _queue_data[i].SpeedLimit = _speed_limit / Math.Min(_queue_data.Count, _pool_size);
+                _queue_data[item].SpeedLimit = _speed_limit / Math.Min(_queue_data.Count, _pool_size);
             }
         }
 
@@ -107,7 +107,7 @@ namespace BaiduCloudSync
                 {
                     _queue_data.ElementAt(_pool_size).Value.Start();
                 }
-                _queue_data.Remove((int)((Downloader)sender).Tag);
+                _queue_data.Remove((int)((Uploader)sender).Tag);
                 _set_speed();
             }
             try { TaskFinished?.Invoke(sender, e); }
