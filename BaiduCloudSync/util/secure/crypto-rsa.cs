@@ -8,7 +8,7 @@ using System.Security.Cryptography;
 namespace GlobalUtil
 {
     //RSA 1024/2048/3072/4096/... bit
-    public partial class Crypt
+    public partial class Crypto
     {
         /// <summary>
         /// Generate a random pair of Public Key and Private Key
@@ -50,15 +50,8 @@ namespace GlobalUtil
                 stream.WriteByte(0x30); //SEQUENCE
                 using (var ms = new MemoryStream())
                 {
-                    _encode_integer_big_edian(ms, new byte[] { 0 }); //Version
                     _encode_integer_big_edian(ms, param.Modulus);
                     _encode_integer_big_edian(ms, param.Exponent);
-                    _encode_integer_big_edian(ms, param.Exponent); //param.D
-                    _encode_integer_big_edian(ms, param.Exponent); //param.P
-                    _encode_integer_big_edian(ms, param.Exponent); //param.Q
-                    _encode_integer_big_edian(ms, param.Exponent); //param.DP
-                    _encode_integer_big_edian(ms, param.Exponent); //param.DQ
-                    _encode_integer_big_edian(ms, param.Exponent); //param.InverseQ
                     var len = (int)ms.Length;
                     _encode_length(stream, len);
                     stream.Write(ms.GetBuffer(), 0, len);
@@ -143,94 +136,44 @@ namespace GlobalUtil
             var base64 = publicPEMKey.Substring(start, (end - start));
             var data = Convert.FromBase64String(base64);
 
-            byte bt = 0;
-
-            var param = new RSAParameters();
-
-            using (var ms = new MemoryStream())
+            try
             {
-                ms.Write(data, 0, data.Length);
-                ms.Seek(0, SeekOrigin.Begin);
-                var twobytes = util.Hex(util.ReadBytes(ms, 2));
-                if (twobytes == "3081")
-                    ms.ReadByte();
-                else if (twobytes == "3082")
-                    util.ReadBytes(ms, 2);
-                else
-                    throw new ArgumentException("Unexpected value at position 0");
-
-                twobytes = util.Hex(util.ReadBytes(ms, 2));
-                if (twobytes != "0201")
-                    throw new ArgumentException("Unexpected Version");
-
-                bt = (byte)ms.ReadByte();
-                if (bt != 0) throw new ArgumentException("Unexpected value at position " + (ms.Length - 1));
-
-                param.Modulus = util.ReadBytes(ms, _decode_length(ms));
-                param.Exponent = util.ReadBytes(ms, _decode_length(ms));
-                util.ReadBytes(ms, _decode_length(ms)); //D
-                util.ReadBytes(ms, _decode_length(ms)); //P
-                util.ReadBytes(ms, _decode_length(ms)); //Q
-                util.ReadBytes(ms, _decode_length(ms)); //DP
-                util.ReadBytes(ms, _decode_length(ms)); //DQ
-                util.ReadBytes(ms, _decode_length(ms)); //InverseQ
+                return DerParser.ParseDERPublicKeyPKCS8(data);
             }
-
-            var rsa = new RSACryptoServiceProvider();
-            rsa.ImportParameters(param);
-            return rsa.ExportCspBlob(false);
+            catch
+            {
+                try
+                {
+                    return DerParser.ParseDERPublicKeyPKCS1(data);
+                }
+                catch { }
+            }
+            return null;
         }
         /// <summary>
         /// Convert PEM string to Private Key byte array
         /// </summary>
-        /// <param name="publicPEMKey">PEM string</param>
+        /// <param name="privatePEMKey">PEM string</param>
         /// <returns>Private Key</returns>
-        public static byte[] RSA_ImportPEMPrivateKey(string publicPEMKey)
+        public static byte[] RSA_ImportPEMPrivateKey(string privatePEMKey)
         {
-            const string header = "-----BEGIN RSA PRIVATE KEY-----";
+            const string header = "-----BEGIN RSA PRIVATE KEY-----"; //pkcs#1 format
             const string footer = "-----END RSA PRIVATE KEY-----";
-            publicPEMKey = publicPEMKey.Replace("\r", "").Replace("\n", "");
-            int start = publicPEMKey.IndexOf(header) + header.Length;
-            int end = publicPEMKey.IndexOf(footer);
-            var base64 = publicPEMKey.Substring(start, (end - start));
+            const string header2 = "-----BEGIN PRIVATE KEY-----"; //pkcs#8 format
+            const string footer2 = "-----END PRIVATE KEY-----";
+            privatePEMKey = privatePEMKey.Replace("\r", "").Replace("\n", "");
+
+            bool use_2 = false;
+            int start = privatePEMKey.IndexOf(header);
+            if (start == -1) { start = privatePEMKey.IndexOf(header2); use_2 = true; }
+            int end = privatePEMKey.IndexOf(use_2 ? footer2 : footer);
+            if (end == -1) throw new ArgumentException("Expected " + (use_2 ? footer2 : footer));
+            start += use_2 ? header2.Length : header.Length;
+
+            var base64 = privatePEMKey.Substring(start, (end - start));
             var data = Convert.FromBase64String(base64);
-
-            byte bt = 0;
-
-            var param = new RSAParameters();
-
-            using (var ms = new MemoryStream())
-            {
-                ms.Write(data, 0, data.Length);
-                ms.Seek(0, SeekOrigin.Begin);
-                var twobytes = util.Hex(util.ReadBytes(ms, 2));
-                if (twobytes == "3081")
-                    ms.ReadByte();
-                else if (twobytes == "3082")
-                    util.ReadBytes(ms, 2);
-                else
-                    throw new ArgumentException("Unexpected value at position 0");
-
-                twobytes = util.Hex(util.ReadBytes(ms, 2));
-                if (twobytes != "0201")
-                    throw new ArgumentException("Unexpected Version");
-
-                bt = (byte)ms.ReadByte();
-                if (bt != 0) throw new ArgumentException("Unexpected value at position " + (ms.Length - 1));
-
-                param.Modulus = util.ReadBytes(ms, _decode_length(ms));
-                param.Exponent = util.ReadBytes(ms, _decode_length(ms));
-                param.D = util.ReadBytes(ms, _decode_length(ms));
-                param.P = util.ReadBytes(ms, _decode_length(ms));
-                param.Q = util.ReadBytes(ms, _decode_length(ms));
-                param.DP = util.ReadBytes(ms, _decode_length(ms));
-                param.DQ = util.ReadBytes(ms, _decode_length(ms));
-                param.InverseQ = util.ReadBytes(ms, _decode_length(ms));
-            }
-
-            var rsa = new RSACryptoServiceProvider();
-            rsa.ImportParameters(param);
-            return rsa.ExportCspBlob(true);
+            return use_2 ? DerParser.ParseDERPrivateKeyPKCS8(data): DerParser.ParseDERPrivateKeyPKCS1(data);
+            
         }
 
         #region private static functions for PEM encode / decode
@@ -291,34 +234,6 @@ namespace GlobalUtil
                     s.WriteByte(value[i]);
                 }
             }
-        }
-        private static int _decode_length(Stream s)
-        {
-            byte bt = 0;
-            int count = 0;
-            bt = (byte)s.ReadByte();
-            if (bt != 2)
-                return 0;
-            bt = (byte)s.ReadByte();
-            if ((bt & 0x80) != 0)
-            {
-                var length = bt & 0x7f;
-                var data = new List<byte>(4);
-                for (int i = 0; i < length; i++)
-                {
-                    data.Add((byte)s.ReadByte());
-                }
-                data.Reverse();
-                var data_array = new byte[4];
-                Array.Copy(data.ToArray(), data_array, Math.Min(data.Count, 4));
-                count = BitConverter.ToInt32(data_array, 0);
-            }
-            else
-                count = bt;
-
-            while (s.ReadByte() == 0) count--;
-            s.Seek(-1, SeekOrigin.Current);
-            return count;
         }
         #endregion
 

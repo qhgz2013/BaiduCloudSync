@@ -20,7 +20,7 @@ namespace BaiduCloudSync
         //是否开启文件加密
         private bool _enable_file_encryption = false;
         //是否开启秒传
-        private bool _enable_rapid_upload = false;
+        private bool _enable_rapid_upload = true;
 
         //api数据
         private LocalFileCacher _local_cacher;

@@ -47,7 +47,7 @@ namespace GlobalUtil
             fs_out.Write(new byte[2], 0, 2); //preserved for latter usage
 
             fs_out.Flush();
-            var encrypted_stream = Crypt.AES_StreamEncrypt(fs_out, aesKey, CipherMode.CFB, aesIV);
+            var encrypted_stream = Crypto.AES_StreamEncrypt(fs_out, aesKey, CipherMode.CFB, aesIV);
             int nread = 0;
             const int buffer_size = 4096;
             var buffer = new byte[buffer_size];
@@ -83,7 +83,7 @@ namespace GlobalUtil
             fs_out.Write(new byte[2], 0, 2); //preserved for latter usage
             fs_out.Flush();
 
-            var encrypted_stream = Crypt.AES_StreamEncrypt(fs_out, aesKey, CipherMode.CFB, aesIV);
+            var encrypted_stream = Crypto.AES_StreamEncrypt(fs_out, aesKey, CipherMode.CFB, aesIV);
             var sha1_value = new byte[20];
             if (!string.IsNullOrEmpty(SHA1)) sha1_value = util.Hex(SHA1);
             encrypted_stream.Write(sha1_value, 0, 20);
@@ -129,7 +129,7 @@ namespace GlobalUtil
             var aesIV = rsa.Decrypt(aes_iv_value, false);
             var preserved = util.ReadBytes(fs_in, 2); //preserved for latter usage
 
-            var decrypted_stream = Crypt.AES_StreamDecrypt(fs_in, aesKey, CipherMode.CFB, aesIV);
+            var decrypted_stream = Crypto.AES_StreamDecrypt(fs_in, aesKey, CipherMode.CFB, aesIV);
             int nread = 0;
             const int buffer_size = 4096;
             var buffer = new byte[buffer_size];
@@ -173,7 +173,7 @@ namespace GlobalUtil
             }
             var preserved = util.ReadBytes(fs_in, 2); //preserved for latter usage
 
-            var decrypted_stream = Crypt.AES_StreamDecrypt(fs_in, aesKey, CipherMode.CFB, aesIV);
+            var decrypted_stream = Crypto.AES_StreamDecrypt(fs_in, aesKey, CipherMode.CFB, aesIV);
             int nread = 0;
             const int buffer_size = 4096;
             var buffer = new byte[buffer_size];

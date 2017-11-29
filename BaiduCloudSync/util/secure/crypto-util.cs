@@ -7,7 +7,7 @@ using System.Text;
 
 namespace GlobalUtil
 {
-    public partial class Crypt
+    public partial class Crypto
     {
         /// <summary>
         /// 将字节散列化加密

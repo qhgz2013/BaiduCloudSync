@@ -8,7 +8,7 @@ using System.Security.Cryptography;
 namespace GlobalUtil
 {
     //AES 128/192/256 bit CBC/CFB/CTS/ECB/OFB
-    public partial class Crypt
+    public partial class Crypto
     {
         /// <summary>
         /// Create an encrypted data stream using the specified key and mode and IV

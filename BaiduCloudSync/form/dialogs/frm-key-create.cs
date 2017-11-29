@@ -51,7 +51,7 @@ namespace BaiduCloudSync
         {
             _cancelled = false;
             _track = new List<byte>();
-            pictureBox1.Image = Crypt.GenerateRandomBitmap(pictureBox1.Width, pictureBox1.Height);
+            pictureBox1.Image = Crypto.GenerateRandomBitmap(pictureBox1.Width, pictureBox1.Height);
             _get_bmp_data();
         }
         private bool _cancelled;
@@ -85,7 +85,7 @@ namespace BaiduCloudSync
         }
         private void button3_Click(object sender, EventArgs e)
         {
-            pictureBox1.Image = Crypt.GenerateRandomBitmap(pictureBox1.Width, pictureBox1.Height);
+            pictureBox1.Image = Crypto.GenerateRandomBitmap(pictureBox1.Width, pictureBox1.Height);
             _get_bmp_data();
         }
 
@@ -159,9 +159,9 @@ namespace BaiduCloudSync
                 else if (radioButton2.Checked) bit = 2048;
                 else bit = 1024;
 
-                Crypt.RSA_CreateKey(out pubkey, out prvkey, bit);
-                var str_pem = Crypt.RSA_ExportPEMPrivateKey(prvkey);
-                var str_pem2 = Crypt.RSA_ExportPEMPublicKey(pubkey);
+                Crypto.RSA_CreateKey(out pubkey, out prvkey, bit);
+                var str_pem = Crypto.RSA_ExportPEMPrivateKey(prvkey);
+                var str_pem2 = Crypto.RSA_ExportPEMPublicKey(pubkey);
                 File.WriteAllText(RSA_PUBLIC_KEY_CACHE, str_pem2);
                 File.WriteAllText(RSA_KEY_FILENAME, str_pem);
                 MessageBox.Show(this, "数据已保存到 " + RSA_KEY_FILENAME + " (按下确认后会自动定位到该文件中)\r\n注意：该文件不要分发给任何不信任的人，以及上传到云盘等等\r\n请妥善保管该密钥文件，最好多备份到U盘等其他媒介中\r\n\r\n！丢失该文件会造成所有加密文件无法解密，后果由自己承担！", "很严肃的事情");
@@ -185,16 +185,16 @@ namespace BaiduCloudSync
                 if (prvkey_exist)
                 {
                     if (private_key)
-                        ret = Crypt.RSA_ImportPEMPrivateKey(File.ReadAllText(RSA_KEY_FILENAME));
+                        ret = Crypto.RSA_ImportPEMPrivateKey(File.ReadAllText(RSA_KEY_FILENAME));
                     else
-                        ret = Crypt.RSA_ImportPEMPublicKey(File.ReadAllText(RSA_KEY_FILENAME));
+                        ret = Crypto.RSA_ImportPEMPublicKey(File.ReadAllText(RSA_KEY_FILENAME));
 
                     if (!File.Exists(RSA_PUBLIC_KEY_CACHE))
-                        File.WriteAllText(RSA_PUBLIC_KEY_CACHE, Crypt.RSA_ExportPEMPublicKey(ret));
+                        File.WriteAllText(RSA_PUBLIC_KEY_CACHE, Crypto.RSA_ExportPEMPublicKey(ret));
                 }
                 else if (pubkey_exist)
                 {
-                    ret = Crypt.RSA_ImportPEMPublicKey(File.ReadAllText(RSA_PUBLIC_KEY_CACHE));
+                    ret = Crypto.RSA_ImportPEMPublicKey(File.ReadAllText(RSA_PUBLIC_KEY_CACHE));
                 }
             }
             catch (Exception)
