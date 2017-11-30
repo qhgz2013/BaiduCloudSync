@@ -44,8 +44,7 @@ namespace BaiduCloudSync
                 _remote_file_list.AddAccount(_pcsAPI);
             _local_file_list = new LocalFileCacher();
             StaticConfig.LoadStaticConfig();
-
-
+            
         }
         private void Form1_Load(object sender, EventArgs e)
         {

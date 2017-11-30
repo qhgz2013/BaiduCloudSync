@@ -156,13 +156,13 @@
     <Compile Include="transfer\uploader.cs" />
     <Compile Include="util\icon-extractor.cs" />
     <Compile Include="util\secure\crypto-rsa-der.cs" />
-    <Compile Include="util\secure\icrypto.cs" />
     <Compile Include="util\queue-stream.cs" />
     <Compile Include="util\secure\common-file-encrypt.cs" />
     <Compile Include="util\secure\crc32.cs" />
     <Compile Include="util\secure\crypto-aes.cs" />
     <Compile Include="util\secure\crypto-rsa.cs" />
     <Compile Include="util\secure\crypto-util.cs" />
+    <Compile Include="util\secure\key-manager.cs" />
     <Compile Include="util\secure\md5.cs" />
     <Compile Include="util\secure\sha1.cs" />
     <Compile Include="util\task-dispatcher.cs" />

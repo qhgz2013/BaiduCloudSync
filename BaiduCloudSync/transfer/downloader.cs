@@ -496,7 +496,7 @@ namespace BaiduCloudSync
                             }
                         }
 
-                        if (_guid_list[i] == Guid.Empty)
+                        if (_guid_list[i] == Guid.Empty && (DateTime.Now - _last_receive[i]).TotalSeconds > 3.0)
                         {
                             if (started_tasks < _PARALLEL_START_REQUEST_COUNT)
                             {
@@ -518,7 +518,7 @@ namespace BaiduCloudSync
                             }
                         }
                         //auto dropping timeout requests
-                        else if ((DateTime.Now - _last_receive[i]).TotalSeconds > 35.0)
+                        else if (_guid_list[i] != Guid.Empty && (DateTime.Now - _last_receive[i]).TotalSeconds > 35.0)
                         {
                             _request[i].Close();
                             //Tracer.GlobalTracer.TraceInfo("data request cancelled (request timed out): #" + i);
@@ -539,7 +539,7 @@ namespace BaiduCloudSync
                 _average_speed_total = cur_len / (DateTime.Now - _start_time).TotalSeconds;
                 _average_speed_5s = (_last_5s_length.Last.Value - _last_5s_length.First.Value) / 5.0;
                 _downloaded_size = (long)cur_len;
-                //Tracer.GlobalTracer.TraceInfo("Downloading: " + cur_len + "/" + _data.Size + " [" + (_average_speed_5s / 1024).ToString("0.00") + "KB/s]");
+                Tracer.GlobalTracer.TraceInfo("Downloading: " + cur_len + "/" + _data.Size + " [" + (_average_speed_5s / 1024).ToString("0.00") + "KB/s]");
 
                 if (cur_len == _data.Size) break;
                 //timer interval
@@ -641,17 +641,14 @@ namespace BaiduCloudSync
             catch (InvalidDataException)
             {
                 //Invalid GUID or StatusCode
-                Thread.Sleep(10000);
             }
             catch (IOException)
             {
                 //IO exception in SOCKET connection
-                Thread.Sleep(5000);
             }
             catch (System.Net.WebException)
             {
                 //HTTP Exception (timed out)
-                Thread.Sleep(5000);
             }
             catch (Exception ex)
             {
