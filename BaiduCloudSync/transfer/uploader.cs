@@ -18,7 +18,7 @@ namespace BaiduCloudSync
         //是否允许分段上传
         private bool _enable_slice_upload = true;
         //是否开启文件加密
-        private bool _enable_file_encryption = false;
+        private bool _enable_encryption;
         //是否开启秒传
         private bool _enable_rapid_upload = true;
 
@@ -26,6 +26,7 @@ namespace BaiduCloudSync
         private LocalFileCacher _local_cacher;
         private RemoteFileCacher _remote_cacher;
         private int _selected_account_id; //对应RemoteFileCacher的账号id
+        private KeyManager _key_manager;
 
         //上传的网盘文件路径
         private string _remote_path;
@@ -98,9 +99,6 @@ namespace BaiduCloudSync
         //分段上传用的上传id
         private string _upload_id;
 
-        //加密文件的路径
-        private string _local_encrypted_file_path;
-
 
         #region public properties
         [Flags]
@@ -161,12 +159,15 @@ namespace BaiduCloudSync
         /// 任务的经历时间
         /// </summary>
         public TimeSpan EllapsedTime { get { return ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_STARTED) != 0) ? (DateTime.Now - _start_time) : (_end_time - _start_time); } }
-
+        /// <summary>
+        /// 上传成功后的数据
+        /// </summary>
+        public ObjectMetadata UploadResult { get { return _remote_data; } }
         #endregion
 
         //是否覆盖已有文件
         private bool _overwrite;
-        public Uploader(LocalFileCacher local_cacher, RemoteFileCacher remote_cacher, string local_path, string remote_path, int account_id, bool overwriting_exist_file = false, int max_thread = DEFAULT_MAX_THREAD, int speed_limit = 0)
+        public Uploader(LocalFileCacher local_cacher, RemoteFileCacher remote_cacher, string local_path, string remote_path, int account_id, bool overwriting_exist_file = false, int max_thread = DEFAULT_MAX_THREAD, int speed_limit = 0, KeyManager key_manager = null, bool enable_encryption = false)
         {
             if (local_cacher == null) throw new ArgumentNullException("local_cacher");
             if (remote_cacher == null) throw new ArgumentNullException("remote_cacher");
@@ -180,6 +181,8 @@ namespace BaiduCloudSync
             _local_path = local_path;
             _remote_path = remote_path;
             _speed_limit = speed_limit;
+            _key_manager = key_manager;
+            _enable_encryption = enable_encryption;
 
             var file_info = new FileInfo(_local_path);
             //file monitor
@@ -466,7 +469,41 @@ namespace BaiduCloudSync
 
         private void _file_encrypt()
         {
+            if (_key_manager == null)
+                return;
+            try
+            {
+                if (_key_manager.IsDynamicEncryption)
+                {
+                    FileEncrypt.EncryptFile(_local_path, _local_path + ".encrypted", _key_manager.RSAPublicKey, _local_data.SHA1);
+                }
+                else if (_key_manager.IsStaticEncryption)
+                {
+                    FileEncrypt.EncryptFile(_local_path, _local_path + ".encrypted", _key_manager.AESKey, _key_manager.AESIV, _local_data.SHA1);
+                }
+                else
+                {
+                    throw new Exception("密钥缺失");
+                }
 
+                _local_path += ".encrypted";
+                if (!_remote_path.EndsWith(".bcsd"))
+                    _remote_path += ".bcsd";
+
+                //handling IO
+                _local_cacher.FileIORequest(_local_path);
+                _upload_thread_flag |= _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED;
+                _file_io_response.Wait();
+                _file_io_response.Reset();
+
+                //handling file slice data
+                _file_size = _local_data.Size;
+                _slice_count = (int)Math.Ceiling(_file_size * 1.0 / BaiduPCS.UPLOAD_SLICE_SIZE);
+            }
+            catch (Exception ex)
+            {
+                Tracer.GlobalTracer.TraceError(ex);
+            }
         }
         private void _monitor_thread_callback()
         {
@@ -476,17 +513,42 @@ namespace BaiduCloudSync
             {
                 _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_STARTED) & ~(_UPLOAD_THREAD_FLAG_START_REQUESTED | _UPLOAD_THREAD_FLAG_PAUSED);
 
-                //TODO: add file encryption module here
-                if (_enable_file_encryption && string.IsNullOrEmpty(_local_encrypted_file_path))
-                    _file_encrypt();
-
                 //local io
                 if (string.IsNullOrEmpty(_local_data.Path))
                 {
                     _local_cacher.FileIORequest(_local_path);
                     _upload_thread_flag |= _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED;
                     _file_io_response.Wait();
+                    _file_io_response.Reset();
                 }
+
+                #region status check
+                if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_CANCEL_REQUESTED) != 0)
+                {
+                    _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_CANCELLED) & ~(_UPLOAD_THREAD_FLAG_CANCEL_REQUESTED | _UPLOAD_THREAD_FLAG_STARTED);
+                    _end_time = DateTime.Now;
+                    return;
+                }
+                if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_PAUSE_REQUESTED) != 0)
+                {
+                    _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_PAUSED) & ~(_UPLOAD_THREAD_FLAG_PAUSE_REQUESTED | _UPLOAD_THREAD_FLAG_STARTED);
+                    _end_time = DateTime.Now;
+                    return;
+                }
+                if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_ERROR) != 0)
+                {
+                    _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_PAUSED) & ~_UPLOAD_THREAD_FLAG_STARTED;
+                    _end_time = DateTime.Now;
+                    try { TaskError?.Invoke(this, new EventArgs()); } catch { }
+                    return;
+                }
+                #endregion
+
+                if (_enable_encryption && !File.Exists(_local_path + ".encrypted"))
+                {
+                    _file_encrypt();
+                }
+
                 //status check
                 #region status check
                 if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_CANCEL_REQUESTED) != 0)
@@ -702,11 +764,17 @@ namespace BaiduCloudSync
             }
             catch (Exception)
             {
+                _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_ERROR | _UPLOAD_THREAD_FLAG_PAUSED) & ~_UPLOAD_THREAD_FLAG_STARTED;
+                _end_time = DateTime.Now;
+                try { TaskError?.Invoke(this, new EventArgs()); } catch { }
 
             }
             finally
             {
                 _monitor_thread = null;
+                //deleting temporary encrypted file
+                if (File.Exists(_local_path) && _local_path.EndsWith(".encrypted"))
+                    File.Delete(_local_path);
             }
         }
     }

@@ -12,7 +12,6 @@ namespace GlobalUtil
         private byte[] _aesKey;
         private byte[] _rsaPublic;
         private byte[] _rsaPrivate;
-        private bool _enableEncryption;
         private bool _hasRsaKey;
         private bool _hasAesKey;
         private bool _encryptionType;
@@ -34,24 +33,6 @@ namespace GlobalUtil
             get
             {
                 return _aesKey;
-            }
-        }
-        /// <summary>
-        /// 是否开启加密（需要至少拥有AES或者RSA其中一个密钥）
-        /// </summary>
-        public bool EnableCrypto
-        {
-            get
-            {
-                return _enableEncryption;
-            }
-
-            set
-            {
-                if (_hasAesKey || _hasRsaKey)
-                    _enableEncryption = value;
-                else
-                    _enableEncryption = false;
             }
         }
 
@@ -80,7 +61,7 @@ namespace GlobalUtil
         {
             get
             {
-                return _hasAesKey && !_enableEncryption;
+                return _hasAesKey && !_encryptionType;
             }
             set
             {
@@ -112,7 +93,14 @@ namespace GlobalUtil
                 return _rsaPublic;
             }
         }
-
+        /// <summary>
+        /// 是否拥有AES密钥
+        /// </summary>
+        public bool HasAesKey { get { return _hasAesKey; } }
+        /// <summary>
+        /// 是否拥有RSA密钥
+        /// </summary>
+        public bool HasRsaKey { get { return _hasRsaKey; } }
         /// <summary>
         /// 读取密钥文件
         /// </summary>

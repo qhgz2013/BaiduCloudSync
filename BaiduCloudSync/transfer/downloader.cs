@@ -32,6 +32,7 @@ namespace BaiduCloudSync
         //保存地址
         private string _output_path;
         private string _cookie_key;
+        private KeyManager _key_manager;
 
         //线程标识
         private volatile int _download_thread_flag;
@@ -78,7 +79,7 @@ namespace BaiduCloudSync
         private object[] _thread_data_lock;
         private object _url_lock;
         private object _thread_flag_lock;
-        public Downloader(RemoteFileCacher pcs, ObjectMetadata remote_file, string local_file, int max_thread = DEFAULT_MAX_THREAD, int speed_limit = 0)
+        public Downloader(RemoteFileCacher pcs, ObjectMetadata remote_file, string local_file, int max_thread = DEFAULT_MAX_THREAD, int speed_limit = 0, KeyManager key_manager = null)
         {
             if (pcs == null) throw new ArgumentNullException("pcs");
             if (string.IsNullOrEmpty(remote_file.Path)) throw new ArgumentNullException("remote_file.Path");
@@ -93,6 +94,8 @@ namespace BaiduCloudSync
             _data = remote_file;
             _output_path = local_file;
             _max_thread = max_thread;
+            _key_manager = key_manager;
+
             _dispatcher = new TaskDispatcher(_data.Size);
             _download_thread_flag = _DOWNLOAD_THREAD_FLAG_READY;
             _file_stream = new FileStream(_output_path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None);
@@ -668,7 +671,44 @@ namespace BaiduCloudSync
 
         private void _decrypt_file()
         {
+            //未实例化密钥管理类
+            if (_key_manager == null)
+                return;
+            try
+            {
 
+                //重命名
+                if (_output_path.EndsWith(".bcsd"))
+                {
+                    _output_path = _output_path.Substring(0, _output_path.Length - 5);
+                    File.Move(_output_path + ".bcsd", _output_path + ".decrypting");
+                }
+                else
+                    File.Move(_output_path, _output_path + ".decrypting");
+
+                var fs = new FileStream(_output_path + ".decrypting", FileMode.Open, FileAccess.Read, FileShare.None);
+                var identifier = fs.ReadByte();
+                fs.Close();
+
+                if (identifier == FileEncrypt.FLG_DYNAMIC_KEY && _key_manager.HasRsaKey)
+                {
+                    FileEncrypt.DecryptFile(_output_path + ".decrypting", _output_path, _key_manager.RSAPrivateKey);
+                    File.Delete(_output_path + ".decrypting");
+                }
+                else if (identifier == FileEncrypt.FLG_STATIC_KEY && _key_manager.HasAesKey)
+                {
+                    FileEncrypt.DecryptFile(_output_path + ".decrypting", _output_path, _key_manager.AESKey, _key_manager.AESIV);
+                    File.Delete(_output_path + ".decrypting");
+                }
+                else
+                {
+                    File.Move(_output_path + ".decrypting", _output_path);
+                }
+            }
+            catch (Exception ex)
+            {
+                Tracer.GlobalTracer.TraceError(ex);
+            }
         }
         #endregion
 
