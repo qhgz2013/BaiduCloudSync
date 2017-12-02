@@ -155,15 +155,16 @@ namespace GlobalUtil
         /// 写入密钥文件
         /// </summary>
         /// <param name="path">密钥路径</param>
-        public void SaveKey(string path)
+        /// <param name="save_rsa">是否保存RSA密钥</param>
+        public void SaveKey(string path, bool save_rsa = true)
         {
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
-            if (_hasRsaKey)
+            if (_hasRsaKey && save_rsa)
             {
                 var rsa_data = Crypto.RSA_ExportPEMPrivateKey(_rsaPrivate);
                 File.WriteAllText(path, rsa_data);
             }
-            else if (_hasAesKey)
+            else if (_hasAesKey && !save_rsa)
             {
                 var aes_data = new byte[48];
                 Array.Copy(_aesKey, 0, aes_data, 0, 32);

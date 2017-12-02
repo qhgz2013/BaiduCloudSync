@@ -31,7 +31,7 @@ namespace BaiduCloudSync
         private const string _BAIDU_ROOT_URL = "https://www.baidu.com/";
         private const string _PAN_ROOT_URL = "https://pan.baidu.com/";
         #endregion
-        
+
         #region login request
         #region private functions
         /// <summary>
@@ -420,6 +420,10 @@ namespace BaiduCloudSync
                         _failed_reason = "2: 用户名或密码错误";
                         LoginFailed?.Invoke();
                         return false;
+                    case 6:
+                        _failed_reason = "6: 验证码错误";
+                        LoginFailed?.Invoke();
+                        return false;
                     case 7:
                         _failed_reason = "7: 密码错误";
                         LoginFailed?.Invoke();
@@ -630,8 +634,8 @@ namespace BaiduCloudSync
             try
             {
                 _http.HttpGet(_BAIDU_ROOT_URL);
-                var response_data = _http.ReadResponseString();
-                var reg = Regex.Match(response_data, "bds.comm.user\\s*=\\s*\"(?<user>[^\"])\";");
+                var response_data = _http.ReadResponseString().Replace("\r", "").Replace("\n", "");
+                var reg = Regex.Match(response_data, "bds\\.comm\\.user\\s*=\\s*\"(?<user>[^\"]*)\";");
                 if (reg.Success)
                     _nickname = reg.Result("${user}");
                 _http.Close();

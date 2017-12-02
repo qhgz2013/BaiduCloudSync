@@ -45,23 +45,11 @@ namespace BaiduCloudSync
             _local_file_list = new LocalFileCacher();
             StaticConfig.LoadStaticConfig();
 
-            var km = new KeyManager();
-            km.CreateKey();
-
-            var uploader = new Uploader(_local_file_list, _remote_file_list, "D:\\1.txt", "/1.txt", 0, true, 4, 0, km, true);
-            uploader.Start();
-
-            while (uploader.TaskState != Uploader.State.FINISHED)
-                Thread.Sleep(100);
-
-            var result = uploader.UploadResult;
-
-            var downloader = new Downloader(_remote_file_list, result, "D:\\2.txt", 5, 0, km);
-            downloader.Start();
-
-            while (downloader.TaskState != Downloader.State.FINISHED)
-                Thread.Sleep(100);
-
+            var fs = new FileStream("E:\\testfilelock.txt", FileMode.Create, FileAccess.Write, FileShare.None);
+            fs.Write(new byte[255], 0, 255);
+            fs.Flush();
+            Thread.Sleep(1000);
+            _local_file_list.FileIORequest("E:\\testfilelock.txt");
         }
         private void Form1_Load(object sender, EventArgs e)
         {

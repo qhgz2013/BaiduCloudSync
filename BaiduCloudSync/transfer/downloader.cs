@@ -594,13 +594,16 @@ namespace BaiduCloudSync
             //debug
             try
             {
+                if (ns == null)
+                    throw new InvalidDataException("NetStream closed and set to null");
                 lock (_thread_data_lock[index])
                     if (id != _guid_list[index])
                         throw new InvalidDataException("Guid mismatched, ignored");
                 if (ns.HTTP_Response == null) return;
                 if (ns.HTTP_Response.StatusCode != System.Net.HttpStatusCode.OK && ns.HTTP_Response.StatusCode != System.Net.HttpStatusCode.PartialContent)
                     throw new InvalidDataException("Status code check failed");
-
+                if (ns.HTTP_Response.ContentLength + (long)_position[index] != (long)_data.Size)
+                    throw new InvalidDataException("Content-Length mismatched, ignored");
                 var response_url = ns.HTTP_Response.ResponseUri.ToString();
                 lock (_url_lock)
                     if (!string.IsNullOrEmpty(response_url)) _urls[index % _urls.Length] = response_url;
@@ -641,9 +644,11 @@ namespace BaiduCloudSync
                     total_read += (ulong)bytes_read;
                 } while (_dispatcher.UpdateTaskSituation(_guid_list[index], _position[index] + total_read) && bytes_read > 0);
             }
-            catch (InvalidDataException)
+            catch (InvalidDataException ex)
             {
                 //Invalid GUID or StatusCode
+                if (_enable_error_tracing)
+                    Tracer.GlobalTracer.TraceError(ex);
             }
             catch (IOException)
             {
@@ -656,7 +661,7 @@ namespace BaiduCloudSync
             catch (Exception ex)
             {
                 //general exception
-                //Tracer.GlobalTracer.TraceError("ERROR #" + index + "\r\n" + ex);
+                Tracer.GlobalTracer.TraceError(ex);
             }
             finally
             {
@@ -676,6 +681,8 @@ namespace BaiduCloudSync
                 return;
             try
             {
+                if (File.Exists(_output_path + ".decrypting"))
+                    File.Delete(_output_path + ".decrypting");
 
                 //重命名
                 if (_output_path.EndsWith(".bcsd"))
@@ -692,13 +699,27 @@ namespace BaiduCloudSync
 
                 if (identifier == FileEncrypt.FLG_DYNAMIC_KEY && _key_manager.HasRsaKey)
                 {
-                    FileEncrypt.DecryptFile(_output_path + ".decrypting", _output_path, _key_manager.RSAPrivateKey);
-                    File.Delete(_output_path + ".decrypting");
+                    try
+                    {
+                        FileEncrypt.DecryptFile(_output_path + ".decrypting", _output_path, _key_manager.RSAPrivateKey);
+                        File.Delete(_output_path + ".decrypting");
+                    }
+                    catch
+                    {
+                        File.Move(_output_path + ".decrypting", _output_path);
+                    }
                 }
                 else if (identifier == FileEncrypt.FLG_STATIC_KEY && _key_manager.HasAesKey)
                 {
-                    FileEncrypt.DecryptFile(_output_path + ".decrypting", _output_path, _key_manager.AESKey, _key_manager.AESIV);
-                    File.Delete(_output_path + ".decrypting");
+                    try
+                    {
+                        FileEncrypt.DecryptFile(_output_path + ".decrypting", _output_path, _key_manager.AESKey, _key_manager.AESIV);
+                        File.Delete(_output_path + ".decrypting");
+                    }
+                    catch
+                    {
+                        File.Move(_output_path + ".decrypting", _output_path);
+                    }
                 }
                 else
                 {

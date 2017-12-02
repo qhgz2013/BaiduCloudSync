@@ -387,6 +387,7 @@ namespace BaiduCloudSync
         {
             if (path == _local_path)
             {
+                _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_ERROR) & ~(_UPLOAD_THREAD_FLAG_DIGEST_REQUESTED | _UPLOAD_THREAD_FLAG_DIGEST_CALCULATING);
                 _file_io_response.Set();
             }
         }
