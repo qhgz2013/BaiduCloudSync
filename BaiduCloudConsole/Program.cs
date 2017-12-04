@@ -54,10 +54,13 @@ namespace BaiduCloudConsole
             NetStream.SaveCookie("data/cookie.dat");
             _key_manager.SaveKey("data/rsa_key.pem", true);
             _key_manager.SaveKey("data/aes_key.dat", false);
+            Console.ReadKey();
         }
         //检验登陆状态，如未登陆则登陆
         private static void _check_and_login()
         {
+            _remote_file_cacher = new RemoteFileCacher();
+            _local_file_cacher = new LocalFileCacher();
             var account_count = NetStream.DefaultCookieContainer.Keys.Count;
             if (account_count == 0)
             {
@@ -155,9 +158,7 @@ namespace BaiduCloudConsole
                     Environment.Exit(0);
                 }
                 NetStream.SaveCookie("data/cookie.dat");
-                _remote_file_cacher = new RemoteFileCacher();
                 _remote_file_cacher.AddAccount(new BaiduPCS(oauth));
-                _local_file_cacher = new LocalFileCacher();
                 Console.WriteLine("欢迎回来，" + oauth.NickName);
             }
 
@@ -200,7 +201,7 @@ namespace BaiduCloudConsole
         }
         private static void _print_no_arg()
         {
-            Console.WriteLine("输入 -h 或者 --help 获取更多帮助");
+            Console.WriteLine("输入 -H 或者 --help 获取更多帮助");
         }
         private static void _print_help()
         {
@@ -226,15 +227,15 @@ namespace BaiduCloudConsole
             Console.WriteLine("-D | --download [网盘文件路径] [本地文件路径] [--threads [下载线程数] --speed [限速(KB/s)]]");
             Console.WriteLine("\t下载文件，可选选项：下载线程数（默认96），限速（默认0，即无限速）");
             Console.WriteLine("-U | --upload [本地文件路径] [网盘文件路径] [--threads [上传线程数] --speed [限速(KB/s)] --encrypt]");
-            Console.WriteLine("\t上传文件，可选选项：上传线程数（默认4），限速（默认0，即无限速），有encrypt选项开启文件加密，密钥见加密部分");
+            Console.WriteLine("\t上传文件，可选选项：上传线程数（默认4），限速（默认0，即无限速）\r\n\t有encrypt选项开启文件加密，密钥见加密部分");
             Console.WriteLine();
             Console.WriteLine("*** 加密部分 ***");
             Console.WriteLine("--show-key");
             Console.WriteLine("\t输出目前的密钥信息");
             Console.WriteLine("--load-key [文件路径] [[-F | --force]]");
-            Console.WriteLine("\t从指定的位置读取密钥到程序中，如密钥已存在，需要force进行强制覆盖");
+            Console.WriteLine("\t从指定的位置读取密钥到程序中，如密钥已存在，需要force进行强制覆盖，注：RSA密钥文件后缀必须为pem");
             Console.WriteLine("--save-key [文件路径]");
-            Console.WriteLine("\t输出当前密钥到指定位置中");
+            Console.WriteLine("\t输出当前密钥到指定位置中\r\n\t注：RSA密钥的文件后缀为pem，如非pem，则会自动添加后缀");
             Console.WriteLine("--create-key [[密钥类型: rsa|aes]] [-F | --force]");
             Console.WriteLine("\t生成密钥，如密钥已存在，需要force进行强制覆盖，如不指定密钥类型，默认为rsa");
             Console.WriteLine("--delete-key [密钥类型: rsa|aes]");
@@ -275,8 +276,139 @@ namespace BaiduCloudConsole
                     }
             }
 
-            var downloader = new Downloader()
+            Console.WriteLine("等待文件信息与服务器同步结束");
+            var rst_event = new ManualResetEventSlim();
+            bool wait_diff_complete = true;
+            _remote_file_cacher.FileDiffFinish += delegate
+            {
+                if (wait_diff_complete)
+                {
+                    rst_event.Set();
+                    wait_diff_complete = false;
+                }
+            };
+            rst_event.Wait();
+
+            Console.WriteLine("从SQL读取文件信息……");
+            var parent_dir_path = remote_path.Substring(0, remote_path.LastIndexOf('/'));
+            if (string.IsNullOrEmpty(parent_dir_path)) parent_dir_path = "/"; //根目录修正
+
+            rst_event.Reset();
+            var file_list = new List<ObjectMetadata>();
+            _remote_file_cacher.GetFileListAsync(parent_dir_path, _file_list_callback, state: new _temp_callback_state { reset = rst_event, list = file_list, page = 1, path = parent_dir_path });
+
+            rst_event.Wait();
+            var remote_file_info = file_list.Find(o => o.Path == remote_path);
+
+            //开始下载
+            var downloader = new Downloader(_remote_file_cacher, remote_file_info, local_path, max_thread, speed_limit, _key_manager);
+            downloader.Start();
+            downloader.TaskError += delegate
+            {
+                Console.WriteLine();
+                Console.WriteLine("下载发生错误！");
+            };
+            bool decrypt_started = false, decrypt_response = false;
+            downloader.DecryptStarted += delegate
+            {
+                decrypt_started = true;
+            };
+            Console.WriteLine("预分配硬盘空间……");
+            Downloader.State stat;
+            do
+            {
+                stat = downloader.TaskState;
+                long finished_size = downloader.DownloadedSize;
+                long total_size = downloader.Size;
+                double rate = 100.0 * finished_size / total_size;
+
+                //进度条长度
+                var bar_length = Math.Max(0, Console.WindowWidth - 45);
+                var bar = new string('.', bar_length);
+                var f_finished_bar = rate / 100 * bar_length;
+                int i_finished_bar = (int)Math.Floor(f_finished_bar);
+                var finished_bar = new string('=', i_finished_bar);
+                if (bar_length != i_finished_bar)
+                    bar = finished_bar + ">" + bar.Substring(0, bar_length - i_finished_bar - 1);
+                else
+                    bar = finished_bar;
+
+                var size_info = new string(' ', 17);
+                size_info = _format_bytes(finished_size) + "/" + _format_bytes(total_size) + size_info;
+                size_info = size_info.Substring(0, 17);
+
+                var speed_info = new string(' ', 10);
+                if (!decrypt_started)
+                {
+                    speed_info = _format_bytes((long)downloader.AverageSpeed5s) + "/s" + speed_info;
+                    speed_info = speed_info.Substring(0, 10);
+                }
+
+                Console.Write("\r[" + rate.ToString("#0.0") + "%] [" + bar + "] " + size_info + " " + speed_info);
+                //if (decrypt_started && !decrypt_response)
+                //{
+                //    decrypt_response = true;
+                //    bar = new string('=', bar_length);
+                //    size_info = new string(' ', 17);
+                //    size_info = _format_bytes(total_size) + "/" + _format_bytes(total_size) + size_info;
+                //    size_info = size_info.Substring(0, 17);
+                //    speed_info = new string(' ', 10);
+                //    Console.Write("\r[" + rate.ToString("#0.0") + "%] [" + bar + "] " + size_info + " " + speed_info);
+
+                //    Console.WriteLine();
+                //    Console.WriteLine("解密文件……");
+                //}
+                Thread.Sleep(100);
+            } while (stat != Downloader.State.FINISHED);
+            Console.WriteLine();
+            Console.WriteLine("下载完成");
         }
+        private static string _format_bytes(long b)
+        {
+            if (b < 0x400)
+                return b.ToString() + "B";
+            else if (b < 0x100000)
+                return ((double)b / 0x400).ToString("0.0") + "KB";
+            else if (b < 0x40000000)
+                return ((double)b / 0x100000).ToString("0.0") + "MB";
+            else if (b < 0x10000000000)
+                return ((double)b / 0x40000000).ToString("0.0") + "GB";
+            else
+                return ((double)b / 0x10000000000).ToString("0.0") + "TB";
+        }
+        private struct _temp_callback_state
+        {
+            public ManualResetEventSlim reset;
+            public List<ObjectMetadata> list;
+            public int page;
+            public string path;
+        }
+        private static void _file_list_callback(bool suc, ObjectMetadata[] data, object state)
+        {
+            var stat = (_temp_callback_state)state;
+            var rst_event = stat.reset;
+            var file_list = stat.list;
+            var page = stat.page;
+            var path = stat.path;
+
+            if (!suc)
+            {
+                rst_event.Set();
+                return;
+            }
+
+            file_list.AddRange(data);
+            if (data.Length == 1000)
+            {
+                stat.page++;
+                _remote_file_cacher.GetFileListAsync(path, _file_list_callback, page: page + 1, state: stat);
+            }
+            else
+            {
+                rst_event.Set();
+            }
+        }
+
         private static void _exec_upload(string[] cmd)
         {
 
@@ -335,6 +467,10 @@ namespace BaiduCloudConsole
                     break;
                 case "--delete-key":
                     _exec_delete_key(cmd);
+                    break;
+                case "-H":
+                case "--help":
+                    _print_help();
                     break;
                 default:
                     Console.WriteLine("无效的指令：" + cmd[0]);

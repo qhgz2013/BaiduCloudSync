@@ -13,6 +13,7 @@ namespace GlobalUtil
 {
     public class FileEncrypt
     {
+        public delegate void StatusCallback(string inputPath, string outputPath, long current, long total);
         //对小姐姐爱得深沉
         public const byte FLG_STATIC_KEY = 0x2b;
         public const byte FLG_DYNAMIC_KEY = 0xa2;
@@ -23,7 +24,7 @@ namespace GlobalUtil
         /// <param name="outputFile">输出的文件路径</param>
         /// <param name="rsaPublic">RSA公钥</param>
         /// <param name="SHA1">文件的SHA1值（可选，用于解密的校验）</param>
-        public static void EncryptFile(string inputFile, string outputFile, byte[] rsaPublic, string SHA1 = null)
+        public static void EncryptFile(string inputFile, string outputFile, byte[] rsaPublic, string SHA1 = null, StatusCallback callback = null)
         {
             if (rsaPublic == null) throw new ArgumentNullException("rsaPublic");
             if (string.IsNullOrEmpty(inputFile)) throw new ArgumentNullException("inputFile");
@@ -34,6 +35,8 @@ namespace GlobalUtil
             {
                 fs_in = new FileStream(inputFile, FileMode.Open, FileAccess.Read, FileShare.Read);
                 fs_out = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.None);
+                var file_length = fs_in.Length;
+                long proceeded_length = 0;
 
                 var rsa = new RSACryptoServiceProvider();
                 rsa.ImportCspBlob(rsaPublic);
@@ -62,6 +65,8 @@ namespace GlobalUtil
                 {
                     nread = fs_in.Read(buffer, 0, buffer_size);
                     encrypted_stream.Write(buffer, 0, nread);
+                    proceeded_length += nread;
+                    callback?.Invoke(inputFile, outputFile, proceeded_length, file_length);
                 } while (nread != 0);
                 encrypted_stream.FlushFinalBlock();
             }
@@ -83,7 +88,7 @@ namespace GlobalUtil
         /// <param name="aesKey">AES密钥</param>
         /// <param name="aesIV">AES初始向量</param>
         /// <param name="SHA1">文件的SHA1值</param>
-        public static void EncryptFile(string inputFile, string outputFile, byte[] aesKey, byte[] aesIV, string SHA1 = null)
+        public static void EncryptFile(string inputFile, string outputFile, byte[] aesKey, byte[] aesIV, string SHA1 = null, StatusCallback callback = null)
         {
             if (string.IsNullOrEmpty(inputFile)) throw new ArgumentNullException("inputFile");
             if (string.IsNullOrEmpty(outputFile)) throw new ArgumentNullException("outputFile");
@@ -93,6 +98,9 @@ namespace GlobalUtil
             {
                 fs_in = new FileStream(inputFile, FileMode.Open, FileAccess.Read, FileShare.Read);
                 fs_out = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.None);
+                var file_length = fs_in.Length;
+                var proceeded_length = 0;
+
                 if (aesKey == null)
                     throw new ArgumentNullException("aesKey");
                 if (aesIV == null)
@@ -115,7 +123,9 @@ namespace GlobalUtil
                 do
                 {
                     nread = fs_in.Read(buffer, 0, buffer_size);
+                    proceeded_length += nread;
                     encrypted_stream.Write(buffer, 0, nread);
+                    callback?.Invoke(inputFile, outputFile, proceeded_length, file_length);
                 } while (nread != 0);
                 encrypted_stream.FlushFinalBlock();
             }
@@ -135,7 +145,7 @@ namespace GlobalUtil
         /// <param name="inputFile">输入的文件路径</param>
         /// <param name="outputFile">输出的文件路径</param>
         /// <param name="rsaPrivate">RSA密钥</param>
-        public static void DecryptFile(string inputFile, string outputFile, byte[] rsaPrivate)
+        public static void DecryptFile(string inputFile, string outputFile, byte[] rsaPrivate, StatusCallback callback = null)
         {
             if (string.IsNullOrEmpty(inputFile)) throw new ArgumentNullException("inputFile");
             if (string.IsNullOrEmpty(outputFile)) throw new ArgumentNullException("outputFile");
@@ -147,6 +157,9 @@ namespace GlobalUtil
             {
                 fs_in = new FileStream(inputFile, FileMode.Open, FileAccess.Read, FileShare.Read);
                 fs_out = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.None);
+                var file_length = fs_in.Length;
+                long proceeded_length = 0;
+
                 var rsa = new RSACryptoServiceProvider();
                 rsa.ImportCspBlob(rsaPrivate);
 
@@ -164,6 +177,7 @@ namespace GlobalUtil
                 var aesKey = rsa.Decrypt(aes_key_value, false);
                 var aesIV = rsa.Decrypt(aes_iv_value, false);
                 var preserved = util.ReadBytes(fs_in, 2); //preserved for latter usage
+                proceeded_length += sha1_value.Length + aes_key_value.Length + aes_iv_value.Length + 2 + 1;
 
                 var decrypted_stream = Crypto.AES_StreamDecrypt(fs_in, aesKey, CipherMode.CFB, aesIV);
                 int nread = 0;
@@ -175,6 +189,8 @@ namespace GlobalUtil
                     nread = decrypted_stream.Read(buffer, 0, buffer_size);
                     fs_out.Write(buffer, 0, nread);
                     sha1.TransformBlock(buffer, 0, nread, buffer, 0);
+                    proceeded_length += nread;
+                    callback?.Invoke(inputFile, outputFile, proceeded_length, file_length);
                 } while (nread != 0);
                 sha1.TransformFinalBlock(buffer, 0, 0);
                 var cur_sha1 = sha1.Hash;
@@ -203,7 +219,7 @@ namespace GlobalUtil
         /// <param name="outputFile">输出的文件路径</param>
         /// <param name="aesKey">AES密钥</param>
         /// <param name="aesIV">AES初始向量</param>
-        public static void DecryptFile(string inputFile, string outputFile, byte[] aesKey, byte[] aesIV)
+        public static void DecryptFile(string inputFile, string outputFile, byte[] aesKey, byte[] aesIV, StatusCallback callback = null)
         {
             if (string.IsNullOrEmpty(inputFile)) throw new ArgumentNullException("inputFile");
             if (string.IsNullOrEmpty(outputFile)) throw new ArgumentNullException("outputFile");
@@ -215,6 +231,8 @@ namespace GlobalUtil
             {
                 fs_in = new FileStream(inputFile, FileMode.Open, FileAccess.Read, FileShare.Read);
                 fs_out = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.None);
+                var file_length = fs_in.Length;
+                var proceeded_length = 3;
 
                 int type = fs_in.ReadByte();
                 if (type != FLG_STATIC_KEY)
@@ -234,8 +252,10 @@ namespace GlobalUtil
                 do
                 {
                     nread = decrypted_stream.Read(buffer, 0, buffer_size);
+                    proceeded_length += nread;
                     fs_out.Write(buffer, 0, nread);
                     sha1.TransformBlock(buffer, 0, nread, buffer, 0);
+                    callback?.Invoke(inputFile, outputFile, proceeded_length, file_length);
                 } while (nread != 0);
                 sha1.TransformFinalBlock(buffer, 0, 0);
                 var cur_sha1 = sha1.Hash;

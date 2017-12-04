@@ -163,6 +163,10 @@ namespace BaiduCloudSync
         /// 上传成功后的数据
         /// </summary>
         public ObjectMetadata UploadResult { get { return _remote_data; } }
+        /// <summary>
+        /// 文件大小
+        /// </summary>
+        public long Size { get { return _file_size; } }
         #endregion
 
         //是否覆盖已有文件
@@ -351,7 +355,7 @@ namespace BaiduCloudSync
         }
 
         #region Event handler
-        public event EventHandler TaskStarted, TaskFinished, TaskPaused, TaskCancelled, TaskError;
+        public event EventHandler TaskStarted, TaskFinished, TaskPaused, TaskCancelled, TaskError, EncryptStarted, EncryptFinished;
         #endregion
 
         private void _on_file_deleted(object sender, FileSystemEventArgs e)
@@ -468,6 +472,11 @@ namespace BaiduCloudSync
             }
         }
 
+        private void _file_encrypt_status_callback(string inputFile, string outputFile, long current, long total)
+        {
+            _uploaded_size = current;
+            _file_size = total;
+        }
         private void _file_encrypt()
         {
             if (_key_manager == null)
@@ -476,11 +485,11 @@ namespace BaiduCloudSync
             {
                 if (_key_manager.IsDynamicEncryption)
                 {
-                    FileEncrypt.EncryptFile(_local_path, _local_path + ".encrypted", _key_manager.RSAPublicKey, _local_data.SHA1);
+                    FileEncrypt.EncryptFile(_local_path, _local_path + ".encrypted", _key_manager.RSAPublicKey, _local_data.SHA1, _file_encrypt_status_callback);
                 }
                 else if (_key_manager.IsStaticEncryption)
                 {
-                    FileEncrypt.EncryptFile(_local_path, _local_path + ".encrypted", _key_manager.AESKey, _key_manager.AESIV, _local_data.SHA1);
+                    FileEncrypt.EncryptFile(_local_path, _local_path + ".encrypted", _key_manager.AESKey, _key_manager.AESIV, _local_data.SHA1, _file_encrypt_status_callback);
                 }
                 else
                 {
@@ -547,7 +556,12 @@ namespace BaiduCloudSync
 
                 if (_enable_encryption && !File.Exists(_local_path + ".encrypted"))
                 {
+                    _upload_thread_flag |= _UPLOAD_THREAD_FLAG_FILE_ENCRYPTING;
+                    try { EncryptStarted?.Invoke(this, new EventArgs()); } catch { }
                     _file_encrypt();
+                    _upload_thread_flag = _upload_thread_flag & ~_UPLOAD_THREAD_FLAG_FILE_ENCRYPTING;
+                    try { EncryptFinished?.Invoke(this, new EventArgs()); } catch { }
+                    _uploaded_size = 0;
                 }
 
                 //status check

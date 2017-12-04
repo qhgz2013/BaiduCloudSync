@@ -271,10 +271,14 @@ namespace BaiduCloudSync
         /// 下载器附加数据
         /// </summary>
         public object Tag { get; set; }
+        /// <summary>
+        /// 文件大小
+        /// </summary>
+        public long Size { get { return (long)_data.Size; } }
         #endregion
 
         #region Event handler
-        public event EventHandler TaskStarted, TaskFinished, TaskPaused, TaskCancelled, TaskError;
+        public event EventHandler TaskStarted, TaskFinished, TaskPaused, TaskCancelled, TaskError, DecryptStarted, DecryptFinished;
         #endregion
 
         private struct _temp_strcut
@@ -571,13 +575,17 @@ namespace BaiduCloudSync
             _file_stream = null;
             _monitor_thread = null;
             _end_time = DateTime.Now;
-            _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_FINISHED) & ~_DOWNLOAD_THREAD_FLAG_STARTED;
 
             //file decryption
             if (_data.Path.EndsWith(".bcsd"))
             {
+                _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_DECRYPTING;
+                try { DecryptStarted?.Invoke(this, new EventArgs()); } catch { }
                 _decrypt_file();
+                _download_thread_flag = _download_thread_flag & ~_DOWNLOAD_THREAD_FLAG_DECRYPTING;
+                try { DecryptFinished?.Invoke(this, new EventArgs()); } catch { }
             }
+            _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_FINISHED) & ~_DOWNLOAD_THREAD_FLAG_STARTED;
 
             //Tracer.GlobalTracer.TraceInfo("Download finished");
             try { TaskFinished?.Invoke(this, new EventArgs()); }
@@ -673,7 +681,11 @@ namespace BaiduCloudSync
                 }
             }
         }
-
+        private void _decrypt_file_status_callback(string inputFile, string outputFile, long current, long length)
+        {
+            _downloaded_size = current;
+            _data.Size = (ulong)length;
+        }
         private void _decrypt_file()
         {
             //未实例化密钥管理类

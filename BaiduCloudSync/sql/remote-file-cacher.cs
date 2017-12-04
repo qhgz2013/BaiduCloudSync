@@ -465,7 +465,7 @@ namespace BaiduCloudSync
             }
         }
         //在sql数据库中读取文件数据
-        private void _get_file_list_from_sql(string path, BaiduPCS.MultiObjectMetaCallback callback, int account_id, BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name, bool asc = true, int page = 1, int size = 1000)
+        private void _get_file_list_from_sql(string path, BaiduPCS.MultiObjectMetaCallback callback, int account_id, BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name, bool asc = true, int page = 1, int size = 1000, object state = null)
         {
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
             if (size <= 0) throw new ArgumentOutOfRangeException("size");
@@ -521,7 +521,7 @@ namespace BaiduCloudSync
                     }
                 }
 
-                callback?.Invoke(true, ret.ToArray(), null);
+                callback?.Invoke(true, ret.ToArray(), state);
             });
         }
 
@@ -677,6 +677,8 @@ namespace BaiduCloudSync
                     _sql_cmd.Parameters["@enabled"].Value = (byte)1;
                     _sql_cmd.ExecuteNonQuery();
                     _sql_cmd.Parameters.Clear();
+
+                    _account_changed = true;
                 }
             }
             return -1;
@@ -732,7 +734,7 @@ namespace BaiduCloudSync
             }
             else
             {
-                _get_file_list_from_sql(path, callback, account_id, order, asc, page, size);
+                _get_file_list_from_sql(path, callback, account_id, order, asc, page, size, state);
             }
         }
         /// <summary>
