@@ -54,7 +54,7 @@ namespace BaiduCloudConsole
             NetStream.SaveCookie("data/cookie.dat");
             _key_manager.SaveKey("data/rsa_key.pem", true);
             _key_manager.SaveKey("data/aes_key.dat", false);
-            Console.ReadKey();
+            //Console.ReadKey();
         }
         //检验登陆状态，如未登陆则登陆
         private static void _check_and_login()
@@ -221,7 +221,7 @@ namespace BaiduCloudConsole
             //Console.WriteLine("\t删除指定用户名的登陆信息");
             Console.WriteLine("*** 文件操作 ***");
             Console.WriteLine("-L | --list [网盘文件路径] [--order [排序:name|size|time] --page [页数] --count [每页显示数量] --desc]");
-            Console.WriteLine("\t列出文件夹下所有文件");
+            Console.WriteLine("\t列出文件夹下所有文件，参数page从1开始");
             Console.WriteLine();
             Console.WriteLine("*** 文件传输 ***");
             Console.WriteLine("-D | --download [网盘文件路径] [本地文件路径] [--threads [下载线程数] --speed [限速(KB/s)]]");
@@ -239,6 +239,7 @@ namespace BaiduCloudConsole
             Console.WriteLine("--create-key [[密钥类型: rsa|aes]] [-F | --force]");
             Console.WriteLine("\t生成密钥，如密钥已存在，需要force进行强制覆盖，如不指定密钥类型，默认为rsa");
             Console.WriteLine("--delete-key [密钥类型: rsa|aes]");
+            Console.WriteLine("\t删除密钥，利用该密钥加密的所有文件将会无法解密");
             Console.WriteLine();
         }
         private static void _exec_download(string[] cmd)
@@ -262,11 +263,22 @@ namespace BaiduCloudConsole
                     switch (cmd[index])
                     {
                         case "--threads":
-                            max_thread = int.Parse(cmd[index + 1]);
+                            //max_thread = int.Parse(cmd[index + 1]);
+                            if (int.TryParse(cmd[index + 1], out max_thread) == false)
+                            {
+                                Console.WriteLine("线程数 {0} 无法转换为整型", cmd[index + 1]);
+                                return;
+                            }
                             index += 2;
                             break;
                         case "--speed":
-                            speed_limit = (int)(double.Parse(cmd[index + 1]) * 1024);
+                            double temp_speed;
+                            if (double.TryParse(cmd[index + 1], out temp_speed) == false)
+                            {
+                                Console.WriteLine("限速 {0} 无法转换为浮点数", cmd[index + 1]);
+                                return;
+                            }
+                            speed_limit = (int)temp_speed * 1024;
                             index += 2;
                             break;
 
@@ -333,16 +345,11 @@ namespace BaiduCloudConsole
                 else
                     bar = finished_bar;
 
-                var size_info = new string(' ', 17);
-                size_info = _format_bytes(finished_size) + "/" + _format_bytes(total_size) + size_info;
-                size_info = size_info.Substring(0, 17);
+                var size_info = string.Format("{0,-17}", _format_bytes(finished_size) + "/" + _format_bytes(total_size));
 
                 var speed_info = new string(' ', 10);
                 if (!decrypt_started)
-                {
-                    speed_info = _format_bytes((long)downloader.AverageSpeed5s) + "/s" + speed_info;
-                    speed_info = speed_info.Substring(0, 10);
-                }
+                    speed_info = string.Format("{0,-10}", _format_bytes((long)downloader.AverageSpeed5s) + "/s");
 
                 Console.Write("\r[" + rate.ToString("#0.0") + "%] [" + bar + "] " + size_info + " " + speed_info);
                 //if (decrypt_started && !decrypt_response)
@@ -415,27 +422,345 @@ namespace BaiduCloudConsole
         }
         private static void _exec_list(string[] cmd)
         {
+            if (cmd.Length < 2)
+            {
+                Console.WriteLine("参数不足");
+                return;
+            }
+            var path = cmd[1];
+            BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name;
+            var page = 1;
+            var count = 200;
+            bool asc = true;
+            if (cmd.Length > 2)
+            {
+                int index = 2;
+                while (index < cmd.Length)
+                {
+                    switch (cmd[index])
+                    {
+                        case "--order":
+                            if (cmd[index + 1] == "name")
+                                order = BaiduPCS.FileOrder.name;
+                            else if (cmd[index + 1] == "size")
+                                order = BaiduPCS.FileOrder.size;
+                            else if (cmd[index + 1] == "time")
+                                order = BaiduPCS.FileOrder.time;
+                            else
+                            {
+                                Console.WriteLine("无效的排序依据：" + cmd[index + 1]);
+                                return;
+                            }
+                            index += 2;
+                            break;
+                        case "--page":
+                            page = int.Parse(cmd[index + 1]);
+                            index += 2;
+                            break;
+                        case "--count":
+                            count = int.Parse(cmd[index + 1]);
+                            index += 2;
+                            break;
+                        case "--desc":
+                            asc = false;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
 
+            var rst_event = new ManualResetEventSlim();
+            ObjectMetadata[] files = null;
+            _remote_file_cacher.GetFileListAsync(path, (suc, data, state) =>
+            {
+                if (suc)
+                {
+                    files = data;
+                    rst_event.Set();
+                }
+                else
+                {
+                    Console.WriteLine("获取失败");
+                }
+            }, order: order, asc: asc, page: page, size: count);
+
+            rst_event.Wait();
+            if (files != null)
+            {
+                Console.WriteLine("{0} 的文件信息: ", path);
+                var padding = new string(' ', Console.WindowWidth);
+                //40,15,18,18
+                var head = ("文件名" + padding).Substring(0, 37) + ("大小" + padding).Substring(0, 13) + ("创建时间" + padding).Substring(0, 14) + ("修改时间" + padding).Substring(0, 14);
+                Console.WriteLine(head);
+                foreach (var file in files)
+                {
+                    var str_filename = file.ServerFileName;
+                    var len_filename = Encoding.Default.GetByteCount(str_filename);
+                    if (len_filename > 40)
+                    {
+                        while (len_filename > 36)
+                        {
+                            str_filename = str_filename.Substring(0, str_filename.Length - 1);
+                            len_filename = Encoding.Default.GetByteCount(str_filename);
+                        }
+                        if (len_filename == 36)
+                            str_filename += "... ";
+                        else
+                            str_filename += " ... ";
+                    }
+                    else
+                        str_filename = string.Format("{0,-" + (40 + str_filename.Length - len_filename) + "}", str_filename);
+
+                    Console.Write(str_filename);
+
+                    var size = string.Format("{0,-15}", file.IsDir ? "<DIR>" : _format_bytes((long)file.Size));
+                    Console.Write(size);
+
+                    var ctime = string.Format("{0,-18}", util.FromUnixTimestamp(file.ServerCTime).ToString("yyyy-MM-dd HH:mm"));
+                    var mtime = string.Format("{0,-18}", util.FromUnixTimestamp(file.ServerMTime).ToString("yyyy-MM-dd HH:mm"));
+                    Console.WriteLine(ctime + mtime);
+                }
+            }
         }
         private static void _exec_show_key(string[] cmd)
         {
-
+            if (cmd.Length != 1)
+            {
+                Console.WriteLine("参数过多");
+                return;
+            }
+            Console.WriteLine("当前的RSA密钥信息：");
+            if (_key_manager.HasRsaKey)
+            {
+                var rsa = new System.Security.Cryptography.RSACryptoServiceProvider();
+                rsa.ImportCspBlob(_key_manager.RSAPrivateKey);
+                var bit_length = rsa.KeySize;
+                Console.WriteLine("\t{0}位RSA密钥", bit_length);
+                Console.WriteLine("\t密钥特征码：{0}", util.Hex(MD5.ComputeHash(_key_manager.RSAPrivateKey, 0, _key_manager.RSAPrivateKey.Length)));
+            }
+            else
+            {
+                Console.WriteLine("\t无RSA密钥信息");
+            }
+            Console.WriteLine();
+            Console.WriteLine("当前的AES密钥信息：");
+            if (_key_manager.HasAesKey)
+            {
+                Console.WriteLine("\tAES密钥：{0}", util.Hex(_key_manager.AESKey));
+                Console.WriteLine("\tAES初始向量：{0}", util.Hex(_key_manager.AESIV));
+            }
+            else
+            {
+                Console.WriteLine("\t无AES密钥信息");
+            }
         }
         private static void _exec_load_key(string[] cmd)
         {
+            if (cmd.Length < 2)
+            {
+                Console.WriteLine("参数过少");
+                return;
+            }
+            if (cmd.Length > 3)
+            {
+                Console.WriteLine("参数过多");
+                return;
+            }
+            var path = cmd[1];
+            if (!File.Exists(path))
+            {
+                Console.WriteLine("文件不存在");
+                return;
+            }
+            bool enable_force = false;
+            if (cmd.Length == 3)
+                if (cmd[2] == "-F" || cmd[2] == "--force")
+                    enable_force = true;
+                else
+                {
+                    Console.WriteLine("无效参数 {0}", cmd[2]);
+                    return;
+                }
 
+            if (path.EndsWith(".pem") && _key_manager.HasRsaKey)
+            {
+                if (enable_force)
+                    _key_manager.LoadKey(path);
+                else
+                {
+                    Console.WriteLine("RSA密钥已存在，如需覆盖请使用-F参数，或者调用--delete-key删除");
+                    return;
+                }
+            }
+            else if (_key_manager.HasAesKey)
+            {
+                if (enable_force)
+                    _key_manager.LoadKey(path);
+                else
+                {
+                    Console.WriteLine("AES密钥已存在，如需覆盖请使用-F参数，或者调用--delete-key删除");
+                    return;
+                }
+            }
+            else
+                return;
+
+            Console.WriteLine("已读取密钥文件 {0}", path);
         }
         private static void _exec_save_key(string[] cmd)
         {
+            if (cmd.Length < 2)
+            {
+                Console.WriteLine("参数过少");
+                return;
+            }
+            if (cmd.Length > 3)
+            {
+                Console.WriteLine("参数过多");
+                return;
+            }
+            var path = cmd[1];
+            if (path.EndsWith(".pem") && _key_manager.HasRsaKey)
+                _key_manager.SaveKey(path, true);
+            else if (_key_manager.HasAesKey)
+                _key_manager.SaveKey(path, false);
+            else
+            {
+                if (path.EndsWith(".pem"))
+                    Console.WriteLine("无RSA密钥信息，保存失败");
+                else
+                    Console.WriteLine("无AES密钥信息，保存失败");
+                return;
+            }
 
+            Console.WriteLine("文件已保存到 {0} 中", path);
         }
         private static void _exec_create_key(string[] cmd)
         {
+            bool create_rsa = true;
+            bool enable_force = false;
+            bool has_key_specified = false;
+            int index = 1;
+            while (index < cmd.Length)
+            {
+                switch (cmd[index])
+                {
+                    case "-F":
+                    case "--force":
+                        enable_force = true;
+                        index++;
+                        break;
+                    case "aes":
+                        if (has_key_specified)
+                        {
+                            Console.WriteLine("多次指定密钥类型，操作无效");
+                            return;
+                        }
+                        else
+                        {
+                            has_key_specified = true;
+                            create_rsa = false;
+                        }
+                        index++;
+                        break;
+                    case "rsa":
+                        if (has_key_specified)
+                        {
+                            Console.WriteLine("多次指定密钥类型，操作无效");
+                            return;
+                        }
+                        else
+                        {
+                            has_key_specified = true;
+                            create_rsa = true;
+                        }
+                        index++;
+                        break;
+                    default:
+                        Console.WriteLine("参数无效：{0}", cmd[index]);
+                        return;
+                }
+            }
 
+            if (_key_manager.HasRsaKey && create_rsa)
+                if (enable_force)
+                    _key_manager.CreateKey(true);
+                else
+                {
+                    Console.WriteLine("RSA密钥已存在，如需覆盖请使用-F参数，或者调用--delete-key删除");
+                    return;
+                }
+            else if (_key_manager.HasAesKey && !create_rsa)
+                if (enable_force)
+                    _key_manager.CreateKey(false);
+                else
+                {
+                    Console.WriteLine("AES密钥已存在，如需覆盖请使用-F参数，或者调用--delete-key删除");
+                    return;
+                }
+            else
+                _key_manager.CreateKey(create_rsa);
+
+            if (create_rsa)
+            {
+                Console.WriteLine("已生成RSA密钥，密钥信息：");
+                var rsa = new System.Security.Cryptography.RSACryptoServiceProvider();
+                rsa.ImportCspBlob(_key_manager.RSAPrivateKey);
+                var bit_length = rsa.KeySize;
+                Console.WriteLine("\t{0}位RSA密钥", bit_length);
+                Console.WriteLine("\t密钥特征码：{0}", util.Hex(MD5.ComputeHash(_key_manager.RSAPrivateKey, 0, _key_manager.RSAPrivateKey.Length)));
+            }
+            else
+            {
+                Console.WriteLine("已生成AES密钥，密钥信息：");
+                Console.WriteLine("\tAES密钥：{0}", util.Hex(_key_manager.AESKey));
+                Console.WriteLine("\tAES初始向量：{0}", util.Hex(_key_manager.AESIV));
+            }
         }
         private static void _exec_delete_key(string[] cmd)
         {
+            if (cmd.Length < 2)
+            {
+                Console.WriteLine("参数不足");
+                return;
+            }
+            var key_type = cmd[1];
+            if (cmd.Length > 3)
+            {
+                Console.WriteLine("参数过多");
+                return;
+            }
+            if (key_type != "aes" && key_type != "rsa")
+            {
+                Console.WriteLine("无效的密钥类型：{0}", key_type);
+            }
+            bool delete_rsa = key_type == "rsa";
 
+            if (delete_rsa)
+            {
+                if (_key_manager.HasRsaKey)
+                {
+                    _key_manager.DeleteKey(true);
+                    if (File.Exists("data/rsa_key.pem"))
+                        File.Delete("data/rsa_key.pem");
+                    Console.WriteLine("删除RSA密钥成功");
+                }
+                else
+                    Console.WriteLine("无RSA密钥，忽略删除操作");
+            }
+            else
+            {
+                if (_key_manager.HasAesKey)
+                {
+                    _key_manager.DeleteKey(false);
+                    if (File.Exists("data/aes_key.dat"))
+                        File.Delete("data/aes_key.dat");
+                    Console.WriteLine("删除AES密钥成功");
+                }
+                else
+                    Console.WriteLine("无AES密钥，忽略删除操作");
+            }
         }
         private static void _exec_command(string[] cmd)
         {

@@ -198,5 +198,25 @@ namespace GlobalUtil
                     _encryptionType = true;
             }
         }
+
+        /// <summary>
+        /// 删除密钥
+        /// </summary>
+        /// <param name="delete_rsa_key">是否删除RSA密钥</param>
+        public void DeleteKey(bool delete_rsa_key = true)
+        {
+            if (_hasRsaKey && delete_rsa_key)
+            {
+                _hasRsaKey = false;
+                _rsaPrivate = null;
+                _rsaPublic = null;
+            }
+            else if (_hasAesKey && !delete_rsa_key)
+            {
+                _hasAesKey = false;
+                _aesIv = null;
+                _aesKey = null;
+            }
+        }
     }
 }
