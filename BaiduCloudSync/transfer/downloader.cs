@@ -278,7 +278,7 @@ namespace BaiduCloudSync
         #endregion
 
         #region Event handler
-        public event EventHandler TaskStarted, TaskFinished, TaskPaused, TaskCancelled, TaskError, DecryptStarted, DecryptFinished;
+        public event EventHandler TaskStarted, TaskFinished, TaskPaused, TaskCancelled, TaskError, DecryptStarted, DecryptFinished, PreAllocBlockStarted, PreAllocBlockFinished;
         #endregion
 
         private struct _temp_strcut
@@ -341,6 +341,8 @@ namespace BaiduCloudSync
             var max_thread = _max_thread;
 
             //pre allocating file
+            _downloaded_size = 0;
+            try { PreAllocBlockStarted?.Invoke(this, new EventArgs()); } catch { }
             if (_file_stream.Length != (long)_data.Size)
             {
                 if (_file_stream.Length > (long)_data.Size)
@@ -348,6 +350,7 @@ namespace BaiduCloudSync
                 else
                 {
                     _file_stream.Seek(0, SeekOrigin.End);
+                    _downloaded_size = _file_stream.Length;
                     var blank_buffer = new byte[_MIN_IO_FLUSH_DATA_LENGTH];
                     long write_length = 0;
                     do
@@ -355,10 +358,13 @@ namespace BaiduCloudSync
                         write_length = (long)_data.Size - _file_stream.Length;
                         int len = (int)Math.Min(_MIN_IO_FLUSH_DATA_LENGTH, write_length);
                         _file_stream.Write(blank_buffer, 0, len);
+                        _downloaded_size += len;
                     } while (write_length > 0 && ((_download_thread_flag & 0xffffff) & (_DOWNLOAD_THREAD_FLAG_PAUSE_REQUESTED | _DOWNLOAD_THREAD_FLAG_STOP_REQUESTED)) == 0);
                 }
                 _file_stream.Seek(0, SeekOrigin.Begin);
             }
+            try { PreAllocBlockFinished?.Invoke(this, new EventArgs()); } catch { }
+            _downloaded_size = 0;
 
             //allocating memory
             _guid_list = new Guid[max_thread];

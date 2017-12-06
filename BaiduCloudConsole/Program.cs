@@ -29,10 +29,6 @@ namespace BaiduCloudConsole
             if (File.Exists("data/aes_key.dat"))
                 _key_manager.LoadKey("data/aes_key.dat");
 
-            Console.WriteLine("BaiduCloudSync 控制台模式");
-            Console.WriteLine("Version: {0}", _version);
-            Console.WriteLine("");
-
             try
             {
                 if (args.Length == 0)
@@ -40,7 +36,6 @@ namespace BaiduCloudConsole
                 else
                 {
                     _check_and_login();
-
                     _exec_command(args);
                 }
             }
@@ -54,6 +49,8 @@ namespace BaiduCloudConsole
             NetStream.SaveCookie("data/cookie.dat");
             _key_manager.SaveKey("data/rsa_key.pem", true);
             _key_manager.SaveKey("data/aes_key.dat", false);
+            _local_file_cacher.Dispose();
+            _remote_file_cacher.Dispose();
             //Console.ReadKey();
         }
         //检验登陆状态，如未登陆则登陆
@@ -61,6 +58,8 @@ namespace BaiduCloudConsole
         {
             _remote_file_cacher = new RemoteFileCacher();
             _local_file_cacher = new LocalFileCacher();
+            if (_remote_file_cacher.GetAllAccounts().Length == 0 && NetStream.DefaultCookieContainer.Keys.Count != 0)
+                NetStream.DefaultCookieContainer = new Dictionary<string, System.Net.CookieContainer>();
             var account_count = NetStream.DefaultCookieContainer.Keys.Count;
             if (account_count == 0)
             {
@@ -201,6 +200,9 @@ namespace BaiduCloudConsole
         }
         private static void _print_no_arg()
         {
+            Console.WriteLine("BaiduCloudSync 控制台模式");
+            Console.WriteLine("Version: {0}", _version);
+            Console.WriteLine("");
             Console.WriteLine("输入 -H 或者 --help 获取更多帮助");
         }
         private static void _print_help()
@@ -226,8 +228,8 @@ namespace BaiduCloudConsole
             Console.WriteLine("*** 文件传输 ***");
             Console.WriteLine("-D | --download [网盘文件路径] [本地文件路径] [--threads [下载线程数] --speed [限速(KB/s)]]");
             Console.WriteLine("\t下载文件，可选选项：下载线程数（默认96），限速（默认0，即无限速）");
-            Console.WriteLine("-U | --upload [本地文件路径] [网盘文件路径] [--threads [上传线程数] --speed [限速(KB/s)] --encrypt]");
-            Console.WriteLine("\t上传文件，可选选项：上传线程数（默认4），限速（默认0，即无限速）\r\n\t有encrypt选项开启文件加密，密钥见加密部分");
+            Console.WriteLine("-U | --upload [本地文件路径] [网盘文件路径] [--threads [上传线程数] --speed [限速(KB/s)] --overwrite --encrypt [rsa|aes]]");
+            Console.WriteLine("\t上传文件，可选选项：上传线程数（默认4），限速（默认0，即无限速）\r\n\tencrypt选项开启文件加密，密钥见加密部分，而且网盘的文件拓展名自动加上.bcsd加以辨别和下载的自动解密");
             Console.WriteLine();
             Console.WriteLine("*** 加密部分 ***");
             Console.WriteLine("--show-key");
@@ -256,6 +258,7 @@ namespace BaiduCloudConsole
             var max_thread = Downloader.DEFAULT_MAX_THREAD;
             var speed_limit = 0;
 
+            #region inputs
             if (cmd.Length > 3)
             {
                 int index = 3;
@@ -263,7 +266,11 @@ namespace BaiduCloudConsole
                     switch (cmd[index])
                     {
                         case "--threads":
-                            //max_thread = int.Parse(cmd[index + 1]);
+                            if (index + 1 >= cmd.Length)
+                            {
+                                Console.WriteLine("参数不足");
+                                return;
+                            }
                             if (int.TryParse(cmd[index + 1], out max_thread) == false)
                             {
                                 Console.WriteLine("线程数 {0} 无法转换为整型", cmd[index + 1]);
@@ -272,13 +279,18 @@ namespace BaiduCloudConsole
                             index += 2;
                             break;
                         case "--speed":
+                            if (index + 1 >= cmd.Length)
+                            {
+                                Console.WriteLine("参数不足");
+                                return;
+                            }
                             double temp_speed;
                             if (double.TryParse(cmd[index + 1], out temp_speed) == false)
                             {
                                 Console.WriteLine("限速 {0} 无法转换为浮点数", cmd[index + 1]);
                                 return;
                             }
-                            speed_limit = (int)temp_speed * 1024;
+                            speed_limit = (int)(temp_speed * 1024);
                             index += 2;
                             break;
 
@@ -287,21 +299,11 @@ namespace BaiduCloudConsole
                             return;
                     }
             }
+            #endregion
 
-            Console.WriteLine("等待文件信息与服务器同步结束");
             var rst_event = new ManualResetEventSlim();
-            bool wait_diff_complete = true;
-            _remote_file_cacher.FileDiffFinish += delegate
-            {
-                if (wait_diff_complete)
-                {
-                    rst_event.Set();
-                    wait_diff_complete = false;
-                }
-            };
-            rst_event.Wait();
 
-            Console.WriteLine("从SQL读取文件信息……");
+            Console.WriteLine("读取文件信息……");
             var parent_dir_path = remote_path.Substring(0, remote_path.LastIndexOf('/'));
             if (string.IsNullOrEmpty(parent_dir_path)) parent_dir_path = "/"; //根目录修正
 
@@ -311,6 +313,23 @@ namespace BaiduCloudConsole
 
             rst_event.Wait();
             var remote_file_info = file_list.Find(o => o.Path == remote_path);
+
+            if (string.IsNullOrEmpty( remote_file_info.Path))
+            {
+                Console.WriteLine("找不到该文件");
+                return;
+            }
+            else if (remote_file_info.IsDir)
+            {
+                Console.WriteLine("暂时不支持文件夹下载");
+                return;
+            }
+            else if (remote_file_info.Size == 0)
+            {
+                File.Create(local_path).Close();
+                Console.WriteLine("下载完成");
+                return;
+            }
 
             //开始下载
             var downloader = new Downloader(_remote_file_cacher, remote_file_info, local_path, max_thread, speed_limit, _key_manager);
@@ -325,6 +344,12 @@ namespace BaiduCloudConsole
             {
                 decrypt_started = true;
             };
+            bool prealloc_finished = false, prealloc_response = false;
+            downloader.PreAllocBlockFinished += delegate
+            {
+                prealloc_finished = true;
+            };
+
             Console.WriteLine("预分配硬盘空间……");
             Downloader.State stat;
             do
@@ -332,43 +357,35 @@ namespace BaiduCloudConsole
                 stat = downloader.TaskState;
                 long finished_size = downloader.DownloadedSize;
                 long total_size = downloader.Size;
-                double rate = 100.0 * finished_size / total_size;
 
-                //进度条长度
-                var bar_length = Math.Max(0, Console.WindowWidth - 45);
-                var bar = new string('.', bar_length);
-                var f_finished_bar = rate / 100 * bar_length;
-                int i_finished_bar = (int)Math.Floor(f_finished_bar);
-                var finished_bar = new string('=', i_finished_bar);
-                if (bar_length != i_finished_bar)
-                    bar = finished_bar + ">" + bar.Substring(0, bar_length - i_finished_bar - 1);
+                if (prealloc_finished && !decrypt_started)
+                    _proceed_status_bar(finished_size, total_size, (long)downloader.AverageSpeed5s);
                 else
-                    bar = finished_bar;
+                    _proceed_status_bar(finished_size, total_size);
 
-                var size_info = string.Format("{0,-17}", _format_bytes(finished_size) + "/" + _format_bytes(total_size));
+                if (!prealloc_response && prealloc_finished)
+                {
+                    prealloc_response = true;
+                    _proceed_status_bar(total_size, total_size);
 
-                var speed_info = new string(' ', 10);
-                if (!decrypt_started)
-                    speed_info = string.Format("{0,-10}", _format_bytes((long)downloader.AverageSpeed5s) + "/s");
-
-                Console.Write("\r[" + rate.ToString("#0.0") + "%] [" + bar + "] " + size_info + " " + speed_info);
-                //if (decrypt_started && !decrypt_response)
-                //{
-                //    decrypt_response = true;
-                //    bar = new string('=', bar_length);
-                //    size_info = new string(' ', 17);
-                //    size_info = _format_bytes(total_size) + "/" + _format_bytes(total_size) + size_info;
-                //    size_info = size_info.Substring(0, 17);
-                //    speed_info = new string(' ', 10);
-                //    Console.Write("\r[" + rate.ToString("#0.0") + "%] [" + bar + "] " + size_info + " " + speed_info);
-
-                //    Console.WriteLine();
-                //    Console.WriteLine("解密文件……");
-                //}
+                    Console.WriteLine();
+                    Console.WriteLine("下载开始……");
+                }
+                else if (!decrypt_response && decrypt_started)
+                {
+                    decrypt_response = true;
+                    _proceed_status_bar(total_size, total_size);
+                    Console.WriteLine();
+                    Console.WriteLine("文件解密开始……");
+                }
                 Thread.Sleep(100);
-            } while (stat != Downloader.State.FINISHED);
-            Console.WriteLine();
-            Console.WriteLine("下载完成");
+            } while ((stat & Downloader.State.FINISHED) == 0 && (stat & Downloader.State.ERROR) == 0);
+
+            if (downloader.TaskState == Downloader.State.FINISHED)
+            {
+                Console.WriteLine();
+                Console.WriteLine("下载完成");
+            }
         }
         private static string _format_bytes(long b)
         {
@@ -418,7 +435,175 @@ namespace BaiduCloudConsole
 
         private static void _exec_upload(string[] cmd)
         {
+            if (cmd.Length < 3)
+            {
+                Console.WriteLine("参数不足");
+                return;
+            }
+            var local_path = cmd[1];
+            var remote_path = cmd[2];
+            var max_thread = Uploader.DEFAULT_MAX_THREAD;
+            var speed_limit = 0;
+            var encrypt_str = "";
+            var overwrite = false;
+            #region inputs
+            if (cmd.Length > 3)
+            {
+                var index = 3;
+                while (index < cmd.Length)
+                {
+                    switch (cmd[index])
+                    {
+                        case "--threads":
+                            if (index + 1 >= cmd.Length)
+                            {
+                                Console.WriteLine("参数不足");
+                                return;
+                            }
+                            if (int.TryParse(cmd[index + 1], out max_thread) == false)
+                            {
+                                Console.WriteLine("线程数 {0} 无法转换为整型", cmd[index + 1]);
+                                return;
+                            }
+                            index += 2;
+                            break;
+                        case "--speed":
+                            if (index + 1 >= cmd.Length)
+                            {
+                                Console.WriteLine("参数不足");
+                                return;
+                            }
+                            double temp_speed;
+                            if (double.TryParse(cmd[index + 1], out temp_speed) == false)
+                            {
+                                Console.WriteLine("限速 {0} 无法转换为浮点数", cmd[index + 1]);
+                                return;
+                            }
+                            speed_limit = (int)(temp_speed * 1024);
+                            index += 2;
+                            break;
+                        case "--encrypt":
+                            if (index + 1 >= cmd.Length)
+                            {
+                                Console.WriteLine("参数不足");
+                                return;
+                            }
+                            encrypt_str = cmd[index + 1];
+                            if (encrypt_str != "aes" && encrypt_str != "rsa")
+                            {
+                                Console.WriteLine("无效的加密类型");
+                                return;
+                            }
+                            index += 2;
+                            break;
+                        case "--overwrite":
+                            overwrite = true;
+                            index++;
+                            break;
+                        default:
+                            Console.WriteLine("未知参数：{0}", cmd[index]);
+                            return;
+                    }
+                }
+            }
+            #endregion
 
+            if (encrypt_str == "rsa")
+                _key_manager.IsDynamicEncryption = true;
+            else
+                _key_manager.IsStaticEncryption = true;
+
+            var uploader = new Uploader(_local_file_cacher, _remote_file_cacher, local_path, remote_path, 0, overwrite, max_thread, speed_limit, _key_manager, encrypt_str != "");
+
+            bool file_digest_finished = false, encrypt_finished = false, encfile_digest_finished = false;
+            uploader.FileDigestFinished += delegate { file_digest_finished = true; };
+            uploader.EncryptFinished += delegate { encrypt_finished = true; };
+            uploader.EncryptFileDigestFinished += delegate { encfile_digest_finished = true; };
+            uploader.TaskError += delegate
+            {
+                Console.WriteLine();
+                Console.WriteLine("上传失败");
+            };
+            uploader.Start();
+
+            Uploader.State stat;
+            Console.WriteLine("计算文件特征值……");
+            long size, current;
+            do
+            {
+                stat = uploader.TaskState;
+                size = uploader.Size;
+                current = uploader.UploadedSize;
+                _proceed_status_bar(current, size);
+                Thread.Sleep(100);
+            } while ((stat & Uploader.State.ERROR) == 0 && !file_digest_finished);
+            _proceed_status_bar(size, size);
+
+            if (encrypt_str != "")
+            {
+                Console.WriteLine();
+                Console.WriteLine("加密文件……");
+                do
+                {
+                    stat = uploader.TaskState;
+                    size = uploader.Size;
+                    current = uploader.UploadedSize;
+                    _proceed_status_bar(current, size);
+                    Thread.Sleep(100);
+                } while ((stat & Uploader.State.ERROR) == 0 && !encrypt_finished);
+                _proceed_status_bar(size, size);
+                Console.WriteLine();
+                Console.WriteLine("计算加密文件特征值……");
+                do
+                {
+                    stat = uploader.TaskState;
+                    size = uploader.Size;
+                    current = uploader.UploadedSize;
+                    _proceed_status_bar(current, size);
+                    Thread.Sleep(100);
+                } while ((stat & Uploader.State.ERROR) == 0 && !encfile_digest_finished);
+                _proceed_status_bar(size, size);
+            }
+            Console.WriteLine();
+            Console.WriteLine("上传文件……");
+            do
+            {
+                stat = uploader.TaskState;
+                size = uploader.Size;
+                current = uploader.UploadedSize;
+                _proceed_status_bar(current, size, (long)uploader.AverageSpeed5s);
+                Thread.Sleep(100);
+            } while ((stat & Uploader.State.ERROR) == 0 && (stat & Uploader.State.FINISHED) == 0);
+            _proceed_status_bar(size, size);
+
+            if (uploader.TaskState == Uploader.State.FINISHED)
+            {
+                Console.WriteLine();
+                Console.WriteLine("上传完成，文件已保存到 {0}", uploader.RemoteFilePath);
+            }
+        }
+        private static void _proceed_status_bar(long current, long total, long? speed = null)
+        {
+            double rate = 100.0 * current / total;
+
+            //进度条长度
+            var bar_length = Math.Max(0, Console.WindowWidth - 45);
+            var bar = new string('.', bar_length);
+            var f_finished_bar = rate / 100 * bar_length;
+            int i_finished_bar = (int)Math.Floor(f_finished_bar);
+            var finished_bar = new string('=', i_finished_bar);
+            if (bar_length != i_finished_bar)
+                bar = finished_bar + ">" + bar.Substring(0, bar_length - i_finished_bar - 1);
+            else
+                bar = finished_bar;
+
+            var size_info = string.Format("{0,-17}", _format_bytes(current) + "/" + _format_bytes(total));
+
+            var speed_info = new string(' ', 10);
+            if (speed != null)
+                speed_info = string.Format("{0,-10}", _format_bytes((long)speed) + "/s");
+
+            Console.Write("\r[" + string.Format("{0,5}", rate.ToString("0.0")) + "%] [" + bar + "] " + size_info + " " + speed_info);
         }
         private static void _exec_list(string[] cmd)
         {

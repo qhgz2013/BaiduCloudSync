@@ -167,13 +167,14 @@ namespace BaiduCloudSync
                     else
                         path_sha1 = SHA1.ComputeHash(next_path.ToLower());
 #pragma warning restore
+                    Tracer.GlobalTracer.TraceInfo("File Digest started: " + next_path);
 
                     //calculation (parallel access)
                     var md5_calc = new MD5(); //speed: ~36s/GB
                     var sha1_calc = new SHA1(); //speed: ~55s/GB
                     var md5_slice_calc = new MD5(); //speed: ~45ms (256KB)
                     var crc32_calc = new Crc32(); //speed: ~11s/GB
-
+                    long md5_pos = 0, sha1_pos = 0, crc32_pos = 0;
                     //loading pre-calculated data from sql
                     lock (_sql_lock)
                     {
@@ -193,17 +194,20 @@ namespace BaiduCloudSync
                             sha1_calc = SHA1.Deserialize(ms_sha1);
                             md5_slice_calc = MD5.Deserialize(ms_md5_slice);
                             crc32_calc = Crc32.Deserialize(ms_crc32);
+                            md5_pos = md5_calc.Length;
+                            sha1_pos = sha1_calc.Length;
+                            crc32_pos = crc32_calc.Length;
                         }
                         dr.Close();
                         _sql_cmd.Parameters.Clear();
                     }
 
                     int io_state = 0;
-                    //4 thread parallel read
-                    Parallel.For(0, 4, (i) =>
+                    //5 thread parallel read
+                    Parallel.For(0, 5, (i) =>
                     {
                         //debug test
-                        var str = new string[] { "MD5", "SHA1", "CRC32", "Slice_MD5" };
+                        var str = new string[] { "MD5", "SHA1", "CRC32", "Slice_MD5", "Event" };
                         var sw = new System.Diagnostics.Stopwatch();
                         Tracer.GlobalTracer.TraceInfo(str[i] + " calculation thread started");
                         sw.Start();
@@ -237,6 +241,8 @@ namespace BaiduCloudSync
                                         md5_slice_calc.Initialize();
                                     fs.Seek(md5_slice_calc.Length, SeekOrigin.Begin);
                                     break;
+                                case 4:
+                                    break;
                                 default:
                                     throw new InvalidOperationException();
                             }
@@ -246,27 +252,40 @@ namespace BaiduCloudSync
                             {
                                 try
                                 {
-                                    current = fs.Read(buffer, 0, buffer.Length);
-
                                     switch (i)
                                     {
                                         case 0:
+                                            current = fs.Read(buffer, 0, buffer.Length);
                                             md5_calc.TransformBlock(buffer, 0, current);
+                                            md5_pos += current;
                                             break;
                                         case 1:
+                                            current = fs.Read(buffer, 0, buffer.Length);
                                             sha1_calc.TransformBlock(buffer, 0, current);
+                                            sha1_pos += current;
                                             break;
                                         case 2:
+                                            current = fs.Read(buffer, 0, buffer.Length);
                                             crc32_calc.TransformBlock(buffer, 0, current);
+                                            crc32_pos += current;
                                             break;
 
                                         case 3:
+                                            current = fs.Read(buffer, 0, buffer.Length);
                                             if (length >= BaiduPCS.VALIDATE_SIZE)
                                                 return;
                                             current = (int)Math.Min(BaiduPCS.VALIDATE_SIZE - length, current);
                                             md5_slice_calc.TransformBlock(buffer, 0, current);
                                             break;
 
+                                        case 4:
+                                            if (io_state == 0xf)
+                                                return;
+                                            long a = md5_pos, b = sha1_pos, c = crc32_pos;
+                                            var min = Math.Min(Math.Min(a, b), c);
+                                            LocalFileIOUpdate?.Invoke(next_path, min, origin_file_length);
+                                            Thread.Sleep(10);
+                                            break;
                                         default:
                                             throw new InvalidOperationException();
                                     }

@@ -356,6 +356,7 @@ namespace BaiduCloudSync
 
         #region Event handler
         public event EventHandler TaskStarted, TaskFinished, TaskPaused, TaskCancelled, TaskError, EncryptStarted, EncryptFinished;
+        public event EventHandler FileDigestStarted, FileDigestFinished, EncryptFileDigestStarted, EncryptFileDigestFinished;
         #endregion
 
         private void _on_file_deleted(object sender, FileSystemEventArgs e)
@@ -376,6 +377,7 @@ namespace BaiduCloudSync
                 {
                     _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_DIGEST_CALCULATING) & ~_UPLOAD_THREAD_FLAG_DIGEST_REQUESTED;
                 }
+                _uploaded_size = current;
             }
         }
         private void _on_file_io_completed(LocalFileData data)
@@ -435,11 +437,6 @@ namespace BaiduCloudSync
                     Interlocked.Add(ref _uploaded_size, length);
 
                     _last_sent[index] = DateTime.Now;
-                    //if (_upload_thread_flag != _UPLOAD_THREAD_FLAG_STARTED)
-                    //{
-                    //    _remote_cacher.UploadSliceCancelAsync(task_id, _selected_account_id);
-                    //    return;
-                    //}
                 }
 
                 _remote_cacher.UploadSliceEndAsync(task_id, (suc2, data2, e2) =>
@@ -499,16 +496,6 @@ namespace BaiduCloudSync
                 _local_path += ".encrypted";
                 if (!_remote_path.EndsWith(".bcsd"))
                     _remote_path += ".bcsd";
-
-                //handling IO
-                _local_cacher.FileIORequest(_local_path);
-                _upload_thread_flag |= _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED;
-                _file_io_response.Wait();
-                _file_io_response.Reset();
-
-                //handling file slice data
-                _file_size = _local_data.Size;
-                _slice_count = (int)Math.Ceiling(_file_size * 1.0 / BaiduPCS.UPLOAD_SLICE_SIZE);
             }
             catch (Exception ex)
             {
@@ -528,9 +515,12 @@ namespace BaiduCloudSync
                 {
                     _local_cacher.FileIORequest(_local_path);
                     _upload_thread_flag |= _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED;
+                    try { FileDigestStarted?.Invoke(this, new EventArgs()); } catch { }
                     _file_io_response.Wait();
                     _file_io_response.Reset();
+                    try { FileDigestFinished?.Invoke(this, new EventArgs()); } catch { }
                 }
+                _uploaded_size = 0;
 
                 #region status check
                 if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_CANCEL_REQUESTED) != 0)
@@ -554,7 +544,7 @@ namespace BaiduCloudSync
                 }
                 #endregion
 
-                if (_enable_encryption && !File.Exists(_local_path + ".encrypted"))
+                if (_enable_encryption)
                 {
                     _upload_thread_flag |= _UPLOAD_THREAD_FLAG_FILE_ENCRYPTING;
                     try { EncryptStarted?.Invoke(this, new EventArgs()); } catch { }
@@ -562,6 +552,20 @@ namespace BaiduCloudSync
                     _upload_thread_flag = _upload_thread_flag & ~_UPLOAD_THREAD_FLAG_FILE_ENCRYPTING;
                     try { EncryptFinished?.Invoke(this, new EventArgs()); } catch { }
                     _uploaded_size = 0;
+                    
+
+                    //handling IO
+                    _local_cacher.FileIORequest(_local_path);
+                    _upload_thread_flag |= _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED;
+                    try { EncryptFileDigestStarted?.Invoke(this, new EventArgs()); } catch { }
+                    _file_io_response.Wait();
+                    _file_io_response.Reset();
+                    try { EncryptFileDigestFinished?.Invoke(this, new EventArgs()); } catch { }
+
+                    //handling file slice data
+                    _uploaded_size = 0;
+                    _file_size = _local_data.Size;
+                    _slice_count = (int)Math.Ceiling(_file_size * 1.0 / BaiduPCS.UPLOAD_SLICE_SIZE);
                 }
 
                 //status check
@@ -788,7 +792,7 @@ namespace BaiduCloudSync
             {
                 _monitor_thread = null;
                 //deleting temporary encrypted file
-                if (File.Exists(_local_path) && _local_path.EndsWith(".encrypted"))
+                if (_enable_encryption && File.Exists(_local_path) && _local_path.EndsWith(".encrypted"))
                     File.Delete(_local_path);
             }
         }
