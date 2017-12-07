@@ -412,8 +412,7 @@ namespace GlobalUtil
             private long _response_header_length;
             private long _response_protocol_length;
             private long _response_body_length;
-
-            private Thread _sync_thread;
+            
             #region properties
             /// <summary>
             /// HTTP请求

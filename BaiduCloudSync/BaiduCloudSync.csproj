@@ -39,7 +39,8 @@
     </StartupObject>
   </PropertyGroup>
   <PropertyGroup>
-    <ApplicationIcon>form\icon.ico</ApplicationIcon>
+    <ApplicationIcon>
+    </ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup />
   <ItemGroup>
@@ -85,71 +86,10 @@
     <Compile Include="api\baidu-pcs-async.cs" />
     <Compile Include="api\baidu-pcs.cs" />
     <Compile Include="api\baidu-pcs-extend.cs" />
-    <Compile Include="form\dialogs\frm-create-share.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="form\dialogs\frm-create-share.Designer.cs">
-      <DependentUpon>frm-create-share.cs</DependentUpon>
-    </Compile>
-    <Compile Include="form\dialogs\frm-overwrite.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="form\dialogs\frm-overwrite.Designer.cs">
-      <DependentUpon>frm-overwrite.cs</DependentUpon>
-    </Compile>
-    <Compile Include="form\dialogs\frm-key-create.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="form\dialogs\frm-key-create.Designer.cs">
-      <DependentUpon>frm-key-create.cs</DependentUpon>
-    </Compile>
     <Compile Include="sql\sql-struct.cs" />
     <Compile Include="sql\remote-file-cacher.cs" />
     <Compile Include="sql\local-file-cacher.cs" />
     <Compile Include="testbench\test-bench.cs" />
-    <Compile Include="form\controls\ctl-debug-output.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="form\controls\ctl-debug-output.Designer.cs">
-      <DependentUpon>ctl-debug-output.cs</DependentUpon>
-    </Compile>
-    <Compile Include="form\controls\ctl-upload-transfer-list.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="form\controls\ctl-upload-transfer-list.Designer.cs">
-      <DependentUpon>ctl-upload-transfer-list.cs</DependentUpon>
-    </Compile>
-    <Compile Include="form\controls\ctl-download-transfer-list.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="form\controls\ctl-download-transfer-list.Designer.cs">
-      <DependentUpon>ctl-download-transfer-list.cs</DependentUpon>
-    </Compile>
-    <Compile Include="form\dialogs\frm-create-dir.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="form\dialogs\frm-create-dir.Designer.cs">
-      <DependentUpon>frm-create-dir.cs</DependentUpon>
-    </Compile>
-    <Compile Include="form\frm-download.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="form\frm-download.Designer.cs">
-      <DependentUpon>frm-download.cs</DependentUpon>
-    </Compile>
-    <Compile Include="form\frm-main.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="form\frm-main.Designer.cs">
-      <DependentUpon>frm-main.cs</DependentUpon>
-    </Compile>
-    <Compile Include="form\dialogs\frm-property.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="form\dialogs\frm-property.Designer.cs">
-      <DependentUpon>frm-property.cs</DependentUpon>
-    </Compile>
-    <Compile Include="form\static-config.cs" />
     <Compile Include="transfer\downloader-pool.cs" />
     <Compile Include="transfer\downloader.cs" />
     <Compile Include="transfer\itransfer.cs" />
@@ -169,48 +109,9 @@
     <Compile Include="util\task-dispatcher.cs" />
     <Compile Include="util\tracer.cs" />
     <Compile Include="util\net-util.cs" />
-    <Compile Include="form\dialogs\frm-login.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="form\dialogs\frm-login.Designer.cs">
-      <DependentUpon>frm-login.cs</DependentUpon>
-    </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="util\util.cs" />
-    <EmbeddedResource Include="form\controls\ctl-debug-output.resx">
-      <DependentUpon>ctl-debug-output.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="form\controls\ctl-upload-transfer-list.resx">
-      <DependentUpon>ctl-upload-transfer-list.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="form\controls\ctl-download-transfer-list.resx">
-      <DependentUpon>ctl-download-transfer-list.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="form\dialogs\frm-create-dir.resx">
-      <DependentUpon>frm-create-dir.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="form\dialogs\frm-create-share.resx">
-      <DependentUpon>frm-create-share.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="form\dialogs\frm-overwrite.resx">
-      <DependentUpon>frm-overwrite.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="form\frm-download.resx">
-      <DependentUpon>frm-download.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="form\frm-main.resx">
-      <DependentUpon>frm-main.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="form\dialogs\frm-login.resx">
-      <DependentUpon>frm-login.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="form\dialogs\frm-property.resx">
-      <DependentUpon>frm-property.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="form\dialogs\frm-key-create.resx">
-      <DependentUpon>frm-key-create.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -237,7 +138,6 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="form\icon.ico" />
     <Content Include="代码重构规划.txt" />
     <Content Include="加密说明.txt" />
   </ItemGroup>
