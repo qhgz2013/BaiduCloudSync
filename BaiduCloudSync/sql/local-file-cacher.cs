@@ -281,6 +281,7 @@ namespace BaiduCloudSync
                                         case 4:
                                             if (io_state == 0xf)
                                                 return;
+                                            current = 1;
                                             long a = md5_pos, b = sha1_pos, c = crc32_pos;
                                             var min = Math.Min(Math.Min(a, b), c);
                                             LocalFileIOUpdate?.Invoke(next_path, min, origin_file_length);

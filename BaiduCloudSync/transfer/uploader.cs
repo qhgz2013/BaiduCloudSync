@@ -371,7 +371,7 @@ namespace BaiduCloudSync
         private void _on_file_io_updated(string path, long current, long total)
         {
             //todo: updating io status
-            if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED) != 0 && path == _local_path)
+            if (path == _local_path)
             {
                 if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED) != 0)
                 {
