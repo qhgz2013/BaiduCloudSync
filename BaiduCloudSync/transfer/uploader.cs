@@ -454,7 +454,7 @@ namespace BaiduCloudSync
             }
             catch (Exception ex)
             {
-                Tracer.GlobalTracer.TraceError(ex);
+                Tracer.GlobalTracer.TraceError("#" + index + "(seq: " + seq_id + "):\r\n" + ex.ToString());
                 Interlocked.Add(ref _uploaded_size, -data_offset);
                 _slice_seq.Enqueue(seq_id);
             }
@@ -552,7 +552,7 @@ namespace BaiduCloudSync
                     _upload_thread_flag = _upload_thread_flag & ~_UPLOAD_THREAD_FLAG_FILE_ENCRYPTING;
                     try { EncryptFinished?.Invoke(this, new EventArgs()); } catch { }
                     _uploaded_size = 0;
-                    
+
 
                     //handling IO
                     _local_cacher.FileIORequest(_local_path);
@@ -709,12 +709,14 @@ namespace BaiduCloudSync
                         {
                             for (int i = 0; i < max_thread && _slice_seq.Count > 0; i++)
                             {
-                                if (_task_id[i] == Guid.Empty || (DateTime.Now - _last_sent[i]).TotalSeconds > 120)
+                                if ((DateTime.Now - _last_sent[i]).TotalSeconds > 120)
                                 {
                                     if (_task_id[i] != Guid.Empty)
                                     {
+                                        _last_sent[i] = DateTime.Now;
                                         _remote_cacher.UploadSliceCancelAsync(_task_id[i], _selected_account_id);
                                         _task_id[i] = Guid.Empty;
+                                        continue;
                                     }
 
                                     //error handling for dequeue failure
