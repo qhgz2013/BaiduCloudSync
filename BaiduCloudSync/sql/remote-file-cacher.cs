@@ -10,6 +10,7 @@ using GlobalUtil;
 namespace BaiduCloudSync
 {
     //管理多个PCS API，对文件数据进行sql缓存的类（包含多线程优化）
+    //todo: 优化管理线程代码
     public class RemoteFileCacher : IDisposable
     {
         private const string _CACHE_PATH = "data";
@@ -282,6 +283,8 @@ namespace BaiduCloudSync
                                 _file_diff_thread_data_dirty.Add(item.Key, true);
                             }
                         }
+                        _is_file_diff_working = true;
+                        try { FileDiffStart?.Invoke(this, new EventArgs()); } catch { }
                         _account_changed = false;
                     }
                 }
@@ -290,6 +293,8 @@ namespace BaiduCloudSync
                 int account_count = _file_diff_thread_fetching_head.Count;
                 int finished_count = 0;
                 bool is_data_dirty = false;
+                var rst_event = new ManualResetEventSlim();
+
                 foreach (var item in _file_diff_thread_fetching_head)
                 {
                     if (_file_diff_thread_data_dirty[item.Key])
@@ -298,7 +303,7 @@ namespace BaiduCloudSync
                         var cursor = item.Value.cursor;
                         lock (_file_diff_thread_fetching_head_lock)
                         {
-                            item.Value.pcs.GetFileDiffAsync(cursor, _file_diff_data_callback, item.Key);
+                            item.Value.pcs.GetFileDiffAsync(cursor, _file_diff_data_callback, new KeyValuePair<object, object>(item.Key, rst_event));
                             _file_diff_thread_data_dirty[item.Key] = false;
                         }
                         _is_file_diff_working = true;
@@ -311,15 +316,9 @@ namespace BaiduCloudSync
                 //join all threads
                 while (finished_count < account_count)
                 {
-                    try
-                    {
-                        Thread.Sleep(15000); //max waiting 15 seconds to fetch
-                    }
-                    catch (ThreadInterruptedException) { finished_count++; }
-                    catch (Exception ex)
-                    {
-                        Tracer.GlobalTracer.TraceError(ex);
-                    }
+                    rst_event.Wait();
+                    rst_event.Reset();
+                    finished_count++;
                 }
                 _is_file_diff_working = false;
                 try { FileDiffFinish?.Invoke(this, new EventArgs()); } catch { }
@@ -335,6 +334,7 @@ namespace BaiduCloudSync
         //http异步请求线程回调
         private void _file_diff_data_callback(bool suc, bool has_more, bool reset, string next_cursor, ObjectMetadata[] result, object state)
         {
+            var index = (int)((KeyValuePair<object, object>)state).Key;
             if (!suc)
             {
                 //failed: retry in 3 seconds
@@ -344,7 +344,7 @@ namespace BaiduCloudSync
                     _AccountData data2;
                     lock (_file_diff_thread_fetching_head_lock)
                     {
-                        data2 = _file_diff_thread_fetching_head[(int)state];
+                        data2 = _file_diff_thread_fetching_head[index];
                     }
                     data2.pcs.GetFileDiffAsync(data2.cursor, _file_diff_data_callback, state);
                 });
@@ -353,8 +353,8 @@ namespace BaiduCloudSync
             if (reset)
             {
                 //reset all files from sql database
-                string reset_sql = "delete from FileList where account_id = " + (int)state;
-                string reset_sql2 = "delete from FileListExtended where account_id = " + (int)state;
+                string reset_sql = "delete from FileList where account_id = " + index;
+                string reset_sql2 = "delete from FileListExtended where account_id = " + index;
                 lock (_sql_lock)
                 {
                     _sql_cmd.CommandText = reset_sql;
@@ -370,12 +370,12 @@ namespace BaiduCloudSync
             _AccountData data;
             lock (_file_diff_thread_fetching_head_lock)
             {
-                data = _file_diff_thread_fetching_head[(int)state];
+                data = _file_diff_thread_fetching_head[index];
                 data.cursor = next_cursor;
-                _file_diff_thread_fetching_head[(int)state] = data;
+                _file_diff_thread_fetching_head[index] = data;
             }
             //updating sql
-            var update_account_sql = "update Account set cursor = @next_cursor where account_id = " + (int)state;
+            var update_account_sql = "update Account set cursor = @next_cursor where account_id = " + index;
             lock (_sql_lock)
             {
                 _sql_cmd.CommandText = update_account_sql;
@@ -392,8 +392,8 @@ namespace BaiduCloudSync
             }
 
             //updating data using sql
-            var delete_sql = "delete from FileList where account_id = " + (int)state + " and FS_ID = ";
-            var delete_sql2 = "delete from FileListExtended where account_id = " + (int)state + " and FS_ID = ";
+            var delete_sql = "delete from FileList where account_id = " + index + " and FS_ID = ";
+            var delete_sql2 = "delete from FileListExtended where account_id = " + index + " and FS_ID = ";
             var insert_sql = "insert into FileList(FS_ID, Category, IsDir, LocalCTime, LocalMTime, OperID, Path, ServerCTime, ServerFileName, ServerMTime, Size, Unlist, MD5, account_id) values " +
                 "(@FS_ID, @Category, @IsDir, @LocalCTime, @LocalMTime, @OperID, @Path, @ServerCTime, @ServerFileName, @ServerMTime, @Size, @Unlist, @MD5, @account_id)";
             var update_sql = "update FileList set Category = @Category, IsDir = @IsDir, LocalCTime = @LocalCTime, LocalMTime = @LocalMTime, OperID = @OperID, Path = @Path, ServerCTime = @ServerCTime, ServerFileName = @ServerFileName, ServerMTime = @ServerMTime, Size = @Size, Unlist = @Unlist, MD5 = @MD5, account_id = @account_id where FS_ID = @FS_ID";
@@ -446,7 +446,7 @@ namespace BaiduCloudSync
                         _sql_cmd.Parameters.Add("@MD5", System.Data.DbType.Binary);
                         _sql_cmd.Parameters["@MD5"].Value = util.Hex(item.MD5);
                         _sql_cmd.Parameters.Add("@account_id", System.Data.DbType.Int32);
-                        _sql_cmd.Parameters["@account_id"].Value = (int)state;
+                        _sql_cmd.Parameters["@account_id"].Value = index;
                         _sql_cmd.ExecuteNonQuery();
                         _sql_cmd.Parameters.Clear();
                     }
@@ -461,7 +461,7 @@ namespace BaiduCloudSync
                     _sql_trs = _sql_con.BeginTransaction();
                 }
                 if (_file_diff_thread != null)
-                    _file_diff_thread.Interrupt();
+                    ((ManualResetEventSlim)((KeyValuePair<object, object>)state).Value).Set();
             }
         }
         //在sql数据库中读取文件数据
