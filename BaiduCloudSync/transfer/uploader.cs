@@ -412,7 +412,7 @@ namespace BaiduCloudSync
                 _task_id[index] = task_id;
                 seq_id = _task_seq[index];
             }
-            long offset = BaiduPCS.UPLOAD_SLICE_SIZE * seq_id;
+            long offset = BaiduPCS.UPLOAD_SLICE_SIZE * (long)seq_id;
 
             int data_offset = 0;
             try
@@ -727,7 +727,7 @@ namespace BaiduCloudSync
                                         try { TaskError?.Invoke(this, new EventArgs()); } catch { }
                                         return;
                                     }
-                                    _remote_cacher.UploadSliceBeginAsync((ulong)Math.Min(_file_size - BaiduPCS.UPLOAD_SLICE_SIZE * _task_seq[i], BaiduPCS.UPLOAD_SLICE_SIZE), _remote_path, _upload_id, _task_seq[i], _on_slice_upload_request_callback, _selected_account_id, i);
+                                    _remote_cacher.UploadSliceBeginAsync((ulong)Math.Min(_file_size - BaiduPCS.UPLOAD_SLICE_SIZE * (long)_task_seq[i], BaiduPCS.UPLOAD_SLICE_SIZE), _remote_path, _upload_id, _task_seq[i], _on_slice_upload_request_callback, _selected_account_id, i);
                                     _last_sent[i] = DateTime.Now;
                                 }
                             }
