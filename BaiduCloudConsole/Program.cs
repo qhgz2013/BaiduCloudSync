@@ -49,8 +49,8 @@ namespace BaiduCloudConsole
             NetStream.SaveCookie("data/cookie.dat");
             _key_manager.SaveKey("data/rsa_key.pem", true);
             _key_manager.SaveKey("data/aes_key.dat", false);
-            _local_file_cacher.Dispose();
-            _remote_file_cacher.Dispose();
+            _local_file_cacher?.Dispose();
+            _remote_file_cacher?.Dispose();
             //Console.ReadKey();
         }
         //检验登陆状态，如未登陆则登陆
@@ -314,7 +314,7 @@ namespace BaiduCloudConsole
             rst_event.Wait();
             var remote_file_info = file_list.Find(o => o.Path == remote_path);
 
-            if (string.IsNullOrEmpty( remote_file_info.Path))
+            if (string.IsNullOrEmpty(remote_file_info.Path))
             {
                 Console.WriteLine("找不到该文件");
                 return;
@@ -433,6 +433,33 @@ namespace BaiduCloudConsole
             }
         }
 
+        private static void _scan_dir(string local_path, string remote_path, out List<string> local_files, out List<string> remote_files, bool recursion = true)
+        {
+            local_files = new List<string>();
+            remote_files = new List<string>();
+
+            var dir_info = new DirectoryInfo(local_path);
+
+            var files = dir_info.GetFiles();
+            var dirs = dir_info.GetDirectories();
+
+            foreach (var item in files)
+            {
+                local_files.Add(item.FullName);
+                remote_files.Add(remote_path + "/" + item.Name);
+            }
+
+            if (recursion)
+            {
+                foreach (var item in dirs)
+                {
+                    List<string> temp_local, temp_remote;
+                    _scan_dir(local_path + "/" + item.Name, remote_path + "/" + item.Name, out temp_local, out temp_remote, recursion);
+                    local_files.AddRange(temp_local);
+                    remote_files.AddRange(temp_remote);
+                }
+            }
+        }
         private static void _exec_upload(string[] cmd)
         {
             if (cmd.Length < 3)
@@ -508,41 +535,57 @@ namespace BaiduCloudConsole
             }
             #endregion
 
+            bool is_file = File.Exists(local_path), is_dir = Directory.Exists(local_path);
+            if (is_file == false && is_dir == false)
+            {
+                Console.WriteLine("输入路径不存在");
+                return;
+            }
+
+            List<string> local_files = new List<string>(), remote_files = new List<string>();
+            if (is_dir)
+            {
+                if (remote_path.EndsWith("/") && remote_path != "/")
+                    remote_path = remote_path.Substring(0, remote_path.Length - 1);
+                _scan_dir(local_path, remote_path, out local_files, out remote_files, true);
+            }
+            else
+            {
+                local_files.Add(local_path);
+                remote_files.Add(remote_path);
+            }
+
             if (encrypt_str == "rsa")
                 _key_manager.IsDynamicEncryption = true;
             else
                 _key_manager.IsStaticEncryption = true;
 
-            var uploader = new Uploader(_local_file_cacher, _remote_file_cacher, local_path, remote_path, 0, overwrite, max_thread, speed_limit, _key_manager, encrypt_str != "");
-
-            bool file_digest_finished = false, encrypt_finished = false, encfile_digest_finished = false;
-            uploader.FileDigestFinished += delegate { file_digest_finished = true; };
-            uploader.EncryptFinished += delegate { encrypt_finished = true; };
-            uploader.EncryptFileDigestFinished += delegate { encfile_digest_finished = true; };
-            uploader.TaskError += delegate
+            for (int i = 0; i < local_files.Count; i++)
             {
-                Console.WriteLine();
-                Console.WriteLine("上传失败");
-            };
-            uploader.Start();
+                local_path = local_files[i];
+                remote_path = remote_files[i];
 
-            Uploader.State stat;
-            Console.WriteLine("计算文件特征值……");
-            long size, current;
-            do
-            {
-                stat = uploader.TaskState;
-                size = uploader.Size;
-                current = uploader.UploadedSize;
-                _proceed_status_bar(current, size);
-                Thread.Sleep(100);
-            } while ((stat & Uploader.State.ERROR) == 0 && !file_digest_finished);
-            _proceed_status_bar(size, size);
+                if (is_dir)
+                {
+                    Console.WriteLine("上传队列：[{0}/{1}] {2}:", i + 1, local_files.Count, local_path);
+                }
 
-            if (encrypt_str != "")
-            {
-                Console.WriteLine();
-                Console.WriteLine("加密文件……");
+                var uploader = new Uploader(_local_file_cacher, _remote_file_cacher, local_path, remote_path, 0, overwrite, max_thread, speed_limit, _key_manager, encrypt_str != "");
+
+                bool file_digest_finished = false, encrypt_finished = false, encfile_digest_finished = false;
+                uploader.FileDigestFinished += delegate { file_digest_finished = true; };
+                uploader.EncryptFinished += delegate { encrypt_finished = true; };
+                uploader.EncryptFileDigestFinished += delegate { encfile_digest_finished = true; };
+                uploader.TaskError += delegate
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("上传失败");
+                };
+                uploader.Start();
+
+                Uploader.State stat;
+                Console.WriteLine("计算文件特征值……");
+                long size, current;
                 do
                 {
                     stat = uploader.TaskState;
@@ -550,36 +593,51 @@ namespace BaiduCloudConsole
                     current = uploader.UploadedSize;
                     _proceed_status_bar(current, size);
                     Thread.Sleep(100);
-                } while ((stat & Uploader.State.ERROR) == 0 && !encrypt_finished);
+                } while ((stat & Uploader.State.ERROR) == 0 && !file_digest_finished);
                 _proceed_status_bar(size, size);
+
+                if (encrypt_str != "")
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("加密文件……");
+                    do
+                    {
+                        stat = uploader.TaskState;
+                        size = uploader.Size;
+                        current = uploader.UploadedSize;
+                        _proceed_status_bar(current, size);
+                        Thread.Sleep(100);
+                    } while ((stat & Uploader.State.ERROR) == 0 && !encrypt_finished);
+                    _proceed_status_bar(size, size);
+                    Console.WriteLine();
+                    Console.WriteLine("计算加密文件特征值……");
+                    do
+                    {
+                        stat = uploader.TaskState;
+                        size = uploader.Size;
+                        current = uploader.UploadedSize;
+                        _proceed_status_bar(current, size);
+                        Thread.Sleep(100);
+                    } while ((stat & Uploader.State.ERROR) == 0 && !encfile_digest_finished);
+                    _proceed_status_bar(size, size);
+                }
                 Console.WriteLine();
-                Console.WriteLine("计算加密文件特征值……");
+                Console.WriteLine("上传文件……");
                 do
                 {
                     stat = uploader.TaskState;
                     size = uploader.Size;
                     current = uploader.UploadedSize;
-                    _proceed_status_bar(current, size);
+                    _proceed_status_bar(current, size, (long)uploader.AverageSpeed5s);
                     Thread.Sleep(100);
-                } while ((stat & Uploader.State.ERROR) == 0 && !encfile_digest_finished);
+                } while ((stat & Uploader.State.ERROR) == 0 && (stat & Uploader.State.FINISHED) == 0);
                 _proceed_status_bar(size, size);
-            }
-            Console.WriteLine();
-            Console.WriteLine("上传文件……");
-            do
-            {
-                stat = uploader.TaskState;
-                size = uploader.Size;
-                current = uploader.UploadedSize;
-                _proceed_status_bar(current, size, (long)uploader.AverageSpeed5s);
-                Thread.Sleep(100);
-            } while ((stat & Uploader.State.ERROR) == 0 && (stat & Uploader.State.FINISHED) == 0);
-            _proceed_status_bar(size, size);
 
-            if (uploader.TaskState == Uploader.State.FINISHED)
-            {
-                Console.WriteLine();
-                Console.WriteLine("上传完成，文件已保存到 {0}", uploader.RemoteFilePath);
+                if (uploader.TaskState == Uploader.State.FINISHED)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("上传完成，文件已保存到 {0}", uploader.RemoteFilePath);
+                }
             }
         }
         private static void _proceed_status_bar(long current, long total, long? speed = null)

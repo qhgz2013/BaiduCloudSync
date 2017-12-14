@@ -1283,6 +1283,12 @@ namespace BaiduCloudSync
                     try
                     {
                         string ret = null;
+                        if (sender.HTTP_Response == null)
+                        {
+                            //null response
+                            callback?.Invoke(false, null, state);
+                            return;
+                        }
                         var response = sender.ReadResponseString();
                         _trace.TraceInfo(response);
                         var json = JsonConvert.DeserializeObject(response) as JObject;

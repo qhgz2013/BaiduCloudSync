@@ -711,7 +711,7 @@ namespace GlobalUtil
             //异步请求的回调函数，代替IAsyncResult
             public delegate void HttpFinishedResponseCallback(NetStream ns, object state);
             //传递参数的临时结构
-            private struct _tmp_struct { public HttpFinishedResponseCallback cb; public object state; public _tmp_struct(HttpFinishedResponseCallback c, object s) { cb = c; state = s; } }
+            private struct _tmp_struct { public HttpFinishedResponseCallback cb; public object state; public Thread callthd; public _tmp_struct(HttpFinishedResponseCallback c, object s, Thread t) { cb = c; state = s; callthd = t; } }
             /// <summary>
             /// 异步发送HTTP get请求
             /// </summary>
@@ -794,7 +794,7 @@ namespace GlobalUtil
                         _request_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
                         _request_header_length += STR_CONNECTION.Length + 2 + (HTTP_Request.Connection == null ? STR_CONNECTION_KEEP_ALIVE.Length : HTTP_Request.Connection.Length);
 
-                        return HTTP_Request.BeginGetResponse(_httpAsyncResponse, new _tmp_struct(callback, state));
+                        return HTTP_Request.BeginGetResponse(_httpAsyncResponse, new _tmp_struct(callback, state, Thread.CurrentThread));
                     }
                     catch (ThreadAbortException) { throw; }
                     catch (Exception ex)
@@ -1001,7 +1001,7 @@ namespace GlobalUtil
                         _request_header_length += STR_HOST.Length + 2 + HTTP_Request.Host.Length;
                         _request_header_length += STR_CONNECTION.Length + 2 + (HTTP_Request.Connection == null ? STR_CONNECTION_KEEP_ALIVE.Length : HTTP_Request.Connection.Length);
 
-                        return HTTP_Request.BeginGetRequestStream(_httpPostAsyncRequest, new _tmp_struct(callback, state));
+                        return HTTP_Request.BeginGetRequestStream(_httpPostAsyncRequest, new _tmp_struct(callback, state, Thread.CurrentThread));
                     }
                     catch (ThreadAbortException) { throw; }
                     catch (WebException ex)
@@ -1046,6 +1046,15 @@ namespace GlobalUtil
             //post时用于EndGetRequestStream的回调函数，用于更新类
             private void _httpPostAsyncRequest(IAsyncResult iar)
             {
+                //排斥调用方线程的代码，.net不知为什么在GetRequestStream的异步方法会调用本身的线程（非线程池线程）
+                if (((_tmp_struct)iar.AsyncState).callthd == Thread.CurrentThread)
+                {
+                    var thd_start_event = new ManualResetEventSlim();
+                    ThreadPool.QueueUserWorkItem(delegate { thd_start_event.Set(); _httpPostAsyncRequest(iar); });
+                    thd_start_event.Wait();
+                    return;
+                }
+
                 try
                 {
                     _lock.AcquireWriterLock(Timeout.Infinite);
@@ -1127,7 +1136,7 @@ namespace GlobalUtil
                     //_lock.AcquireWriterLock(Timeout.Infinite);
                     try
                     {
-                        return HTTP_Request.BeginGetResponse(_httpAsyncResponse, new _tmp_struct(callback, state));
+                        return HTTP_Request.BeginGetResponse(_httpAsyncResponse, new _tmp_struct(callback, state, Thread.CurrentThread));
                     }
                     catch (ThreadAbortException) { throw; }
                     catch (WebException ex)
