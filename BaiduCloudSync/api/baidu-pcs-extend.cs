@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 namespace BaiduCloudSync
 {
@@ -120,47 +121,80 @@ namespace BaiduCloudSync
         /// 将网盘的秒传数据文件转成原文件（将产生一个去掉末尾.symbollink的文件）
         /// </summary>
         /// <param name="path">symbollink文件路径（必要）</param>
-        /// <param name="fs_id">fsid（必要）</param>
+        /// <param name="dst_path">保存的文件名（可选）</param>
         /// <returns>新的文件信息</returns>
-        public ObjectMetadata ConvertFromSymbolLink(string path, ulong fs_id)
+        public ObjectMetadata ConvertFromSymbolLink(string path, string dst_path = null)
         {
-            _trace.TraceInfo("BaiduPCS.ConvertFromSymbolLink called: string path=" + path + ", ulong fs_id=" + fs_id);
+            _trace.TraceInfo("BaiduPCS.ConvertFromSymbolLink called: string path=" + path + ", string dst_path=" + (dst_path == null ? "null" : dst_path));
 
-            if (string.IsNullOrEmpty(path) || fs_id == 0) return new ObjectMetadata();
-            //var url = GetDownloadLink(fs_id);
-            var url = GetDownloadLink_API(path);
-
-            if (string.IsNullOrEmpty(url)) return new ObjectMetadata();
-
-            var ns = new NetStream();
-            ns.CookieKey = _auth.CookieIdentifier;
-            try
+            var rst_event = new ManualResetEventSlim();
+            var ret = new ObjectMetadata();
+            ConvertFromSymbolLinkAsync(path, (suc, data, state) =>
             {
-                ns.HttpGet(url);
-                var response = ns.ReadResponseString();
-                ns.Close();
-
-                var json = JsonConvert.DeserializeObject(response) as JObject;
-                var content_length = json.Value<ulong>("content_length");
-                var content_md5 = json.Value<string>("content_md5");
-                var content_crc32 = json.Value<string>("content_crc32");
-                var slice_md5 = json.Value<string>("slice_md5");
-
-                if (content_length == 0 || string.IsNullOrEmpty(content_md5) || string.IsNullOrEmpty(content_crc32)) return new ObjectMetadata();
-
-                //var new_path = path.TrimEnd(".symbollink".ToArray());
-                var new_path = path.EndsWith(".symbollink") ? path.Substring(0, path.Length - 11) : (path + "." + path.Split('.').Last());
-
-                var data = RapidUploadRaw(new_path, content_length, content_md5, content_crc32, slice_md5);
-                return data;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            return new ObjectMetadata();
+                if (suc)
+                    ret = data;
+                rst_event.Set();
+            }, dst_path);
+            rst_event.Wait();
+            return ret;
         }
 
+        public void ConvertFromSymbolLinkAsync(string path, ObjectMetaCallback callback, string dst_path = null, object state = null)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                if (callback != null)
+                    ThreadPool.QueueUserWorkItem(delegate { callback(false, new ObjectMetadata(), state); });
+                return;
+            }
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                _trace.TraceInfo("BaiduPCS.ConvertFromSymbolLinkAsync called: string path=" + path + ", ObjectMetaCallback callback=" + callback.ToString());
+                var url = GetLocateDownloadLink(path);
+                if (url.Length == 0)
+                {
+                    _trace.TraceWarning("Locate url length is zero");
+                    callback?.Invoke(false, new ObjectMetadata(), state);
+                    return;
+                }
+
+                var ns = new NetStream();
+                ns.RetryTimes = 3;
+                try
+                {
+                    ns.HttpGet(url[0]);
+
+                    var response_json = ns.ReadResponseString();
+                    var json = JsonConvert.DeserializeObject(response_json) as JObject;
+
+                    var content_length = json.Value<ulong>("content_length");
+                    var content_md5 = json.Value<string>("content_md5");
+                    var content_crc32 = json.Value<string>("content_crc32");
+                    var slice_md5 = json.Value<string>("slice_md5");
+
+
+                    if (content_length == 0 || string.IsNullOrEmpty(content_md5) || string.IsNullOrEmpty(content_crc32))
+                    {
+                        callback?.Invoke(false, new ObjectMetadata(), state);
+                        return;
+                    }
+
+                    if (dst_path == null)
+                        dst_path = path.EndsWith(".symbollink") ? path.Substring(0, path.Length - 11) : (path + "." + path.Split('.').Last());
+
+                    var data = RapidUploadRaw(dst_path, content_length, content_md5, content_crc32, slice_md5);
+                }
+                catch (Exception ex)
+                {
+                    _trace.TraceError(ex);
+                    callback?.Invoke(false, new ObjectMetadata(), state);
+                }
+                finally
+                {
+                    ns.Close();
+                }
+            });
+        }
         //文件夹同步
         //#region Folder Sync
         //private bool _get_syncup_data(string local_path, string remote_path, LocalFileCacher local_cacher, FileListCacher remote_cacher, ref List<ObjectMetadata> delete_list, ref List<TrackedData> upload_list, bool recursive)

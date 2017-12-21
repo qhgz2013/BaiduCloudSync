@@ -224,6 +224,12 @@ namespace BaiduCloudConsole
             Console.WriteLine("*** 文件操作 ***");
             Console.WriteLine("-L | --list [网盘文件路径] [--order [排序:name|size|time] --page [页数] --count [每页显示数量] --desc]");
             Console.WriteLine("\t列出文件夹下所有文件，参数page从1开始");
+            Console.WriteLine("--delete [网盘文件路径]");
+            Console.WriteLine("\t删除指定路径的文件或文件夹");
+            Console.WriteLine("--to-symbollink [网盘文件路径] [[文件链接路径]]");
+            Console.WriteLine("\t将文件转换为文件链接，仅对大于256K的文件有效，可选参数：文件链接路径（默认在文件名后加.symbollink）");
+            Console.WriteLine("--from-symbollink [文件链接路径] [[网盘文件路径]]");
+            Console.WriteLine("\t将文件链接转换为文件，可选参数：文件路径（默认去掉文件的.symbollink结尾）");
             Console.WriteLine();
             Console.WriteLine("*** 文件传输 ***");
             Console.WriteLine("-D | --download [网盘文件路径] [本地文件路径] [--threads [下载线程数] --speed [限速(KB/s)]]");
@@ -1005,6 +1011,41 @@ namespace BaiduCloudConsole
                     Console.WriteLine("无AES密钥，忽略删除操作");
             }
         }
+        private static void _exec_delete(string[] cmd)
+        {
+            if (cmd.Length < 2)
+            {
+                Console.WriteLine("参数不足");
+                return;
+            }
+            var path = cmd[1];
+            var rst_event = new ManualResetEventSlim();
+            _remote_file_cacher.DeletePathAsync(path, (suc, data, state) =>
+            {
+                rst_event.Set();
+            });
+            rst_event.Wait();
+            Console.WriteLine("删除完成");
+        }
+        private static void _exec_to_symbollink(string[] cmd)
+        {
+            if (cmd.Length < 2)
+            {
+                Console.WriteLine("参数不足");
+                return;
+            }
+            var src_path = cmd[1];
+            var dst_path = src_path + ".symbollink";
+            if (cmd.Length == 3)
+                dst_path = cmd[2];
+
+
+
+        }
+        private static void _exec_from_symbollink(string[] cmd)
+        {
+
+        }
         private static void _exec_command(string[] cmd)
         {
             switch (cmd[0])
@@ -1039,6 +1080,15 @@ namespace BaiduCloudConsole
                 case "-H":
                 case "--help":
                     _print_help();
+                    break;
+                case "--delete":
+                    _exec_delete(cmd);
+                    break;
+                case "--to-symbollink":
+                    _exec_to_symbollink(cmd);
+                    break;
+                case "--from-symbollink":
+                    _exec_from_symbollink(cmd);
                     break;
                 default:
                     Console.WriteLine("无效的指令：" + cmd[0]);
