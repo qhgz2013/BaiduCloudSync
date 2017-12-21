@@ -18,6 +18,10 @@ namespace BaiduCloudConsole
         private static KeyManager _key_manager;
 
         private static string _version = "1.0.0 pre-alpha";
+        private static void _debug_function()
+        {
+            //KEEP IT EMPTY if you are to build a release executable file!
+        }
         private static void Main(string[] args)
         {
             if (!Directory.Exists("data"))
@@ -36,6 +40,7 @@ namespace BaiduCloudConsole
                 else
                 {
                     _check_and_login();
+                    _debug_function();
                     _exec_command(args);
                 }
             }
@@ -250,6 +255,52 @@ namespace BaiduCloudConsole
             Console.WriteLine("\t删除密钥，利用该密钥加密的所有文件将会无法解密");
             Console.WriteLine();
         }
+        private static void _scan_remote_dir(string local_path, string remote_path, out List<string> local_files, out List<ObjectMetadata> remote_files, bool recursion = true)
+        {
+            var rst_event = new ManualResetEventSlim();
+            var parent_dir_path = remote_path.Substring(0, remote_path.LastIndexOf('/'));
+            if (string.IsNullOrEmpty(parent_dir_path)) parent_dir_path = "/"; //根目录修正
+            var file_list = new List<ObjectMetadata>();
+            _remote_file_cacher.GetFileListAsync(parent_dir_path, _file_list_callback, state: new _temp_callback_state { reset = rst_event, list = file_list, page = 1, path = parent_dir_path });
+
+            rst_event.Wait();
+            var remote_file_info = file_list.Find(o => o.Path == remote_path);
+
+            local_files = new List<string>();
+            remote_files = new List<ObjectMetadata>();
+            if (remote_file_info.FS_ID == 0)
+                return;
+            if (remote_file_info.IsDir)
+                _scan_remote_dir_internal(local_path, remote_path, ref local_files, ref remote_files, recursion);
+            else
+            {
+                local_files.Add(local_path);
+                remote_files.Add(remote_file_info);
+            }
+        }
+        private static void _scan_remote_dir_internal(string local_path, string remote_path, ref List<string> local_files, ref List<ObjectMetadata> remote_files, bool recursion = true)
+        {
+            var rst_event = new ManualResetEventSlim();
+            var file_list = new List<ObjectMetadata>();
+            _remote_file_cacher.GetFileListAsync(remote_path, _file_list_callback, state: new _temp_callback_state { reset = rst_event, list = file_list, page = 1, path = remote_path });
+            rst_event.Wait();
+
+            for (int i = 0; i < file_list.Count; i++)
+            {
+                if (file_list[i].IsDir)
+                {
+                    if (recursion)
+                    {
+                        _scan_remote_dir_internal(local_path + "/" + file_list[i].ServerFileName, remote_path + "/" + file_list[i].ServerFileName, ref local_files, ref remote_files, recursion);
+                    }
+                }
+                else
+                {
+                    local_files.Add(local_path + "/" + file_list[i].ServerFileName);
+                    remote_files.Add(file_list[i]);
+                }
+            }
+        }
         private static void _exec_download(string[] cmd)
         {
             if (cmd.Length < 3)
@@ -307,90 +358,80 @@ namespace BaiduCloudConsole
             }
             #endregion
 
-            var rst_event = new ManualResetEventSlim();
-
             Console.WriteLine("读取文件信息……");
-            var parent_dir_path = remote_path.Substring(0, remote_path.LastIndexOf('/'));
-            if (string.IsNullOrEmpty(parent_dir_path)) parent_dir_path = "/"; //根目录修正
+            List<string> local_files;
+            List<ObjectMetadata> remote_files;
+            _scan_remote_dir(local_path, remote_path, out local_files, out remote_files, true);
 
-            rst_event.Reset();
-            var file_list = new List<ObjectMetadata>();
-            _remote_file_cacher.GetFileListAsync(parent_dir_path, _file_list_callback, state: new _temp_callback_state { reset = rst_event, list = file_list, page = 1, path = parent_dir_path });
-
-            rst_event.Wait();
-            var remote_file_info = file_list.Find(o => o.Path == remote_path);
-
-            if (string.IsNullOrEmpty(remote_file_info.Path))
+            if (remote_files.Count == 0)
             {
                 Console.WriteLine("找不到该文件");
                 return;
             }
-            else if (remote_file_info.IsDir)
-            {
-                Console.WriteLine("暂时不支持文件夹下载");
-                return;
-            }
-            else if (remote_file_info.Size == 0)
-            {
-                File.Create(local_path).Close();
-                Console.WriteLine("下载完成");
-                return;
-            }
 
             //开始下载
-            var downloader = new Downloader(_remote_file_cacher, remote_file_info, local_path, max_thread, speed_limit, _key_manager);
-            downloader.Start();
-            downloader.TaskError += delegate
+            for (int i = 0; i < remote_files.Count; i++)
             {
-                Console.WriteLine();
-                Console.WriteLine("下载发生错误！");
-            };
-            bool decrypt_started = false, decrypt_response = false;
-            downloader.DecryptStarted += delegate
-            {
-                decrypt_started = true;
-            };
-            bool prealloc_finished = false, prealloc_response = false;
-            downloader.PreAllocBlockFinished += delegate
-            {
-                prealloc_finished = true;
-            };
-
-            Console.WriteLine("预分配硬盘空间……");
-            Downloader.State stat;
-            do
-            {
-                stat = downloader.TaskState;
-                long finished_size = downloader.DownloadedSize;
-                long total_size = downloader.Size;
-
-                if (prealloc_finished && !decrypt_started)
-                    _proceed_status_bar(finished_size, total_size, (long)downloader.AverageSpeed5s);
-                else
-                    _proceed_status_bar(finished_size, total_size);
-
-                if (!prealloc_response && prealloc_finished)
+                if (remote_files.Count > 0)
                 {
-                    prealloc_response = true;
-                    _proceed_status_bar(total_size, total_size);
-
                     Console.WriteLine();
-                    Console.WriteLine("下载开始……");
+                    Console.WriteLine("下载队列：[{0}/{1}] {3} -> {2}:", i + 1, local_files.Count, local_files[i], remote_files[i]);
                 }
-                else if (!decrypt_response && decrypt_started)
+
+                var downloader = new Downloader(_remote_file_cacher, remote_files[i], local_files[i], max_thread, speed_limit, _key_manager);
+                downloader.Start();
+                downloader.TaskError += delegate
                 {
-                    decrypt_response = true;
-                    _proceed_status_bar(total_size, total_size);
                     Console.WriteLine();
-                    Console.WriteLine("文件解密开始……");
-                }
-                Thread.Sleep(100);
-            } while ((stat & Downloader.State.FINISHED) == 0 && (stat & Downloader.State.ERROR) == 0);
+                    Console.WriteLine("下载发生错误！");
+                };
+                bool decrypt_started = false, decrypt_response = false;
+                downloader.DecryptStarted += delegate
+                {
+                    decrypt_started = true;
+                };
+                bool prealloc_finished = false, prealloc_response = false;
+                downloader.PreAllocBlockFinished += delegate
+                {
+                    prealloc_finished = true;
+                };
 
-            if (downloader.TaskState == Downloader.State.FINISHED)
-            {
-                Console.WriteLine();
-                Console.WriteLine("下载完成");
+                Console.WriteLine("预分配硬盘空间……");
+                Downloader.State stat;
+                do
+                {
+                    stat = downloader.TaskState;
+                    long finished_size = downloader.DownloadedSize;
+                    long total_size = downloader.Size;
+
+                    if (prealloc_finished && !decrypt_started)
+                        _proceed_status_bar(finished_size, total_size, (long)downloader.AverageSpeed5s);
+                    else
+                        _proceed_status_bar(finished_size, total_size);
+
+                    if (!prealloc_response && prealloc_finished)
+                    {
+                        prealloc_response = true;
+                        _proceed_status_bar(total_size, total_size);
+
+                        Console.WriteLine();
+                        Console.WriteLine("下载开始……");
+                    }
+                    else if (!decrypt_response && decrypt_started)
+                    {
+                        decrypt_response = true;
+                        _proceed_status_bar(total_size, total_size);
+                        Console.WriteLine();
+                        Console.WriteLine("文件解密开始……");
+                    }
+                    Thread.Sleep(100);
+                } while ((stat & Downloader.State.FINISHED) == 0 && (stat & Downloader.State.ERROR) == 0);
+
+                if (downloader.TaskState == Downloader.State.FINISHED)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("下载完成");
+                }
             }
         }
         private static string _format_bytes(long b)
@@ -573,7 +614,8 @@ namespace BaiduCloudConsole
 
                 if (is_dir)
                 {
-                    Console.WriteLine("上传队列：[{0}/{1}] {2}:", i + 1, local_files.Count, local_path);
+                    Console.WriteLine();
+                    Console.WriteLine("上传队列：[{0}/{1}] {2} -> {3}:", i + 1, local_files.Count, local_path, remote_path);
                 }
 
                 var uploader = new Uploader(_local_file_cacher, _remote_file_cacher, local_path, remote_path, 0, overwrite, max_thread, speed_limit, _key_manager, encrypt_str != "");
@@ -648,7 +690,7 @@ namespace BaiduCloudConsole
         }
         private static void _proceed_status_bar(long current, long total, long? speed = null)
         {
-            double rate = 100.0 * current / total;
+            double rate = ((total == 0) ? 0.0 : (100.0 * current / total));
 
             //进度条长度
             var bar_length = Math.Max(0, Console.WindowWidth - 45);
@@ -1049,7 +1091,7 @@ namespace BaiduCloudConsole
 
             rst_event.Wait();
             if (suc)
-                Console.WriteLine("转换成功，已保存到 " + dst_path);
+                Console.WriteLine("转换成功，已保存到 " + (dst_path == null ? src_path + ".symbollink" : dst_path));
             else
                 Console.WriteLine("转换失败，详细日志可见 global-trace.log");
 
@@ -1076,10 +1118,10 @@ namespace BaiduCloudConsole
 
             rst_event.Wait();
             if (suc)
-                Console.WriteLine("转换成功，已保存到 " + dst_path);
+                Console.WriteLine("转换成功，已保存到 " + (dst_path != null ? dst_path : (src_path.EndsWith(".symbollink") ? src_path.Substring(0, src_path.Length - 11) : (src_path + "." + src_path.Split('.').Last()))));
             else
                 Console.WriteLine("转换失败，详细日志可见 global-trace.log");
-            
+
         }
         private static void _exec_command(string[] cmd)
         {

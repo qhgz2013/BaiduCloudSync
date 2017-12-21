@@ -98,6 +98,8 @@ namespace BaiduCloudSync
 
             _dispatcher = new TaskDispatcher(_data.Size);
             _download_thread_flag = _DOWNLOAD_THREAD_FLAG_READY;
+            var fileinfo = new FileInfo(_output_path);
+            if (!fileinfo.Directory.Exists) fileinfo.Directory.Create();
             _file_stream = new FileStream(_output_path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None);
             _monitor_thread_created = new ManualResetEventSlim();
 
@@ -383,15 +385,6 @@ namespace BaiduCloudSync
             }
 
             var buffer = new byte[_MIN_IO_FLUSH_DATA_LENGTH];
-            var fill_buffer = new byte[max_thread][];
-            for (int i = 0; i < max_thread; i++)
-            {
-                fill_buffer[i] = new byte[_MIN_IO_FLUSH_DATA_LENGTH];
-                for (int j = 0; j < _MIN_IO_FLUSH_DATA_LENGTH; j++)
-                {
-                    fill_buffer[i][j] = (byte)(i + 1);
-                }
-            }
             var next_loop_time = DateTime.Now.AddSeconds(1);
             //monitor loop
             #region monitor loop
