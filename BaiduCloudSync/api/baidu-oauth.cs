@@ -655,7 +655,7 @@ namespace BaiduCloudSync
         {
             lock (_external_auth_lock)
             {
-                //if (!string.IsNullOrEmpty(_sign2)) return;
+                if (!string.IsNullOrEmpty(_sign2) && (DateTime.Now - util.FromUnixTimestamp(long.Parse(_timestamp))).TotalMinutes < 10) return;
                 Tracer.GlobalTracer.TraceInfo("BaiduOAuth._init_pcs_auth_data called: void");
                 try
                 {

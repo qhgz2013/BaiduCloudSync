@@ -1035,16 +1035,51 @@ namespace BaiduCloudConsole
                 return;
             }
             var src_path = cmd[1];
-            var dst_path = src_path + ".symbollink";
+            string dst_path = null;
             if (cmd.Length == 3)
                 dst_path = cmd[2];
 
+            var rst_event = new ManualResetEventSlim();
+            bool suc = false;
+            _remote_file_cacher.ConvertToSymbolLinkAsync(src_path, (s, data, state) =>
+            {
+                suc = s;
+                rst_event.Set();
+            }, dst_path);
 
+            rst_event.Wait();
+            if (suc)
+                Console.WriteLine("转换成功，已保存到 " + dst_path);
+            else
+                Console.WriteLine("转换失败，详细日志可见 global-trace.log");
 
         }
         private static void _exec_from_symbollink(string[] cmd)
         {
+            if (cmd.Length < 2)
+            {
+                Console.WriteLine("参数不足");
+                return;
+            }
+            var src_path = cmd[1];
+            string dst_path = null;
+            if (cmd.Length == 3)
+                dst_path = cmd[2];
 
+            var rst_event = new ManualResetEventSlim();
+            bool suc = false;
+            _remote_file_cacher.ConvertFromSymbolLinkAsync(src_path, (s, data, state) =>
+            {
+                suc = s;
+                rst_event.Set();
+            }, dst_path);
+
+            rst_event.Wait();
+            if (suc)
+                Console.WriteLine("转换成功，已保存到 " + dst_path);
+            else
+                Console.WriteLine("转换失败，详细日志可见 global-trace.log");
+            
         }
         private static void _exec_command(string[] cmd)
         {

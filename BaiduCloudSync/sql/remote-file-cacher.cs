@@ -127,7 +127,9 @@ namespace BaiduCloudSync
             _file_diff_thread.Name = "文件差异比较线程";
 
             _account_changed = true;
+            _file_diff_thread_started = new ManualResetEventSlim();
             _file_diff_thread.Start();
+            _file_diff_thread_started.Wait();
         }
         //释放所有资源
         public void Dispose()
@@ -203,6 +205,7 @@ namespace BaiduCloudSync
 
 
         private Thread _file_diff_thread; //进行文件差异请求的线程
+        private ManualResetEventSlim _file_diff_thread_started; //文件差异线程是否已经开始
         private volatile int _file_diff_thread_flag; //线程标志符
         private const int _FILE_DIFF_FLAG_ABORT_REQUEST = 0x1;
         private const int _FILE_DIFF_FLAG_ABORTED = 0x2;
@@ -265,6 +268,7 @@ namespace BaiduCloudSync
         //主监控线程回调
         private void _file_diff_thread_callback()
         {
+            _file_diff_thread_started.Set();
             while (_file_diff_thread_flag == 0)
             {
 
@@ -919,6 +923,36 @@ namespace BaiduCloudSync
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
                 _account_data[account_id].pcs.CreateSuperFileAsync(path, uploadid, block_list, file_size, callback, state);
+                lock (_file_diff_thread_fetching_head_lock)
+                {
+                    if (_file_diff_thread_data_dirty.ContainsKey(account_id))
+                        _file_diff_thread_data_dirty[account_id] = true;
+                    _is_file_diff_working = true;
+                }
+            }
+        }
+
+        //extended functions
+        public void ConvertFromSymbolLinkAsync(string path, BaiduPCS.ObjectMetaCallback callback, string dst_path = null, int account_id = 0, object state = null)
+        {
+            lock (_account_data_external_lock)
+            {
+                if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
+                _account_data[account_id].pcs.ConvertFromSymbolLinkAsync(path, callback, dst_path, state);
+                lock (_file_diff_thread_fetching_head_lock)
+                {
+                    if (_file_diff_thread_data_dirty.ContainsKey(account_id))
+                        _file_diff_thread_data_dirty[account_id] = true;
+                    _is_file_diff_working = true;
+                }
+            }
+        }
+        public void ConvertToSymbolLinkAsync(string path, BaiduPCS.ObjectMetaCallback callback, string dst_path = null, int account_id = 0, object state = null)
+        {
+            lock (_account_data_external_lock)
+            {
+                if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
+                _account_data[account_id].pcs.ConvertToSymbolLinkAsync(path, callback, dst_path, state);
                 lock (_file_diff_thread_fetching_head_lock)
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))

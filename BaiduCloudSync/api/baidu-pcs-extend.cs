@@ -30,92 +30,118 @@ namespace BaiduCloudSync
         /// 将网盘的文件转换成秒传数据文件（将产生一个原文件名.symbollink的文件）
         /// </summary>
         /// <param name="path">原文件路径（必要）</param>
-        /// <param name="fs_id">fsid（必要）</param>
+        /// <param name="dst_path">保存的文件名（可选）</param>
         /// <returns>新的文件信息</returns>
-        public ObjectMetadata ConvertToSymbolLink(string path, ulong fs_id)
+        public ObjectMetadata ConvertToSymbolLink(string path, string dst_path = null)
         {
-            _trace.TraceInfo("BaiduPCS.ConvertToSymbolLink called: string path=" + path + ", ulong fs_id=" + fs_id);
+            _trace.TraceInfo("BaiduPCS.ConvertToSymbolLink called: string path=" + path + ", string dst_path=" + (dst_path == null ? "null" : dst_path));
 
-            if (string.IsNullOrEmpty(path) || fs_id == 0) return new ObjectMetadata();
-            //var url = GetDownloadLink(fs_id);
-            var url = GetDownloadLink_API(path);
-
-            if (string.IsNullOrEmpty(url)) return new ObjectMetadata(); //获取下载地址失败，返回失败
-            try
+            var rst_event = new ManualResetEventSlim();
+            var ret = new ObjectMetadata();
+            ConvertToSymbolLinkAsync(path, (suc, data, state) =>
             {
-                var ns = new NetStream();
-                ns.CookieKey = _auth.CookieIdentifier;
-                //下载文件的验证段数据并进行MD5验算
-                var bytes = new byte[BUFFER_SIZE];
-                var md5_calc = new System.Security.Cryptography.MD5CryptoServiceProvider();
-                md5_calc.Initialize();
+                if (suc)
+                    ret = data;
+                rst_event.Set();
+            }, dst_path);
+            rst_event.Wait();
+            return ret;
+        }
 
-                ns.HttpGet(url);
-
-                var content_length = ns.HTTP_Response.ContentLength;
-                if (content_length < VALIDATE_SIZE) return new ObjectMetadata();
-
-                var stream_in = ns.ResponseStream;
-
-                long read_bytes = 0;
-                long total_bytes = 0;
-
-                while (total_bytes < VALIDATE_SIZE)
+        public void ConvertToSymbolLinkAsync(string path, ObjectMetaCallback callback, string dst_path = null, object state = null)
+        {
+            if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                _trace.TraceInfo("BaiduPCS.ConvertToSymbolLinkAsync called: string path=" + path + "ObjectMetaCallback callback=" + callback.ToString());
+                var url = GetLocateDownloadLink(path);
+                if (url.Length == 0)
                 {
-                    read_bytes = stream_in.Read(bytes, 0, BUFFER_SIZE);
-                    if (read_bytes == 0) break;
-                    total_bytes += read_bytes;
-                    if (total_bytes > VALIDATE_SIZE)
-                    {
-                        read_bytes -= VALIDATE_SIZE - total_bytes;
-                        total_bytes = VALIDATE_SIZE;
-                    }
-                    md5_calc.TransformBlock(bytes, 0, (int)read_bytes, bytes, 0);
+                    _trace.TraceWarning("Locate url length is zero");
+                    callback?.Invoke(false, new ObjectMetadata(), state);
+                    return;
                 }
+                var ns = new NetStream();
+                ns.RetryTimes = 3;
+                ns.CookieKey = _auth.CookieIdentifier;
+                try
+                {
+                    var buffer = new byte[BUFFER_SIZE];
+                    var md5 = new System.Security.Cryptography.MD5CryptoServiceProvider();
+                    int rbytes, total = 0;
+                    ns.HttpGet(url[0]);
+                    var content_length = ns.HTTP_Response.ContentLength;
+                    if (content_length < VALIDATE_SIZE)
+                    {
+                        _trace.TraceWarning("Content_length is too small, exited");
+                        callback?.Invoke(false, new ObjectMetadata(), state);
+                        return;
+                    }
 
-                md5_calc.TransformFinalBlock(bytes, 0, 0);
-                var md5 = md5_calc.Hash;
-                var slice_md5 = util.Hex(md5);
+                    var stream = ns.ResponseStream;
+                    do
+                    {
+                        rbytes = stream.Read(buffer, 0, BUFFER_SIZE);
+                        rbytes = (int)Math.Min(VALIDATE_SIZE - total, rbytes);
+                        md5.TransformBlock(buffer, 0, rbytes, buffer, 0);
+                        total += rbytes;
+                    } while (rbytes > 0 && total < VALIDATE_SIZE);
+                    md5.TransformFinalBlock(buffer, 0, 0);
 
+                    var slice_md5 = util.Hex(md5.Hash);
 
-                //从response处获取其他参数
-                var content_md5 = ns.HTTP_Response.Headers["Content-MD5"];
-                var content_crc32 = ns.HTTP_Response.Headers["x-bs-meta-crc32"];
-                uint int_crc32 = uint.Parse(content_crc32);
-                content_crc32 = int_crc32.ToString("X2").ToLower();
+                    //从response处获取其他参数
+                    var content_md5 = ns.HTTP_Response.Headers["Content-MD5"];
+                    var content_crc32 = ns.HTTP_Response.Headers["x-bs-meta-crc32"];
+                    uint int_crc32 = uint.Parse(content_crc32);
+                    content_crc32 = int_crc32.ToString("X2").ToLower();
 
-                ns.Close();
-                if (string.IsNullOrEmpty(content_crc32) || string.IsNullOrEmpty(content_md5)) return new ObjectMetadata();
+                    if (string.IsNullOrEmpty(content_crc32) || string.IsNullOrEmpty(content_md5))
+                    {
+                        _trace.TraceWarning("Empty content_crc32 or content_md5 detected, pls report this status to developer by opening new issue");
+                        callback?.Invoke(false, new ObjectMetadata(), state);
+                    }
 
-                //尝试发送rapid upload请求
-                var temp_path = "/BaiduCloudSyncCache/temp-rapid-upload-request-" + Guid.NewGuid().ToString();
+                    //尝试发送rapid upload请求
+                    var temp_path = "/BaiduCloudSyncCache/temp-rapid-upload-request-" + Guid.NewGuid().ToString();
 
-                var rapid_upload_info = RapidUploadRaw(temp_path, (ulong)content_length, content_md5, content_crc32, slice_md5);
-                DeletePath("/BaiduCloudSyncCache");
+                    var rapid_upload_info = RapidUploadRaw(temp_path, (ulong)content_length, content_md5, content_crc32, slice_md5);
+                    DeletePath("/BaiduCloudSyncCache");
 
-                if (string.IsNullOrEmpty(rapid_upload_info.MD5) || rapid_upload_info.FS_ID == 0) return new ObjectMetadata();
+                    if (string.IsNullOrEmpty(rapid_upload_info.MD5) || rapid_upload_info.FS_ID == 0)
+                    {
+                        _trace.TraceWarning("Validate check: post rapid upload failed, operation aborted");
+                        callback?.Invoke(false, new ObjectMetadata(), state);
+                        return;
+                    }
 
-                //rapid upload通过，整合成json格式的文件上传到服务器
-                var json = new JObject();
-                json.Add("content_length", content_length);
-                json.Add("content_md5", content_md5);
-                json.Add("content_crc32", content_crc32);
-                json.Add("slice_md5", slice_md5);
-                var str_json = JsonConvert.SerializeObject(json);
-                var bytes_json = Encoding.UTF8.GetBytes(str_json);
-                var stream_to_write = new MemoryStream();
-                stream_to_write.Write(bytes_json, 0, bytes_json.Length);
-                stream_to_write.Seek(0, SeekOrigin.Begin);
+                    //rapid upload通过，整合成json格式的文件上传到服务器
+                    var json = new JObject();
+                    json.Add("content_length", content_length);
+                    json.Add("content_md5", content_md5);
+                    json.Add("content_crc32", content_crc32);
+                    json.Add("slice_md5", slice_md5);
+                    var str_json = JsonConvert.SerializeObject(json);
+                    var bytes_json = Encoding.UTF8.GetBytes(str_json);
+                    var stream_to_write = new MemoryStream();
+                    stream_to_write.Write(bytes_json, 0, bytes_json.Length);
+                    stream_to_write.Seek(0, SeekOrigin.Begin);
 
-                var file_meta = UploadRaw(stream_to_write, (ulong)bytes_json.Length, path + ".symbollink");
-                stream_to_write.Close();
-                return file_meta;
-            }
-            catch (Exception ex)
-            {
-                _trace.TraceError(ex.ToString());
-            }
-            return new ObjectMetadata();
+                    if (dst_path == null)
+                        dst_path = path + ".symbollink";
+                    var file_meta = UploadRaw(stream_to_write, (ulong)bytes_json.Length, dst_path);
+                    stream_to_write.Close();
+                    callback?.Invoke(true, file_meta, state);
+                }
+                catch (Exception ex)
+                {
+                    _trace.TraceError(ex);
+                }
+                finally
+                {
+                    ns.Close();
+                }
+            });
         }
         /// <summary>
         /// 将网盘的秒传数据文件转成原文件（将产生一个去掉末尾.symbollink的文件）
@@ -141,12 +167,7 @@ namespace BaiduCloudSync
 
         public void ConvertFromSymbolLinkAsync(string path, ObjectMetaCallback callback, string dst_path = null, object state = null)
         {
-            if (string.IsNullOrEmpty(path))
-            {
-                if (callback != null)
-                    ThreadPool.QueueUserWorkItem(delegate { callback(false, new ObjectMetadata(), state); });
-                return;
-            }
+            if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
             ThreadPool.QueueUserWorkItem(delegate
             {
                 _trace.TraceInfo("BaiduPCS.ConvertFromSymbolLinkAsync called: string path=" + path + ", ObjectMetaCallback callback=" + callback.ToString());
@@ -160,6 +181,7 @@ namespace BaiduCloudSync
 
                 var ns = new NetStream();
                 ns.RetryTimes = 3;
+                ns.CookieKey = _auth.CookieIdentifier;
                 try
                 {
                     ns.HttpGet(url[0]);
