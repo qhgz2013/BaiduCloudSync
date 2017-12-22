@@ -12,5 +12,3 @@
 10. 实现RSA pem的标准解析 (see: https://msdn.microsoft.com/en-us/library/windows/desktop/bb648645(v=vs.85).aspx) 【finished】
 11. 建立非窗体的命令解析界面(命令行后台操作)
 12. 多账号网盘RAID
-
-*.  支持下载的预创建进度回调

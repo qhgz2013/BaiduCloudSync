@@ -110,6 +110,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             try
             {
                 ns.HttpGetAsync(API_QUOTA_URL, (sender, e) =>
@@ -195,6 +196,7 @@ namespace BaiduCloudSync
 
                 var ns = new NetStream();
                 ns.CookieKey = _auth.CookieIdentifier;
+                ns.TimeOut = 60000;
                 var data = Encoding.UTF8.GetBytes(postParam.BuildQueryString());
                 ns.HttpPostAsync(API_FILEMANAGER_URL, data.Length, (sender, e) =>
                 {
@@ -309,6 +311,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
 
             var data = Encoding.UTF8.GetBytes(post_param.BuildQueryString());
             try
@@ -426,6 +429,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
 
             var data = Encoding.UTF8.GetBytes(post_param.BuildQueryString());
             try
@@ -529,6 +533,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
 
             var data = Encoding.UTF8.GetBytes(post_param.BuildQueryString());
             try
@@ -603,6 +608,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
 
             var post_data = Encoding.UTF8.GetBytes(post_param.BuildQueryString());
             try
@@ -689,6 +695,7 @@ namespace BaiduCloudSync
             param.Add("num", count);
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             try
             {
                 ns.HttpGetAsync(API_LIST_URL, (sender, e) =>
@@ -755,6 +762,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             try
             {
                 ns.HttpGetAsync(API_FILEDIFF_URL, (sender, e) =>
@@ -827,6 +835,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             try
             {
                 ns.HttpPostAsync(PCS_FILE_URL, 0, (sender, e) =>
@@ -1079,6 +1088,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             var query_param = new Parameters();
 
             query_param.Add("channel", "chunlei");
@@ -1206,7 +1216,6 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
-            ns.TimeOut = 60000;
             var boundary = util.GenerateFormDataBoundary();
 
 
@@ -1377,6 +1386,7 @@ namespace BaiduCloudSync
             var post_data = Encoding.UTF8.GetBytes(post_param.BuildQueryString());
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             try
             {
                 ns.HttpPostAsync(API_CREATE_URL, post_data.Length, (sender, e) =>
@@ -1478,6 +1488,7 @@ namespace BaiduCloudSync
             var param = new Parameters();
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
 
             param.Add("sign", _auth.sign2);
             param.Add("timestamp", _auth.timestamp);
@@ -1546,6 +1557,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             var param = new Parameters();
             param.Add("method", "locatedownload");
             param.Add("app_id", APPID);
@@ -1632,6 +1644,7 @@ namespace BaiduCloudSync
             if (expire_time != 0 && expire_time != 1 && expire_time != 7) throw new ArgumentOutOfRangeException("expire_time数值只能为0，1或7");
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             var xhr_param = _get_xhr_param();
             var query_param = new Parameters();
             query_param.Add("channel", "chunlei");
@@ -1731,6 +1744,7 @@ namespace BaiduCloudSync
             if (expire_time != 0 && expire_time != 1 && expire_time != 7) throw new ArgumentOutOfRangeException("expire_time数值只能为0，1或7");
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             var xhr_param = _get_xhr_param();
             var query_param = new Parameters();
             query_param.Add("channel", "chunlei");
@@ -1824,6 +1838,7 @@ namespace BaiduCloudSync
             _trace.TraceInfo("BaiduPCS.CancelShareAsync called: IEnumerable<ulong> share_ids=[count=" + share_ids.Count() + "], OperationCallback callback=" + callback.ToString());
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             var xhr_param = _get_xhr_param();
             var query_param = new Parameters();
             query_param.Add("channel", "chunlei");
@@ -1896,6 +1911,7 @@ namespace BaiduCloudSync
 
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
+            ns.TimeOut = 60000;
             try
             {
                 ns.HttpGetAsync(API_SHARE_RECORD_URL, (sender, e) =>

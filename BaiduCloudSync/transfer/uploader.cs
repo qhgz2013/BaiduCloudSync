@@ -359,6 +359,7 @@ namespace BaiduCloudSync
         public event EventHandler FileDigestStarted, FileDigestFinished, EncryptFileDigestStarted, EncryptFileDigestFinished;
         #endregion
 
+        #region file detection & io
         private void _on_file_deleted(object sender, FileSystemEventArgs e)
         {
             _upload_thread_flag = _upload_thread_flag | _UPLOAD_THREAD_FLAG_ERROR | _UPLOAD_THREAD_FLAG_FILE_MODIFIED;
@@ -397,13 +398,10 @@ namespace BaiduCloudSync
                 _file_io_response.Set();
             }
         }
+        #endregion
 
         private void _on_slice_upload_request_callback(bool suc, Guid task_id, Stream connect_stream, object state)
         {
-            if (!suc)
-            {
-                return;
-            }
             int index = (int)state;
             FileStream fs = null;
             int seq_id;
@@ -414,6 +412,11 @@ namespace BaiduCloudSync
             }
             long offset = BaiduPCS.UPLOAD_SLICE_SIZE * (long)seq_id;
 
+            if (!suc)
+            {
+                _slice_seq.Enqueue(seq_id);
+                return;
+            }
             int data_offset = 0;
             try
             {
@@ -502,6 +505,27 @@ namespace BaiduCloudSync
                 Tracer.GlobalTracer.TraceError(ex);
             }
         }
+
+        private class _temp_struct
+        {
+            public bool suc;
+            public ManualResetEventSlim lck;
+        }
+
+        private void _pre_create_request_callback(bool suc, int slice_count, string upload_id, object state)
+        {
+            var temp = (_temp_struct)state;
+            temp.suc = suc;
+            _upload_id = upload_id;
+            temp.lck.Set();
+        }
+        private void _create_superfile_request_callback(bool suc, ObjectMetadata data, object state)
+        {
+            var temp = (_temp_struct)state;
+            temp.suc = suc;
+            _remote_data = data;
+            temp.lck.Set();
+        }
         private void _monitor_thread_callback()
         {
             _monitor_thread_created.Set();
@@ -511,6 +535,7 @@ namespace BaiduCloudSync
                 _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_STARTED) & ~(_UPLOAD_THREAD_FLAG_START_REQUESTED | _UPLOAD_THREAD_FLAG_PAUSED);
 
                 //local io
+                #region file io
                 if (string.IsNullOrEmpty(_local_data.Path))
                 {
                     _local_cacher.FileIORequest(_local_path);
@@ -521,6 +546,7 @@ namespace BaiduCloudSync
                     try { FileDigestFinished?.Invoke(this, new EventArgs()); } catch { }
                 }
                 _uploaded_size = 0;
+                #endregion
 
                 #region status check
                 if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_CANCEL_REQUESTED) != 0)
@@ -544,6 +570,7 @@ namespace BaiduCloudSync
                 }
                 #endregion
 
+                #region encryption
                 if (_enable_encryption)
                 {
                     _upload_thread_flag |= _UPLOAD_THREAD_FLAG_FILE_ENCRYPTING;
@@ -567,6 +594,7 @@ namespace BaiduCloudSync
                     _file_size = _local_data.Size;
                     _slice_count = (int)Math.Ceiling(_file_size * 1.0 / BaiduPCS.UPLOAD_SLICE_SIZE);
                 }
+                #endregion
 
                 //status check
                 #region status check
@@ -617,16 +645,17 @@ namespace BaiduCloudSync
                     //pre create file request
                     if (string.IsNullOrEmpty(_upload_id))
                     {
-                        bool precreate_suc = false;
-                        _remote_cacher.PreCreateFileAsync(_remote_path, _slice_count, (suc, data, uploadid, e) =>
+
+                        var temp_struct = new _temp_struct { lck = sync_lock, suc = false };
+                        for (int i = 0; i < 3; i++)
                         {
-                            precreate_suc = suc;
-                            _upload_id = uploadid;
-                            sync_lock.Set();
-                        }, _selected_account_id);
-                        sync_lock.Wait();
-                        sync_lock.Reset();
-                        if (precreate_suc == false)
+                            _remote_cacher.PreCreateFileAsync(_remote_path, _slice_count, _pre_create_request_callback, _selected_account_id, temp_struct);
+                            sync_lock.Wait();
+                            sync_lock.Reset();
+                            if (temp_struct.suc)
+                                break;
+                        }
+                        if (temp_struct.suc == false)
                         {
                             //precreate failed
                             _upload_thread_flag |= _UPLOAD_THREAD_FLAG_ERROR;
@@ -752,17 +781,17 @@ namespace BaiduCloudSync
                     #endregion
 
                     //merging slice request
-                    var create_superfile_suc = false;
-                    _remote_cacher.CreteSuperFileAsync(_remote_path, _upload_id, from item in _slice_result orderby item.Key ascending select item.Value, (ulong)_file_size, (suc, data, e) =>
+                    var temp_struct1 = new _temp_struct { lck = sync_lock, suc = false };
+                    for (int i = 0; i < 3; i++)
                     {
-                        create_superfile_suc = suc;
-                        _remote_data = data;
-                        sync_lock.Set();
-                    }, _selected_account_id);
-                    sync_lock.Wait();
-                    sync_lock.Reset();
+                        _remote_cacher.CreteSuperFileAsync(_remote_path, _upload_id, from item in _slice_result orderby item.Key ascending select item.Value, (ulong)_file_size, _create_superfile_request_callback, _selected_account_id, temp_struct1);
+                        sync_lock.Wait();
+                        sync_lock.Reset();
+                        if (temp_struct1.suc)
+                            break;
+                    }
 
-                    if (create_superfile_suc)
+                    if (temp_struct1.suc)
                     {
                         _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_FINISHED) & ~_UPLOAD_THREAD_FLAG_STARTED;
                         try { TaskFinished?.Invoke(this, new EventArgs()); } catch { }
@@ -793,6 +822,7 @@ namespace BaiduCloudSync
             finally
             {
                 _monitor_thread = null;
+                _file_watcher.EnableRaisingEvents = false;
                 //deleting temporary encrypted file
                 if (_enable_encryption && File.Exists(_local_path) && _local_path.EndsWith(".encrypted"))
                     File.Delete(_local_path);

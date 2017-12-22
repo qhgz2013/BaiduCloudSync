@@ -711,6 +711,37 @@ namespace BaiduCloudConsole
 
             Console.Write("\r[" + string.Format("{0,5}", rate.ToString("0.0")) + "%] [" + bar + "] " + size_info + " " + speed_info);
         }
+        private static void _stat_file_count(string path, out int files, out int dirs, out long size, bool recursion = true)
+        {
+            var rst_event = new ManualResetEventSlim();
+            var file_list = new List<ObjectMetadata>();
+            _remote_file_cacher.GetFileListAsync(path, _file_list_callback, state: new _temp_callback_state { reset = rst_event, list = file_list, page = 1, path = path });
+            rst_event.Wait();
+            dirs = 0;
+            files = 0;
+            size = 0;
+            foreach (var item in file_list)
+            {
+                if (item.IsDir)
+                {
+                    dirs++;
+                    if (recursion)
+                    {
+                        int temp_file, temp_dir;
+                        long temp_size;
+                        _stat_file_count(item.Path, out temp_file, out temp_dir, out temp_size, recursion);
+                        dirs += temp_dir;
+                        files += temp_file;
+                        size += temp_size;
+                    }
+                }
+                else
+                {
+                    files++;
+                    size += (long)item.Size;
+                }
+            }
+        }
         private static void _exec_list(string[] cmd)
         {
             if (cmd.Length < 2)
@@ -756,7 +787,8 @@ namespace BaiduCloudConsole
                             asc = false;
                             break;
                         default:
-                            break;
+                            Console.WriteLine("无效的参数：" + cmd[index]);
+                            return;
                     }
                 }
             }
@@ -812,6 +844,14 @@ namespace BaiduCloudConsole
                     var mtime = string.Format("{0,-18}", util.FromUnixTimestamp(file.ServerMTime).ToString("yyyy-MM-dd HH:mm"));
                     Console.WriteLine(ctime + mtime);
                 }
+
+                Console.WriteLine();
+                int file_count, dir_count, file_count_rec, dir_count_rec;
+                long size_count, size_count_rec;
+                _stat_file_count(path, out file_count, out dir_count, out size_count, false);
+                _stat_file_count(path, out file_count_rec, out dir_count_rec, out size_count_rec, true);
+                Console.WriteLine("文件统计：仅该目录：{0} 文件夹， {1} 文件， {2}", dir_count.ToString("#,##0"), file_count.ToString("#,##0"), _format_bytes(size_count));
+                Console.WriteLine("        包括子目录：{0} 文件夹， {1} 文件， {2}", dir_count_rec.ToString("#,##0"), file_count_rec.ToString("#,##0"), _format_bytes(size_count_rec));
             }
         }
         private static void _exec_show_key(string[] cmd)
@@ -1166,6 +1206,10 @@ namespace BaiduCloudConsole
                     break;
                 case "--from-symbollink":
                     _exec_from_symbollink(cmd);
+                    break;
+                case "--reset-cache":
+                    _remote_file_cacher.ResetCache(0);
+                    Console.WriteLine("cache reset.");
                     break;
                 default:
                     Console.WriteLine("无效的指令：" + cmd[0]);

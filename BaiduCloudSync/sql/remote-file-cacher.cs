@@ -704,6 +704,31 @@ namespace BaiduCloudSync
                 }
             }
         }
+
+        /// <summary>
+        /// 重置账号缓存
+        /// </summary>
+        /// <param name="id">账号id</param>
+        public void ResetCache(int id)
+        {
+            if (!_account_data.ContainsKey(id)) throw new ArgumentOutOfRangeException("id");
+            lock (_account_data_external_lock)
+            {
+                while (_is_file_diff_working || _account_changed) Thread.Sleep(10);
+                lock (_sql_lock)
+                {
+                    _sql_cmd.CommandText = "update Account set cursor = 'null' where account_id = " + id;
+                    _sql_cmd.ExecuteNonQuery();
+                    _sql_cmd.CommandText = "delete from FileList where account_id = " + id;
+                    _sql_cmd.ExecuteNonQuery();
+                    _sql_cmd.CommandText = "delete from FileListExtended where account_id = " + id;
+                    _sql_cmd.ExecuteNonQuery();
+
+                    _sql_trs.Commit();
+                    _sql_trs = _sql_con.BeginTransaction();
+                }
+            }
+        }
         #endregion
 
 
@@ -728,7 +753,7 @@ namespace BaiduCloudSync
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
                 _account_data[account_id].pcs.GetFileListAsync(path, (suc, data, s) =>
                 {
-                    for (int i = 0; i < data.Length; i++)
+                    for (int i = 0; suc && i < data.Length; i++)
                     {
                         data[i].AccountID = account_id;
                     }
