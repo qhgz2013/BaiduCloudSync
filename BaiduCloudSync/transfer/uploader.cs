@@ -412,6 +412,7 @@ namespace BaiduCloudSync
             }
             long offset = BaiduPCS.UPLOAD_SLICE_SIZE * (long)seq_id;
 
+            Tracer.GlobalTracer.TraceInfo("slice upload callback: #" + index + "(seq: " + seq_id + ")");
             if (!suc)
             {
                 _slice_seq.Enqueue(seq_id);
@@ -446,10 +447,12 @@ namespace BaiduCloudSync
                 {
                     if (suc2)
                     {
+                        Tracer.GlobalTracer.TraceInfo("Added seq " + seq_id + " into slice result");
                         _slice_result.TryAdd(seq_id, data2);
                     }
                     else
                     {
+                        Tracer.GlobalTracer.TraceWarning("#" + index + "(seq: " + seq_id + "): Upload slice failed");
                         _slice_seq.Enqueue(seq_id);
                         Interlocked.Add(ref _uploaded_size, -data_offset);
                     }

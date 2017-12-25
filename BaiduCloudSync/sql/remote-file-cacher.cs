@@ -476,7 +476,7 @@ namespace BaiduCloudSync
             if (page <= 0) throw new ArgumentOutOfRangeException("page");
             if (!path.EndsWith("/")) path += "/";
             var sql_text = "select FS_ID, Category, IsDir, LocalCTime, LocalMTime, OperID, Path, ServerCTime, ServerFileName, ServerMTime, Size, Unlist, MD5" +
-                " from FileList where account_id = " + account_id + " and path like '" + path + "%' and path not like '" + path + "%/%'";
+                " from FileList where account_id = " + account_id + " and path like @path0 and path not like @path1";
 
             ThreadPool.QueueUserWorkItem(delegate
             {
@@ -488,6 +488,10 @@ namespace BaiduCloudSync
                     {
                         _sql_cache_path = path;
                         _sql_cmd.CommandText = sql_text;
+                        _sql_cmd.Parameters.Add("@path0", System.Data.DbType.String);
+                        _sql_cmd.Parameters.Add("@path1", System.Data.DbType.String);
+                        _sql_cmd.Parameters["@path0"].Value = path + "%";
+                        _sql_cmd.Parameters["@path1"].Value = path + "%/%";
                         var dr = _sql_cmd.ExecuteReader();
                         var meta_list = new List<ObjectMetadata>();
                         while (dr.Read())
@@ -510,6 +514,7 @@ namespace BaiduCloudSync
                             meta_list.Add(new_meta);
                         }
                         dr.Close();
+                        _sql_cmd.Parameters.Clear();
 
                         //sorting
                         meta_list.Sort(new _sort_meta(order, asc));

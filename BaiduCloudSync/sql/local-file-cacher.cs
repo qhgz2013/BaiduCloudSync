@@ -209,7 +209,7 @@ namespace BaiduCloudSync
                         //debug test
                         var str = new string[] { "MD5", "SHA1", "CRC32", "Slice_MD5", "Event" };
                         var sw = new System.Diagnostics.Stopwatch();
-                        Tracer.GlobalTracer.TraceInfo(str[i] + " calculation thread started");
+                        //Tracer.GlobalTracer.TraceInfo(str[i] + " calculation thread started");
                         sw.Start();
 
                         FileStream fs = null;
@@ -318,7 +318,7 @@ namespace BaiduCloudSync
 
                             //debug test
                             sw.Stop();
-                            Tracer.GlobalTracer.TraceInfo(str[i] + " calculation finished (" + sw.ElapsedMilliseconds + " ms ellapsed)");
+                            //Tracer.GlobalTracer.TraceInfo(str[i] + " calculation finished (" + sw.ElapsedMilliseconds + " ms ellapsed)");
                         }
 
                     });

@@ -973,7 +973,8 @@ namespace BaiduCloudSync
                         sender.RequestStream.Write(head_bytes, 0, head_bytes.Length);
                         var guid = Guid.NewGuid();
                         var data = new _upload_data { stream = sender, boundary = boundary };
-                        _upload_queue.Add(guid, data);
+                        lock (_upload_external_lock)
+                            _upload_queue.Add(guid, data);
 
                         callback?.Invoke(true, guid, sender.RequestStream, state);
                     }
@@ -1242,7 +1243,8 @@ namespace BaiduCloudSync
                         sender.RequestStream.Write(head_bytes, 0, head_bytes.Length);
                         var guid = Guid.NewGuid();
                         var data = new _upload_data2 { stream = sender, boundary = boundary, uploadid = uploadid, index = sequence };
-                        _slice_upload_queue.Add(guid, data);
+                        lock (_slice_upload_external_lock)
+                            _slice_upload_queue.Add(guid, data);
 
                         callback?.Invoke(true, guid, sender.RequestStream, state);
                     }
