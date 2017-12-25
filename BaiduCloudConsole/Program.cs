@@ -492,8 +492,11 @@ namespace BaiduCloudConsole
 
             foreach (var item in files)
             {
-                local_files.Add(item.FullName);
-                remote_files.Add(remote_path + "/" + item.Name);
+                if (!item.Name.EndsWith(".encrypted"))
+                {
+                    local_files.Add(item.FullName);
+                    remote_files.Add(remote_path + "/" + item.Name);
+                }
             }
 
             if (recursion)

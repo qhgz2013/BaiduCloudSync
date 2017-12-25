@@ -189,6 +189,7 @@ namespace BaiduCloudSync
             _enable_encryption = enable_encryption;
 
             var file_info = new FileInfo(_local_path);
+            if (!file_info.Exists) throw new ArgumentException("file not exists");
             //file monitor
             _file_watcher = new FileSystemWatcher(file_info.Directory.FullName, file_info.Name);
             _file_watcher.Changed += _on_file_changed;
@@ -277,7 +278,6 @@ namespace BaiduCloudSync
                             _monitor_thread = new Thread(_monitor_thread_callback);
                             _monitor_thread.IsBackground = true;
                             _monitor_thread.Name = "Upload monitor";
-                            _monitor_thread_created.Reset();
                             _monitor_thread.Start();
                         }
                         else
@@ -289,6 +289,10 @@ namespace BaiduCloudSync
                 }
             }
             try { TaskStarted?.Invoke(this, new EventArgs()); } catch { }
+        }
+        ~Uploader()
+        {
+            Dispose();
         }
         public void Pause()
         {
@@ -529,6 +533,12 @@ namespace BaiduCloudSync
             _remote_data = data;
             temp.lck.Set();
         }
+        private void _delete_callback(bool suc, bool result, object state)
+        {
+            var temp = (_temp_struct)state;
+            temp.suc = suc;
+            temp.lck.Set();
+        }
         private void _monitor_thread_callback()
         {
             _monitor_thread_created.Set();
@@ -643,7 +653,19 @@ namespace BaiduCloudSync
                     //deleting existed file if overwrite is true
                     if (_overwrite)
                     {
-                        _remote_cacher.DeletePathAsync(_remote_path, (suc, data, e) => { }, _selected_account_id);
+                        var temp_struct = new _temp_struct { lck = sync_lock, suc = false };
+                        for (int i = 0; i < 3; i++)
+                        {
+                            _remote_cacher.DeletePathAsync(_remote_path, _delete_callback, _selected_account_id, temp_struct);
+                            sync_lock.Wait();
+                            sync_lock.Reset();
+                            if (temp_struct.suc)
+                                break;
+                        }
+                        if (temp_struct.suc == false)
+                        {
+                            Tracer.GlobalTracer.TraceWarning("delete file " + _remote_path + " failed, using newcopy instead (reached max. retry times)");
+                        }
                     }
                     //pre create file request
                     if (string.IsNullOrEmpty(_upload_id))
@@ -739,7 +761,7 @@ namespace BaiduCloudSync
 
                         lock (_thread_data_lock)
                         {
-                            for (int i = 0; i < max_thread && _slice_seq.Count > 0; i++)
+                            for (int i = 0; i < max_thread; i++)
                             {
                                 if ((DateTime.Now - _last_sent[i]).TotalSeconds > 120)
                                 {
@@ -750,7 +772,8 @@ namespace BaiduCloudSync
                                         _task_id[i] = Guid.Empty;
                                         continue;
                                     }
-
+                                    if (_slice_seq.Count == 0)
+                                        break;
                                     //error handling for dequeue failure
                                     if (_slice_seq.TryDequeue(out _task_seq[i]) == false)
                                     {
@@ -759,7 +782,11 @@ namespace BaiduCloudSync
                                         try { TaskError?.Invoke(this, new EventArgs()); } catch { }
                                         return;
                                     }
-                                    _remote_cacher.UploadSliceBeginAsync((ulong)Math.Min(_file_size - BaiduPCS.UPLOAD_SLICE_SIZE * (long)_task_seq[i], BaiduPCS.UPLOAD_SLICE_SIZE), _remote_path, _upload_id, _task_seq[i], _on_slice_upload_request_callback, _selected_account_id, i);
+                                    try
+                                    {
+                                        _remote_cacher.UploadSliceBeginAsync((ulong)Math.Min(_file_size - BaiduPCS.UPLOAD_SLICE_SIZE * (long)_task_seq[i], BaiduPCS.UPLOAD_SLICE_SIZE), _remote_path, _upload_id, _task_seq[i], _on_slice_upload_request_callback, _selected_account_id, i);
+                                    }
+                                    catch { _slice_seq.Enqueue(_task_seq[i]); }
                                     _last_sent[i] = DateTime.Now;
                                 }
                             }

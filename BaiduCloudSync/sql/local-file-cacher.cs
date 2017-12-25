@@ -134,6 +134,7 @@ namespace BaiduCloudSync
                     continue;
                 }
 
+                FileSystemWatcher fs_watcher = null;
                 try
                 {
                     var fileinfo = new FileInfo(next_path);
@@ -146,7 +147,7 @@ namespace BaiduCloudSync
                         continue;
                     }
 
-                    var fs_watcher = new FileSystemWatcher(fileinfo.DirectoryName, fileinfo.Name);
+                    fs_watcher = new FileSystemWatcher(fileinfo.DirectoryName, fileinfo.Name);
                     bool is_file_changed = false;
                     fs_watcher.Deleted += (s, e) =>
                     {
@@ -176,6 +177,7 @@ namespace BaiduCloudSync
                     var crc32_calc = new Crc32(); //speed: ~11s/GB
                     long md5_pos = 0, sha1_pos = 0, crc32_pos = 0;
                     //loading pre-calculated data from sql
+                    #region loading data
                     lock (_sql_lock)
                     {
                         _sql_cmd.CommandText = "select MD5_Serialized, SHA1_Serialized, MD5_Slice_Serialized, CRC32_serialized from FileIOState where Path_SHA1 = @Path_SHA1";
@@ -201,6 +203,7 @@ namespace BaiduCloudSync
                         dr.Close();
                         _sql_cmd.Parameters.Clear();
                     }
+                    #endregion
 
                     int io_state = 0;
                     //5 thread parallel read
@@ -299,6 +302,10 @@ namespace BaiduCloudSync
                             } while (is_file_changed == false && _current_io_file_flag == 0 && _io_thread_flags == 0 && current > 0 && fs.CanRead);
 
                         }
+                        catch (Exception ex)
+                        {
+                            Tracer.GlobalTracer.TraceError(ex);
+                        }
                         finally
                         {
                             try
@@ -313,9 +320,12 @@ namespace BaiduCloudSync
 
                             if ((i != 3 && length == origin_file_length) || (i == 3 && length == Math.Min(BaiduPCS.VALIDATE_SIZE, origin_file_length)))
                             {
-                                io_state |= (1 << i);
+                                Interlocked.Add(ref io_state, 1 << i);
                             }
-
+                            else
+                            {
+                                Tracer.GlobalTracer.TraceWarning("invalid io state detected in " + str[i] + " calculation");
+                            }
                             //debug test
                             sw.Stop();
                             //Tracer.GlobalTracer.TraceInfo(str[i] + " calculation finished (" + sw.ElapsedMilliseconds + " ms ellapsed)");
@@ -331,6 +341,7 @@ namespace BaiduCloudSync
                     }
 
                     //handling io finish state
+                    #region handling finish state
                     if (io_state == 0xf)
                     {
                         //handling file data
@@ -392,8 +403,10 @@ namespace BaiduCloudSync
                         try { LocalFileIOFinish?.Invoke(local_data); }
                         catch { }
                     }
+                    #endregion
 
                     //handling thread flags
+                    #region handling unfinished state
                     if (_io_thread_flags == _IO_THREAD_ABORT_REQUEST || _current_io_file_flag == 1)
                     {
 
@@ -456,10 +469,23 @@ namespace BaiduCloudSync
                         _io_thread_flags = _IO_THREAD_ABORTED;
                         return;
                     }
+                    #endregion
+
+                    fs_watcher.EnableRaisingEvents = false;
+                    fs_watcher.Dispose();
+                    fs_watcher = null;
                 }
                 catch (Exception ex)
                 {
                     Tracer.GlobalTracer.TraceError(ex);
+                }
+                finally
+                {
+                    if (fs_watcher != null)
+                    {
+                        fs_watcher.Dispose();
+                        fs_watcher = null;
+                    }
                 }
             }
         }
