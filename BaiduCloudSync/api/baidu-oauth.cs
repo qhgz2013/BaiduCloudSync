@@ -44,8 +44,12 @@ namespace BaiduCloudSync
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_getapi called: void");
             try
             {
-                _http.HttpGet(_BAIDU_ROOT_URL);
-                _http.Close();
+                var ns = new NetStream();
+                ns.CookieKey = _cookie_identifier;
+                ns.RetryDelay = 1000;
+                ns.RetryTimes = 3;
+                ns.HttpGet(_BAIDU_ROOT_URL);
+                ns.Close();
             }
             catch (Exception)
             {
@@ -65,9 +69,13 @@ namespace BaiduCloudSync
             var url = _OAUTH_GETAPI_URL + "&" + querystring;
             try
             {
-                _http.HttpGet(url);
-                var responseText = _http.ReadResponseString();
-                _http.Close();
+                var  ns = new NetStream();
+                ns.CookieKey = _cookie_identifier;
+                ns.RetryDelay = 1000;
+                ns.RetryTimes = 3;
+                ns.HttpGet(url);
+                var responseText = ns.ReadResponseString();
+                ns.Close();
 
                 //sample returns:
                 /*
@@ -106,9 +114,13 @@ namespace BaiduCloudSync
             var url = _OAUTH_GETAPI_URL + "&" + querystring;
             try
             {
-                _http.HttpGet(url);
-                var responseText = _http.ReadResponseString();
-                _http.Close();
+                var ns = new NetStream();
+                ns.CookieKey = _cookie_identifier;
+                ns.RetryDelay = 1000;
+                ns.RetryTimes = 3;
+                ns.HttpGet(url);
+                var responseText = ns.ReadResponseString();
+                ns.Close();
 
                 //sample return:
                 /*
@@ -193,9 +205,13 @@ namespace BaiduCloudSync
 
             try
             {
-                _http.HttpPost(_OAUTH_LOGIN_URL, param);
-                var str = _http.ReadResponseString();
-                _http.Close();
+                var ns = new NetStream();
+                ns.CookieKey = _cookie_identifier;
+                ns.RetryDelay = 1000;
+                ns.RetryTimes = 3;
+                ns.HttpPost(_OAUTH_LOGIN_URL, param);
+                var str = ns.ReadResponseString();
+                ns.Close();
 
                 //sample return:
                 /*
@@ -244,7 +260,13 @@ namespace BaiduCloudSync
             try
             {
                 var url = _OAUTH_CAPTCHA_URL + "?" + codestring;
-                _http.HttpGet(url);
+
+                var ns = new NetStream();
+                ns.CookieKey = _cookie_identifier;
+                ns.RetryDelay = 1000;
+                ns.RetryTimes = 3;
+
+                ns.HttpGet(url);
 
                 //transfer to local memory stream
                 var ss = new MemoryStream();
@@ -252,7 +274,7 @@ namespace BaiduCloudSync
                 byte[] buf = new byte[4096];
                 do
                 {
-                    readcount = _http.ResponseStream.Read(buf, 0, 4096);
+                    readcount = ns.ResponseStream.Read(buf, 0, 4096);
                     ss.Write(buf, 0, readcount);
                 } while (readcount != 0);
                 ss.Position = 0;
@@ -291,9 +313,14 @@ namespace BaiduCloudSync
             var url = _OAUTH_CHECKVCODE_URL + "&" + querystring;
             try
             {
-                _http.HttpGet(url);
-                var responseText = _http.ReadResponseString();
-                _http.Close();
+
+                var ns = new NetStream();
+                ns.CookieKey = _cookie_identifier;
+                ns.RetryDelay = 1000;
+                ns.RetryTimes = 3;
+                ns.HttpGet(url);
+                var responseText = ns.ReadResponseString();
+                ns.Close();
                 //sample returns:
                 /*
                  * bd__cbs__1l7o0h({"errInfo":{        "no": "500002",        "msg": "验证码错误."    },    "data": {    }})
@@ -329,9 +356,13 @@ namespace BaiduCloudSync
             var url = _OAUTH_REGET_CODESTR_URL + "&" + param.BuildQueryString();
             try
             {
-                _http.HttpGet(url);
-                var str = _http.ReadResponseString();
-                _http.Close();
+                var ns = new NetStream();
+                ns.CookieKey = _cookie_identifier;
+                ns.RetryDelay = 1000;
+                ns.RetryTimes = 3;
+                ns.HttpGet(url);
+                var str = ns.ReadResponseString();
+                ns.Close();
                 var json = _escape_callback_function(str);
                 return (JObject)JsonConvert.DeserializeObject(json);
             }
@@ -351,18 +382,13 @@ namespace BaiduCloudSync
         //vcodetype...不知道怎么形容好
         private string _vcodetype;
 
-        private NetStream _http;
         //分辨多用户的标识key
         private string _cookie_identifier;
         public string CookieIdentifier { get { return _cookie_identifier; } }
         public BaiduOAuth(string cookieKey = null)
         {
-            _http = new NetStream();
             //由表单边界格式生成cookie
             _cookie_identifier = string.IsNullOrEmpty(cookieKey) ? util.GenerateFormDataBoundary() : cookieKey;
-            _http.CookieKey = _cookie_identifier;
-            _http.RetryDelay = 1000;
-            _http.RetryTimes = 3;
             _username = "";
             _password = "";
             _token = "";
@@ -633,12 +659,16 @@ namespace BaiduCloudSync
         {
             try
             {
-                _http.HttpGet(_BAIDU_ROOT_URL);
-                var response_data = _http.ReadResponseString().Replace("\r", "").Replace("\n", "");
+                var ns = new NetStream();
+                ns.CookieKey = _cookie_identifier;
+                ns.RetryDelay = 1000;
+                ns.RetryTimes = 3;
+                ns.HttpGet(_BAIDU_ROOT_URL);
+                var response_data = ns.ReadResponseString().Replace("\r", "").Replace("\n", "");
                 var reg = Regex.Match(response_data, "bds\\.comm\\.user\\s*=\\s*\"(?<user>[^\"]*)\";");
                 if (reg.Success)
                     _nickname = reg.Result("${user}");
-                _http.Close();
+                ns.Close();
             }
             catch (Exception ex)
             {
@@ -659,10 +689,14 @@ namespace BaiduCloudSync
                 Tracer.GlobalTracer.TraceInfo("BaiduOAuth._init_pcs_auth_data called: void");
                 try
                 {
-                    _http.HttpGet(_PAN_ROOT_URL);
+                    var ns = new NetStream();
+                    ns.CookieKey = _cookie_identifier;
+                    ns.RetryDelay = 1000;
+                    ns.RetryTimes = 3;
+                    ns.HttpGet(_PAN_ROOT_URL);
 
-                    var str = _http.ReadResponseString();
-                    _http.Close();
+                    var str = ns.ReadResponseString();
+                    ns.Close();
 
                     //_trace.TraceInfo(str);
 
