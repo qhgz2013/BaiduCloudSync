@@ -644,7 +644,7 @@ namespace BaiduCloudSync
                         _remote_data = data;
                         sync_lock.Set();
                     }, _overwrite ? BaiduPCS.ondup.overwrite : BaiduPCS.ondup.newcopy, _selected_account_id);
-                    sync_lock.Wait();
+                    sync_lock.Wait(120000);
                     sync_lock.Reset();
                 }
 
@@ -657,7 +657,7 @@ namespace BaiduCloudSync
                         for (int i = 0; i < 3; i++)
                         {
                             _remote_cacher.DeletePathAsync(_remote_path, _delete_callback, _selected_account_id, temp_struct);
-                            sync_lock.Wait();
+                            sync_lock.Wait(60000);
                             sync_lock.Reset();
                             if (temp_struct.suc)
                                 break;
@@ -675,7 +675,7 @@ namespace BaiduCloudSync
                         for (int i = 0; i < 3; i++)
                         {
                             _remote_cacher.PreCreateFileAsync(_remote_path, _slice_count, _pre_create_request_callback, _selected_account_id, temp_struct);
-                            sync_lock.Wait();
+                            sync_lock.Wait(120000);
                             sync_lock.Reset();
                             if (temp_struct.suc)
                                 break;
@@ -815,7 +815,7 @@ namespace BaiduCloudSync
                     for (int i = 0; i < 3; i++)
                     {
                         _remote_cacher.CreteSuperFileAsync(_remote_path, _upload_id, from item in _slice_result orderby item.Key ascending select item.Value, (ulong)_file_size, _create_superfile_request_callback, _selected_account_id, temp_struct1);
-                        sync_lock.Wait();
+                        sync_lock.Wait(120000);
                         sync_lock.Reset();
                         if (temp_struct1.suc)
                             break;
@@ -853,6 +853,8 @@ namespace BaiduCloudSync
             {
                 _monitor_thread = null;
                 _file_watcher.EnableRaisingEvents = false;
+                _file_watcher.Dispose();
+                _file_watcher = null;
                 //deleting temporary encrypted file
                 if (_enable_encryption && File.Exists(_local_path) && _local_path.EndsWith(".encrypted"))
                     File.Delete(_local_path);

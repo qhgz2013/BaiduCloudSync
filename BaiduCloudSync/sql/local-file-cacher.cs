@@ -130,7 +130,12 @@ namespace BaiduCloudSync
                 if (queue_empty || _current_io_file_flag == 1)
                 {
                     _io_wait.Reset();
-                    _io_wait.Wait();
+                    _io_wait.Wait(120000);
+                    lock (_sql_lock)
+                    {
+                        _sql_trs.Commit(); //committing changes every 2 minutes
+                        _sql_trs = _sql_con.BeginTransaction();
+                    }
                     continue;
                 }
 

@@ -165,7 +165,7 @@ namespace BaiduCloudSync
 
 
         public event EventHandler FileDiffStart, FileDiffFinish;
-        public bool IsFileDiffWorking { get { return _is_file_diff_working; } }
+        public bool IsFileDiffWorking { get { return _is_update_required; } }
 
 
         //每个pcs api对应的数据
@@ -211,7 +211,7 @@ namespace BaiduCloudSync
         private const int _FILE_DIFF_FLAG_ABORTED = 0x2;
         private Dictionary<int, _AccountData> _file_diff_thread_fetching_head; //当前获取的账号
         private Dictionary<int, bool> _file_diff_thread_data_dirty; //当前账号的数据是否需要更新
-        private bool _is_file_diff_working; //差异线程是否在互联网上下载数据
+        private bool _is_update_required; //差异线程是否需要互联网上下载数据
         private object _file_diff_thread_fetching_head_lock;
 
         //sql数据缓存
@@ -271,7 +271,7 @@ namespace BaiduCloudSync
             _file_diff_thread_started.Set();
             while (_file_diff_thread_flag == 0)
             {
-
+                bool triggered_file_diff_started = false;
                 lock (_account_data_external_lock)
                 {
                     if (_account_changed)
@@ -287,8 +287,12 @@ namespace BaiduCloudSync
                                 _file_diff_thread_data_dirty.Add(item.Key, true);
                             }
                         }
-                        _is_file_diff_working = true;
-                        try { FileDiffStart?.Invoke(this, new EventArgs()); } catch { }
+                        _is_update_required = true;
+                        if (!triggered_file_diff_started)
+                        {
+                            try { FileDiffStart?.Invoke(this, new EventArgs()); } catch { }
+                            triggered_file_diff_started = true;
+                        }
                         _account_changed = false;
                     }
                 }
@@ -310,8 +314,12 @@ namespace BaiduCloudSync
                             item.Value.pcs.GetFileDiffAsync(cursor, _file_diff_data_callback, new KeyValuePair<object, object>(item.Key, rst_event));
                             _file_diff_thread_data_dirty[item.Key] = false;
                         }
-                        _is_file_diff_working = true;
-                        try { FileDiffStart?.Invoke(this, new EventArgs()); } catch { }
+                        _is_update_required = true;
+                        if (!triggered_file_diff_started)
+                        {
+                            try { FileDiffStart?.Invoke(this, new EventArgs()); } catch { }
+                            triggered_file_diff_started = true;
+                        }
                     }
                     else
                         finished_count++;
@@ -324,8 +332,11 @@ namespace BaiduCloudSync
                     rst_event.Reset();
                     finished_count++;
                 }
-                _is_file_diff_working = false;
-                try { FileDiffFinish?.Invoke(this, new EventArgs()); } catch { }
+                if (triggered_file_diff_started)
+                {
+                    _is_update_required = false;
+                    try { FileDiffFinish?.Invoke(this, new EventArgs()); } catch { }
+                }
 
                 if (!is_data_dirty)
                 {
@@ -339,6 +350,7 @@ namespace BaiduCloudSync
         private void _file_diff_data_callback(bool suc, bool has_more, bool reset, string next_cursor, ObjectMetadata[] result, object state)
         {
             var index = (int)((KeyValuePair<object, object>)state).Key;
+            if (_file_diff_thread_flag != 0) return;
             if (!suc)
             {
                 //failed: retry in 3 seconds
@@ -365,8 +377,6 @@ namespace BaiduCloudSync
                     _sql_cmd.ExecuteNonQuery();
                     _sql_cmd.CommandText = reset_sql2;
                     _sql_cmd.ExecuteNonQuery();
-                    _sql_trs.Commit();
-                    _sql_trs = _sql_con.BeginTransaction();
                 }
             }
 
@@ -457,13 +467,13 @@ namespace BaiduCloudSync
                 }
 
             //completed fetch, interrupting monitor thread
+            lock (_sql_lock)
+            {
+                _sql_trs.Commit();
+                _sql_trs = _sql_con.BeginTransaction();
+            }
             if (!has_more)
             {
-                lock (_sql_lock)
-                {
-                    _sql_trs.Commit();
-                    _sql_trs = _sql_con.BeginTransaction();
-                }
                 if (_file_diff_thread != null)
                     ((ManualResetEventSlim)((KeyValuePair<object, object>)state).Value).Set();
             }
@@ -719,7 +729,7 @@ namespace BaiduCloudSync
             if (!_account_data.ContainsKey(id)) throw new ArgumentOutOfRangeException("id");
             lock (_account_data_external_lock)
             {
-                while (_is_file_diff_working || _account_changed) Thread.Sleep(10);
+                while (_is_update_required || _account_changed) Thread.Sleep(10);
                 lock (_sql_lock)
                 {
                     _sql_cmd.CommandText = "update Account set cursor = 'null' where account_id = " + id;
@@ -753,7 +763,7 @@ namespace BaiduCloudSync
         public void GetFileListAsync(string path, BaiduPCS.MultiObjectMetaCallback callback, int account_id = 0, BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name, bool asc = true, int page = 1, int size = 1000, object state = null)
         {
             if (path.EndsWith("/") && path != "/") path = path.Substring(0, path.Length - 1);
-            if (_is_file_diff_working || _account_changed)
+            if (_is_update_required || _account_changed)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
                 _account_data[account_id].pcs.GetFileListAsync(path, (suc, data, s) =>
@@ -789,7 +799,7 @@ namespace BaiduCloudSync
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
                     {
                         _file_diff_thread_data_dirty[account_id] = true;
-                        _is_file_diff_working = true;
+                        _is_update_required = true;
                     }
                 }
             }
@@ -811,7 +821,7 @@ namespace BaiduCloudSync
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
                         _file_diff_thread_data_dirty[account_id] = true;
-                    _is_file_diff_working = true;
+                    _is_update_required = true;
                 }
             }
         }
@@ -831,7 +841,7 @@ namespace BaiduCloudSync
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
                         _file_diff_thread_data_dirty[account_id] = true;
-                    _is_file_diff_working = true;
+                    _is_update_required = true;
                 }
             }
         }
@@ -851,7 +861,7 @@ namespace BaiduCloudSync
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
                         _file_diff_thread_data_dirty[account_id] = true;
-                    _is_file_diff_working = true;
+                    _is_update_required = true;
                 }
             }
         }
@@ -870,7 +880,7 @@ namespace BaiduCloudSync
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
                         _file_diff_thread_data_dirty[account_id] = true;
-                    _is_file_diff_working = true;
+                    _is_update_required = true;
                 }
             }
         }
@@ -885,7 +895,7 @@ namespace BaiduCloudSync
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
                         _file_diff_thread_data_dirty[account_id] = true;
-                    _is_file_diff_working = true;
+                    _is_update_required = true;
                 }
             }
         }
@@ -942,7 +952,7 @@ namespace BaiduCloudSync
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
                         _file_diff_thread_data_dirty[account_id] = true;
-                    _is_file_diff_working = true;
+                    _is_update_required = true;
                 }
             }
         }
@@ -957,7 +967,7 @@ namespace BaiduCloudSync
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
                         _file_diff_thread_data_dirty[account_id] = true;
-                    _is_file_diff_working = true;
+                    _is_update_required = true;
                 }
             }
         }
@@ -973,7 +983,7 @@ namespace BaiduCloudSync
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
                         _file_diff_thread_data_dirty[account_id] = true;
-                    _is_file_diff_working = true;
+                    _is_update_required = true;
                 }
             }
         }
@@ -987,7 +997,7 @@ namespace BaiduCloudSync
                 {
                     if (_file_diff_thread_data_dirty.ContainsKey(account_id))
                         _file_diff_thread_data_dirty[account_id] = true;
-                    _is_file_diff_working = true;
+                    _is_update_required = true;
                 }
             }
         }

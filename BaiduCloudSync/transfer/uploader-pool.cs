@@ -31,7 +31,10 @@ namespace BaiduCloudSync
         private bool _auto_start;
         //分配的任务id
         private int _allocated_index;
-        public UploaderPool(RemoteFileCacher remote_cacher, LocalFileCacher local_cacher, int account_id, bool overwrite_file)
+
+        private GlobalUtil.KeyManager _key_manager;
+        private bool _enable_encrypt;
+        public UploaderPool(RemoteFileCacher remote_cacher, LocalFileCacher local_cacher, int account_id, bool overwrite_file = false, GlobalUtil.KeyManager key_manager = null, bool encrypt_file = false)
         {
             if (remote_cacher == null) throw new ArgumentNullException("remote_cacher");
             if (local_cacher == null) throw new ArgumentNullException("local_cacher");
@@ -43,6 +46,8 @@ namespace BaiduCloudSync
             _max_thread = Uploader.DEFAULT_MAX_THREAD;
             _auto_start = false;
             _allocated_index = 0;
+            _enable_encrypt = encrypt_file;
+            _key_manager = key_manager;
 
             _account_id = account_id;
             _overwrite = overwrite_file;
@@ -58,7 +63,7 @@ namespace BaiduCloudSync
         /// </summary>
         public int PoolSize { get { return _pool_size; } set { if (value <= 0) throw new ArgumentOutOfRangeException("value"); lock (_external_lock) _pool_size = value; } }
         /// <summary>
-        /// 总下载速度，单位：B/s
+        /// 总上传速度，单位：B/s
         /// </summary>
         public int SpeedLimit { get { return _speed_limit; } set { lock (_external_lock) { _speed_limit = value; _set_speed(); } } }
         /// <summary>
@@ -67,6 +72,10 @@ namespace BaiduCloudSync
         public int MaxThread { get { return _max_thread; } set { lock (_external_lock) _max_thread = value; } }
         //routed events
         public event EventHandler TaskStarted, TaskPaused, TaskCancelled, TaskError, TaskFinished;
+        /// <summary>
+        /// 上传任务数量
+        /// </summary>
+        public int Count { get { return _queue_data.Count; } }
         #endregion
 
         private void _set_speed()
@@ -125,7 +134,7 @@ namespace BaiduCloudSync
         {
             lock (_external_lock)
             {
-                var uploader = new Uploader(_local_cacher, _remote_cacher, local_path, remote_path, _account_id, _overwrite, _max_thread, _speed_limit / _pool_size);
+                var uploader = new Uploader(_local_cacher, _remote_cacher, local_path, remote_path, _account_id, _overwrite, _max_thread, _speed_limit / _pool_size, _key_manager, _enable_encrypt);
                 var index = _allocated_index++;
                 uploader.Tag = index;
                 uploader.TaskStarted += _on_task_started;

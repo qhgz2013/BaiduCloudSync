@@ -896,6 +896,7 @@ namespace BaiduCloudSync
             }
             catch (Exception ex)
             {
+                ns.Close();
                 _trace.TraceError(ex);
                 throw ex;
             }
