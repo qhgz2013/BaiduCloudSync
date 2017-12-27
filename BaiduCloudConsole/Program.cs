@@ -24,6 +24,7 @@ namespace BaiduCloudConsole
         }
         private static void Main(string[] args)
         {
+            //var suc = ThreadPool.SetMinThreads(1, 1);
             if (!Directory.Exists("data"))
                 Directory.CreateDirectory("data");
             NetStream.LoadCookie("data/cookie.dat");
@@ -611,98 +612,71 @@ namespace BaiduCloudConsole
             else
                 _key_manager.IsStaticEncryption = true;
 
-            var pool = new UploaderPool(_remote_file_cacher, _local_file_cacher, 0, overwrite, _key_manager, !string.IsNullOrEmpty(encrypt_str));
-            for (int i = 0; i < local_files.Count; i++)
-            {
-                pool.QueueTask(remote_files[i], local_files[i]);
-            }
-
-            Console.WriteLine("上传任务池：\r\n并行任务数：{0}，并行线程数：{2}，速度限制：{1} B/s", pool.PoolSize, pool.SpeedLimit, pool.MaxThread);
-            if (string.IsNullOrEmpty(encrypt_str))
-                Console.WriteLine("未开启文件加密");
-            else
-                Console.WriteLine("已开启{0}加密", encrypt_str.ToUpper());
-            //记录已开始的任务
-            var started_tasks = new List<Uploader>();
-            var lck = new object();
 
             bool output_state = false;
             var output_state_lck = new object();
 
-            var total_count = pool.Count;
+            var total_count = remote_files.Count;
             var fin_count = 0;
-
-            pool.TaskStarted += (s, e) => { lock (lck) started_tasks.Add((Uploader)s); };
-            pool.TaskError += (s, e) =>
-            {
-                fin_count++;
-                lock (lck)
-                    if (started_tasks.Contains((Uploader)s))
-                        started_tasks.Remove((Uploader)s);
-                lock (output_state_lck)
-                {
-                    if (output_state)
-                    {
-                        output_state = false;
-                        Console.WriteLine();
-                    }
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("任务错误: {0} -> {1}", ((Uploader)s).LocalFilePath, ((Uploader)s).RemoteFilePath);
-                    Console.ResetColor();
-                }
-            };
-            pool.TaskFinished += (s, e) =>
-            {
-                fin_count++;
-                lock (lck)
-                    if (started_tasks.Contains((Uploader)s))
-                        started_tasks.Remove((Uploader)s);
-                //lock (output_state_lck)
-                //{
-                //    if (output_state)
-                //    {
-                //        output_state = false;
-                //        Console.WriteLine();
-                //    }
-                //    Console.WriteLine("任务完成: {0} -> {1}", ((Uploader)s).LocalFilePath, ((Uploader)s).RemoteFilePath);
-                //}
-            };
-            pool.Start();
+            var alloc_count = 0;
+            var uploaders = new List<Uploader>();
+            var lck = new object();
 
             var base_y = Console.CursorTop;
             var last_y = base_y;
-            while (pool.Count > 0)
+            int loop_count = 0;
+            while (fin_count < total_count)
             {
-                var fill_str = new string(' ', Console.WindowWidth);
-
-                lock (output_state_lck)
+                loop_count++;
+                for (int i = uploaders.Count; i < 5 && i < remote_files.Count; i++)
                 {
-                    if (!output_state)
-                    {
-                        output_state = true;
-                        base_y = Console.CursorTop;
-                    }
-
-                    Console.SetCursorPosition(0, base_y);
-                    for (int i = base_y; i <= last_y + 1; i++)
-                    {
-                        Console.Write(fill_str);
-                    }
-                    Console.SetCursorPosition(0, base_y);
-                    Console.WriteLine("[{0}/{1}]", fin_count, total_count);
+                    var uploader = new Uploader(_local_file_cacher, _remote_file_cacher, local_files[alloc_count], remote_files[alloc_count],
+                        0, overwrite, max_thread, speed_limit, _key_manager, !string.IsNullOrEmpty(encrypt_str));
+                    uploader.Tag = alloc_count;
+                    alloc_count++;
                     lock (lck)
-                    {
-                        for (int i = 0; i < started_tasks.Count; i++)
-                        {
-                            var item = started_tasks[i];
-                            var progress = (item.Size == 0 ? 0.0 : (item.UploadedSize * 100.0 / item.Size));
-                            Console.WriteLine("#{0,-5} | {1,5}% | {2,-20} | {3,-10} | {4}", item.Tag, progress.ToString("##0.0"), _format_bytes(item.UploadedSize) + "/" + _format_bytes(item.Size), _format_bytes((long)item.AverageSpeed5s) + "/s", item.RemoteFilePath);
+                        uploaders.Add(uploader);
+                    uploader.TaskError += (s, e) => { lock (lck) uploaders.Remove((Uploader)s); Interlocked.Increment(ref fin_count); };
+                    uploader.TaskFinished += (s, e) => { lock (lck) uploaders.Remove((Uploader)s); Interlocked.Increment(ref fin_count); };
 
-                        }
-                    }
-                    last_y = Console.CursorTop;
-                    Thread.Sleep(1000);
+                    uploader.Start();
                 }
+
+                #region output
+                if (loop_count == 10)
+                {
+                    loop_count = 0;
+                    var fill_str = new string(' ', Console.WindowWidth);
+                    lock (output_state_lck)
+                    {
+                        if (!output_state)
+                        {
+                            output_state = true;
+                            base_y = Console.CursorTop;
+                        }
+
+                        Console.SetCursorPosition(0, base_y);
+                        for (int i = base_y; i <= last_y + 1; i++)
+                        {
+                            Console.Write(fill_str);
+                        }
+                        Console.SetCursorPosition(0, base_y);
+                        Console.WriteLine("[{0}/{1}]", fin_count, total_count);
+                        lock (lck)
+                        {
+                            for (int i = 0; i < uploaders.Count; i++)
+                            {
+                                var item = uploaders[i];
+                                var progress = (item.Size == 0 ? 0.0 : (item.UploadedSize * 100.0 / item.Size));
+                                Console.WriteLine("#{0,-5} | {1,5}% | {2,-20} | {3,-10} | {5,-10} | {4}", item.Tag, progress.ToString("##0.0"), _format_bytes(item.UploadedSize) + "/" + _format_bytes(item.Size), _format_bytes((long)item.AverageSpeed5s) + "/s", item.RemoteFilePath, item.TaskState.ToString());
+
+                            }
+                        }
+                        last_y = Console.CursorTop;
+                    }
+                    #endregion
+                }
+                Thread.Sleep(100);
             }
         }
         private static void _proceed_status_bar(long current, long total, long? speed = null)

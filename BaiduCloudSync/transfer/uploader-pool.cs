@@ -117,6 +117,10 @@ namespace BaiduCloudSync
                     _queue_data.ElementAt(_pool_size).Value.Start();
                 }
                 _queue_data.Remove((int)((Uploader)sender).Tag);
+                //System.Threading.ThreadPool.QueueUserWorkItem(delegate
+                //{
+                //    ((Uploader)sender).Dispose();
+                //});
                 _set_speed();
             }
             try { TaskFinished?.Invoke(sender, e); }

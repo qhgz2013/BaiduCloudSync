@@ -80,8 +80,7 @@ namespace BaiduCloudSync
         private const int _UPLOAD_THREAD_FLAG_FILE_ENCRYPTING = 0x08000000;
 
 
-        //监控线程
-        private Thread _monitor_thread;
+        private ManualResetEventSlim _monitor_thread_exited;
         private ManualResetEventSlim _monitor_thread_created; //线程是否已创建
         private ManualResetEventSlim _file_io_response; //文件IO是否已经进行回调
 
@@ -212,6 +211,7 @@ namespace BaiduCloudSync
                 _upload_size_5s.AddLast(0);
             _monitor_thread_created = new ManualResetEventSlim();
             _file_io_response = new ManualResetEventSlim();
+            _monitor_thread_exited = new ManualResetEventSlim();
 
             _local_cacher.LocalFileIOFinish += _on_file_io_completed;
             _local_cacher.LocalFileIOUpdate += _on_file_io_updated;
@@ -222,11 +222,8 @@ namespace BaiduCloudSync
 
         public void Dispose()
         {
-            if (_monitor_thread != null)
-            {
-                //todo: modify to join operation if necessary
-                Cancel();
-            }
+            _monitor_thread_created.Wait();
+            _monitor_thread_exited.Wait();
 
             lock (_thread_data_lock)
             {
@@ -275,10 +272,11 @@ namespace BaiduCloudSync
                             Tracer.GlobalTracer.TraceInfo("---STARTED---");
                             _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_START_REQUESTED) & ~_UPLOAD_THREAD_FLAG_READY;
 
-                            _monitor_thread = new Thread(_monitor_thread_callback);
-                            _monitor_thread.IsBackground = true;
-                            _monitor_thread.Name = "Upload monitor";
-                            _monitor_thread.Start();
+                            //_monitor_thread = new Thread(_monitor_thread_callback);
+                            //_monitor_thread.IsBackground = true;
+                            //_monitor_thread.Name = "Upload monitor";
+                            //_monitor_thread.Start();
+                            ThreadPool.QueueUserWorkItem(new WaitCallback(_monitor_thread_callback), null);
                         }
                         else
                         {
@@ -316,7 +314,8 @@ namespace BaiduCloudSync
                         return;
 
                     _monitor_thread_created.Wait();
-                    _monitor_thread.Join();
+                    _monitor_thread_exited.Wait();
+                    _monitor_thread_exited.Reset();
                     _monitor_thread_created.Reset();
                 }
             }
@@ -350,7 +349,8 @@ namespace BaiduCloudSync
                     }
 
                     _monitor_thread_created.Wait();
-                    _monitor_thread.Join();
+                    _monitor_thread_exited.Wait();
+                    _monitor_thread_exited.Reset();
                     _monitor_thread_created.Reset();
                     Dispose();
                 }
@@ -539,7 +539,7 @@ namespace BaiduCloudSync
             temp.suc = suc;
             temp.lck.Set();
         }
-        private void _monitor_thread_callback()
+        private void _monitor_thread_callback(object _ = null)
         {
             _monitor_thread_created.Set();
             _start_time = DateTime.Now;
@@ -851,13 +851,13 @@ namespace BaiduCloudSync
             }
             finally
             {
-                _monitor_thread = null;
                 _file_watcher.EnableRaisingEvents = false;
                 _file_watcher.Dispose();
                 _file_watcher = null;
                 //deleting temporary encrypted file
                 if (_enable_encryption && File.Exists(_local_path) && _local_path.EndsWith(".encrypted"))
                     File.Delete(_local_path);
+                _monitor_thread_exited.Set();
             }
         }
     }
