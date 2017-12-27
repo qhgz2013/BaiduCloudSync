@@ -9,8 +9,11 @@ using GlobalUtil;
 
 namespace BaiduCloudSync
 {
-    //管理多个PCS API，对文件数据进行sql缓存的类（包含多线程优化）
+
     //todo: 优化管理线程代码
+    /// <summary>
+    /// 管理多个PCS API，对文件数据进行sql缓存的类（包含多线程优化）
+    /// </summary>
     public class RemoteFileCacher : IDisposable
     {
         private const string _CACHE_PATH = "data";

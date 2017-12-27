@@ -10,7 +10,9 @@ using System.Threading;
 
 namespace BaiduCloudSync
 {
-    //todo: implement file encryption
+    /// <summary>
+    /// 百度网盘的文件上传器类，用于进行多线程并行上传。
+    /// </summary>
     public class Uploader : IDisposable, ITransfer
     {
         //默认并行4线程上传

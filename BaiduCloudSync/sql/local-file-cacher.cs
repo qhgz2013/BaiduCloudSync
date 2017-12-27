@@ -10,22 +10,69 @@ using GlobalUtil;
 
 namespace BaiduCloudSync
 {
+    /// <summary>
+    /// 在本地文件读取时的回调函数
+    /// </summary>
+    /// <param name="path">文件路径</param>
+    /// <param name="current">已读取字节数</param>
+    /// <param name="total">文件总字节数</param>
     public delegate void LocalFileIOCallback(string path, long current, long total);
+    /// <summary>
+    /// 本地的文件哈希信息
+    /// </summary>
     public struct LocalFileData
     {
+        /// <summary>
+        /// 文件路径
+        /// </summary>
         public string Path;
+        /// <summary>
+        /// 文件路径的SHA1值
+        /// </summary>
         public string Path_SHA1;
+        /// <summary>
+        /// 文件的MD5
+        /// </summary>
         public string MD5;
+        /// <summary>
+        /// 文件大小
+        /// </summary>
         public long Size;
+        /// <summary>
+        /// 文件的CRC32
+        /// </summary>
         public uint CRC32;
+        /// <summary>
+        /// 文件的分段MD5，即最大计算前256K字节的MD5
+        /// </summary>
         public string Slice_MD5;
+        /// <summary>
+        /// 文件的SHA1
+        /// </summary>
         public string SHA1;
+        /// <summary>
+        /// 文件创建时间
+        /// </summary>
         public DateTime CTime;
+        /// <summary>
+        /// 文件修改时间
+        /// </summary>
         public DateTime MTime;
     }
+    /// <summary>
+    /// 在本地文件读取完成后的回调函数
+    /// </summary>
+    /// <param name="data">文件哈希信息</param>
     public delegate void LocalFileIOFinishCallback(LocalFileData data);
+    /// <summary>
+    /// 文件读取取消的回调函数
+    /// </summary>
+    /// <param name="path">文件路径</param>
     public delegate void LocalFileIOAbortedCallback(string path);
     //todo: 增加缓存大小修改
+    /// <summary>
+    /// 本地文件哈希缓存数据库，用于缓存本地文件的哈希值（即散列特征），减少重复计算，进行并行哈希计算等
+    /// </summary>
     public class LocalFileCacher : IDisposable
     {
         private const string _CACHE_PATH = "data";
@@ -173,7 +220,7 @@ namespace BaiduCloudSync
                     else
                         path_sha1 = SHA1.ComputeHash(next_path.ToLower());
 #pragma warning restore
-                    Tracer.GlobalTracer.TraceInfo("File Digest started: " + next_path);
+                    Tracer.GlobalTracer.TraceInfo("File hash started: " + next_path);
 
                     //calculation (parallel access)
                     var md5_calc = new MD5(); //speed: ~36s/GB
@@ -549,7 +596,7 @@ namespace BaiduCloudSync
         public event LocalFileIOFinishCallback LocalFileIOFinish;
         public event LocalFileIOAbortedCallback LocalFileIOAbort;
         /// <summary>
-        /// 将文件的特征I/O任务添加到执行队列中
+        /// 将文件的哈希任务添加到执行队列中
         /// </summary>
         /// <param name="path">文件路径</param>
         public void FileIORequest(string path)
@@ -616,6 +663,10 @@ namespace BaiduCloudSync
             });
         }
         //TODO: debug check: sync variable boundary
+        /// <summary>
+        /// 取消文件的哈希任务
+        /// </summary>
+        /// <param name="path">文件路径</param>
         public void FileIOAbort(string path)
         {
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");

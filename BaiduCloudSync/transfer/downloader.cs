@@ -10,7 +10,6 @@ using System.Threading;
 
 namespace BaiduCloudSync
 {
-    //TODO: 接入自动解密模块
     /// <summary>
     /// 百度网盘的文件下载器类，用于进行多线程并行下载。
     /// </summary>

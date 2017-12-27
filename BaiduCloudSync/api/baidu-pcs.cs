@@ -228,7 +228,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public bool DeletePath(string path)
         {
-            _trace.TraceInfo("BaiduPCS.DeletePath called: string path=" + path);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.DeletePath called: string path=" + path);
             return DeletePath(new string[] { path });
         }
         /// <summary>
@@ -238,7 +239,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public bool DeletePath(IEnumerable<string> paths)
         {
-            _trace.TraceInfo("BaiduPCS.DeletePath called: IEnumerable<string> paths=[count=" + paths.Count() + "]");
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.DeletePath called: IEnumerable<string> paths=[count=" + paths.Count() + "]");
             bool ret = false;
             var set_event = new ManualResetEventSlim();
             DeletePathAsync(paths, (suc, data, s) =>
@@ -258,7 +260,8 @@ namespace BaiduCloudSync
         /// <returns>返回是否成功</returns>
         public bool MovePath(string source, string destination, ondup ondup = ondup.overwrite)
         {
-            _trace.TraceInfo("BaiduPCS.MovePath called: string source=" + source + ", string destination=" + destination + ", ondup ondup=" + ondup);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.MovePath called: string source=" + source + ", string destination=" + destination + ", ondup ondup=" + ondup);
             return MovePath(new string[] { source }, new string[] { destination }, ondup);
         }
         /// <summary>
@@ -270,7 +273,8 @@ namespace BaiduCloudSync
         /// <returns>返回是否成功</returns>
         public bool MovePath(IEnumerable<string> source, IEnumerable<string> destination, ondup ondup = ondup.overwrite)
         {
-            _trace.TraceInfo("BaiduPCS.MovePath called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], ondup ondup=" + ondup);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.MovePath called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], ondup ondup=" + ondup);
             bool ret = false;
             var set_event = new ManualResetEventSlim();
             MovePathAsync(source, destination, (suc, data, s) =>
@@ -291,7 +295,8 @@ namespace BaiduCloudSync
         /// <returns>返回是否成功</returns>
         public bool CopyPath(string source, string destination, ondup ondup = ondup.overwrite)
         {
-            _trace.TraceInfo("BaiduPCS.CopyPath called: string source=" + source + ", string destination=" + destination + ", ondup ondup=" + ondup);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.CopyPath called: string source=" + source + ", string destination=" + destination + ", ondup ondup=" + ondup);
             return CopyPath(new string[] { source }, new string[] { destination }, ondup);
         }
         /// <summary>
@@ -303,7 +308,8 @@ namespace BaiduCloudSync
         /// <returns>返回是否成功</returns>
         public bool CopyPath(IEnumerable<string> source, IEnumerable<string> destination, ondup ondup = ondup.overwrite)
         {
-            _trace.TraceInfo("BaiduPCS.CopyPath called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], ondup ondup=" + ondup);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.CopyPath called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> destination=[count=" + destination.Count() + "], ondup ondup=" + ondup);
             var set_event = new ManualResetEventSlim();
             bool ret = false;
             CopyPathAsync(source, destination, (suc, data, s) =>
@@ -322,7 +328,8 @@ namespace BaiduCloudSync
         /// <returns>返回是否成功</returns>
         public bool Rename(string source, string new_name)
         {
-            _trace.TraceInfo("BaiduPCS.Rename called: string source=" + source + ", string new_name=" + new_name);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.Rename called: string source=" + source + ", string new_name=" + new_name);
             return Rename(new string[] { source }, new string[] { new_name });
         }
         /// <summary>
@@ -333,7 +340,8 @@ namespace BaiduCloudSync
         /// <returns>返回是否成功</returns>
         public bool Rename(IEnumerable<string> source, IEnumerable<string> new_name)
         {
-            _trace.TraceInfo("BaiduPCS.Rename called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> new_name=[count=" + new_name.Count() + "]");
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.Rename called: IEnumerable<string> source=[count=" + source.Count() + "], IEnumerable<string> new_name=[count=" + new_name.Count() + "]");
             var set_event = new ManualResetEventSlim();
             bool ret = false;
             RenameAsync(source, new_name, (suc, data, s) =>
@@ -351,7 +359,8 @@ namespace BaiduCloudSync
         /// <returns>文件夹信息，失败时返回的fs_id=0</returns>
         public ObjectMetadata CreateDirectory(string path)
         {
-            _trace.TraceInfo("BaiduPCS.CreateDirectory called: string path=" + path);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.CreateDirectory called: string path=" + path);
             var set_event = new ManualResetEventSlim();
             ObjectMetadata ret = new ObjectMetadata();
             CreateDirectoryAsync(path, (suc, data, s) =>
@@ -374,7 +383,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public ObjectMetadata[] GetFileList(string path, FileOrder order = FileOrder.name, bool asc = true, int page = 1, int count = 1000)
         {
-            _trace.TraceInfo("BaiduPCS.GetFileList called: string path=" + path + ", FileOrder order=" + order + ", bool asc=" + asc + ", int page=" + page + ", int count=" + count);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.GetFileList called: string path=" + path + ", FileOrder order=" + order + ", bool asc=" + asc + ", int page=" + page + ", int count=" + count);
             ObjectMetadata[] ret = null;
             var set_event = new ManualResetEventSlim();
             GetFileListAsync(path, (suc, data, s) =>
@@ -394,6 +404,8 @@ namespace BaiduCloudSync
         /// <param name="cursor">游标位置</param>
         public ObjectMetadata[] GetFileDiff(out string next_cursor, out bool has_more, out bool reset, string cursor = null)
         {
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.GetFileDiff called: string cursor=" + cursor);
             ObjectMetadata[] ret = null;
             var set_event = new ManualResetEventSlim();
             string arg1 = null;
@@ -429,7 +441,8 @@ namespace BaiduCloudSync
         /// <returns>返回文件信息</returns>
         public ObjectMetadata RapidUploadRaw(string path, ulong content_length, string content_md5, string content_crc, string slice_md5, ondup ondup = ondup.overwrite)
         {
-            _trace.TraceInfo("BaiduPCS.RapidUploadRaw called: string path=" + path + ", ulong content_length=" + content_length + ", string content_md5=" + content_md5 + ", string content_crc=" + content_crc + ", string slice_md5=" + slice_md5 + ", ondup ondup=" + ondup);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.RapidUploadRaw called: string path=" + path + ", ulong content_length=" + content_length + ", string content_md5=" + content_md5 + ", string content_crc=" + content_crc + ", string slice_md5=" + slice_md5 + ", ondup ondup=" + ondup);
             var set_event = new ManualResetEventSlim();
             ObjectMetadata ret = new ObjectMetadata();
             RapidUploadAsync(path, content_length, content_md5, content_crc, slice_md5, (suc, data, s) =>
@@ -451,7 +464,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public ObjectMetadata UploadRaw(Stream stream_in, ulong content_length, string path, ondup ondup = ondup.overwrite, UploadStatusCallback callback = null)
         {
-            _trace.TraceInfo("BaiduPCS.UploadRaw called: Stream stream_in=" + stream_in.ToString() + ", ulong content_length=" + content_length + ", string path=" + path + ", ondup ondup=" + ondup + ", UploadStatusCallback callback=" + callback?.ToString());
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.UploadRaw called: Stream stream_in=" + stream_in.ToString() + ", ulong content_length=" + content_length + ", string path=" + path + ", ondup ondup=" + ondup + ", UploadStatusCallback callback=" + callback?.ToString());
 
             ObjectMetadata ret = new ObjectMetadata();
             var set_event = new ManualResetEventSlim();
@@ -496,7 +510,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public PreCreateResult PreCreateFile(string path, int block_count)
         {
-            _trace.TraceInfo("BaiduPCS.PreCreateFile called: string path=" + path + ", int block_count=" + block_count);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.PreCreateFile called: string path=" + path + ", int block_count=" + block_count);
             var ret = new PreCreateResult();
             var set_event = new ManualResetEventSlim();
             PreCreateFileAsync(path, block_count, (suc, block_count2, uploadid, s) =>
@@ -520,7 +535,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public string UploadSliceRaw(Stream stream_in, string path, string uploadid, int sequence, UploadStatusCallback callback = null)
         {
-            _trace.TraceInfo("BaiduPCS.UploadSliceRaw called: Stream stream_in=" + stream_in.ToString() + ", string uploadid=" + uploadid + ", int sequence=" + sequence + ", UploadStatusCallback callback=" + callback.ToString());
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.UploadSliceRaw called: Stream stream_in=" + stream_in.ToString() + ", string uploadid=" + uploadid + ", int sequence=" + sequence + ", UploadStatusCallback callback=" + callback.ToString());
 
             string ret = null;
             Guid task_id;
@@ -561,7 +577,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public ObjectMetadata CreateSuperFile(string path, string uploadid, IEnumerable<string> block_list, ulong file_size)
         {
-            _trace.TraceInfo("BaiduPCS.CreateSuperFile called: string path=" + path + ", string uploadid=" + uploadid + ", Ienumerable<string> block_list=[count=" + block_list.Count() + "]");
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.CreateSuperFile called: string path=" + path + ", string uploadid=" + uploadid + ", Ienumerable<string> block_list=[count=" + block_list.Count() + "]");
             ObjectMetadata ret = new ObjectMetadata();
             var set_event = new ManualResetEventSlim();
             CreateSuperFileAsync(path, uploadid, block_list, file_size, (suc, data, s) =>
@@ -584,7 +601,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public string GetDownloadLink_API(string path, bool over_https = true)
         {
-            _trace.TraceInfo("BaiduPCS.GetDownloadLink_API called: string path=" + path + ", bool over_https=" + over_https);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.GetDownloadLink_API called: string path=" + path + ", bool over_https=" + over_https);
             var param = new Parameters();
             param.Add("method", "download");
             param.Add("app_id", APPID);
@@ -607,7 +625,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public string GetDownloadLink(ulong fs_id, bool over_https = true)
         {
-            _trace.TraceInfo("BaiduPCS.GetDownloadLink called: ulong fs_id=" + fs_id + ", bool over_https=" + over_https);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.GetDownloadLink called: ulong fs_id=" + fs_id + ", bool over_https=" + over_https);
             var set_event = new ManualResetEventSlim();
             string[] ret = null;
             GetDownloadLinkAsync(fs_id, (suc, data, s) =>
@@ -628,7 +647,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public string[] GetLocateDownloadLink(string path)
         {
-            _trace.TraceInfo("BaiduPCS.GetLocateDownloadLink called: string path=" + path);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.GetLocateDownloadLink called: string path=" + path);
             var set_event = new ManualResetEventSlim();
             string[] ret = null;
             GetLocateDownloadLinkAsync(path, (suc, data, s) =>
@@ -684,7 +704,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public ShareData CreatePublicShare(ulong fs_id, int expireTime = 0)
         {
-            _trace.TraceInfo("BaiduPCS.CreatePublicShare called: ulong fs_id=" + fs_id + ", int expireTime=" + expireTime);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.CreatePublicShare called: ulong fs_id=" + fs_id + ", int expireTime=" + expireTime);
             return CreatePublicShare(new ulong[] { fs_id }, expireTime);
         }
         /// <summary>
@@ -695,7 +716,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public ShareData CreatePublicShare(IEnumerable<ulong> fs_ids, int expireTime = 0)
         {
-            _trace.TraceInfo("BaiduPCS.CreatePublicShare called: IEnumerable<ulong> fs_ids=[count=" + fs_ids.Count() + "]" + ", int expireTime=" + expireTime);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.CreatePublicShare called: IEnumerable<ulong> fs_ids=[count=" + fs_ids.Count() + "]" + ", int expireTime=" + expireTime);
             var ret = new ShareData();
             var set_event = new ManualResetEventSlim();
             CreatePublicShareAsync(fs_ids, (suc, data, s) =>
@@ -717,7 +739,8 @@ namespace BaiduCloudSync
         /// <param name="expireTime">有效时间（可选：1-1天，7-7天，0-永久）</param>
         public ShareData CreatePrivateShare(ulong fs_id, string password, int expireTime = 0)
         {
-            _trace.TraceInfo("BaiduPCS.CreatePrivateShare called: ulong fs_id=" + fs_id + ", string password=" + password + ", int expireTime=" + expireTime);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.CreatePrivateShare called: ulong fs_id=" + fs_id + ", string password=" + password + ", int expireTime=" + expireTime);
             return CreatePrivateShare(new ulong[] { fs_id }, password, expireTime);
         }
         /// <summary>
@@ -729,7 +752,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public ShareData CreatePrivateShare(IEnumerable<ulong> fs_ids, string password, int expireTime = 0)
         {
-            _trace.TraceInfo("BaiduPCS.CreatePrivateShare called: Ienumerable<ulong> fs_ids=[count=" + fs_ids.Count() + "], string password=" + password + ", int expireTime=" + expireTime);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.CreatePrivateShare called: Ienumerable<ulong> fs_ids=[count=" + fs_ids.Count() + "], string password=" + password + ", int expireTime=" + expireTime);
             var ret = new ShareData();
             var set_event = new ManualResetEventSlim();
             CreatePublicShareAsync(fs_ids, (suc, data, s) =>
@@ -749,7 +773,8 @@ namespace BaiduCloudSync
         /// <param name="share_id">Share ID</param>
         public void CancelShare(ulong share_id)
         {
-            _trace.TraceInfo("BaiduPCS.CancelShare called: ulong share_id=" + share_id);
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.CancelShare called: ulong share_id=" + share_id);
             CancelShare(new ulong[] { share_id });
         }
         /// <summary>
@@ -758,7 +783,8 @@ namespace BaiduCloudSync
         /// <param name="share_ids">Share ID</param>
         public void CancelShare(IEnumerable<ulong> share_ids)
         {
-            _trace.TraceInfo("BaiduPCS.CancelShare called: IEnumerable<ulong> share_ids=[count=" + share_ids.Count() + "]");
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.CancelShare called: IEnumerable<ulong> share_ids=[count=" + share_ids.Count() + "]");
             var set_event = new ManualResetEventSlim();
             CancelShareAsync(share_ids, (suc, data, s) =>
             {
@@ -839,7 +865,8 @@ namespace BaiduCloudSync
         /// <returns></returns>
         public ShareRecord[] GetShareRecords()
         {
-            _trace.TraceInfo("BaiduPCS.GetShareRecords called: void");
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.GetShareRecords called: void");
             ShareRecord[] ret = null;
             var set_event = new ManualResetEventSlim();
             GetShareRecordsAsync((suc, data, s) =>
@@ -876,6 +903,9 @@ namespace BaiduCloudSync
         }
         #endregion
     }
+    /// <summary>
+    /// 在请求百度API时捕获到的API错误代码非0的异常
+    /// </summary>
     public class ErrnoException : Exception
     {
         public int Errno { get; }

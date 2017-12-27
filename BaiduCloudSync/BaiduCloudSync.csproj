@@ -89,8 +89,8 @@
     <Compile Include="sql\sql-struct.cs" />
     <Compile Include="sql\remote-file-cacher.cs" />
     <Compile Include="sql\local-file-cacher.cs" />
+    <Compile Include="sql\sync-tracker.cs" />
     <Compile Include="testbench\test-bench.cs" />
-    <Compile Include="transfer\downloader-pool.cs" />
     <Compile Include="transfer\downloader.cs" />
     <Compile Include="transfer\itransfer.cs" />
     <Compile Include="transfer\uploader.cs" />

@@ -34,7 +34,8 @@ namespace BaiduCloudSync
         /// <returns>新的文件信息</returns>
         public ObjectMetadata ConvertToSymbolLink(string path, string dst_path = null)
         {
-            _trace.TraceInfo("BaiduPCS.ConvertToSymbolLink called: string path=" + path + ", string dst_path=" + (dst_path == null ? "null" : dst_path));
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.ConvertToSymbolLink called: string path=" + path + ", string dst_path=" + (dst_path == null ? "null" : dst_path));
 
             var rst_event = new ManualResetEventSlim();
             var ret = new ObjectMetadata();
@@ -48,12 +49,20 @@ namespace BaiduCloudSync
             return ret;
         }
 
-        public void ConvertToSymbolLinkAsync(string path, ObjectMetaCallback callback, string dst_path = null, object state = null)
+        /// <summary>
+        /// 将网盘的文件异步转换成秒传数据文件（将产生一个原文件名.symbollink的文件）
+        /// </summary>
+        /// <param name="path">原文件路径</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="dst_path">保存的文件名</param>
+        /// <param name="state">附加参数</param>
+        public void ConvertToSymbolLinkAsync(string path, ObjectMetaCallback callback = null, string dst_path = null, object state = null)
         {
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
             ThreadPool.QueueUserWorkItem(delegate
             {
-                _trace.TraceInfo("BaiduPCS.ConvertToSymbolLinkAsync called: string path=" + path + "ObjectMetaCallback callback=" + callback.ToString());
+                if (_enable_function_trace)
+                    _trace.TraceInfo("BaiduPCS.ConvertToSymbolLinkAsync called: string path=" + path + "ObjectMetaCallback callback=" + callback?.ToString() + ", string dst_path=" + dst_path);
                 var url = GetLocateDownloadLink(path);
                 if (url.Length == 0)
                 {
@@ -151,7 +160,8 @@ namespace BaiduCloudSync
         /// <returns>新的文件信息</returns>
         public ObjectMetadata ConvertFromSymbolLink(string path, string dst_path = null)
         {
-            _trace.TraceInfo("BaiduPCS.ConvertFromSymbolLink called: string path=" + path + ", string dst_path=" + (dst_path == null ? "null" : dst_path));
+            if (_enable_function_trace)
+                _trace.TraceInfo("BaiduPCS.ConvertFromSymbolLink called: string path=" + path + ", string dst_path=" + (dst_path == null ? "null" : dst_path));
 
             var rst_event = new ManualResetEventSlim();
             var ret = new ObjectMetadata();
@@ -164,13 +174,20 @@ namespace BaiduCloudSync
             rst_event.Wait();
             return ret;
         }
-
-        public void ConvertFromSymbolLinkAsync(string path, ObjectMetaCallback callback, string dst_path = null, object state = null)
+        /// <summary>
+        /// 将网盘的秒传数据文件异步转成原文件（将产生一个去掉末尾.symbollink的文件）
+        /// </summary>
+        /// <param name="path">原文件路径</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="dst_path">保存的文件名</param>
+        /// <param name="state">附加参数</param>
+        public void ConvertFromSymbolLinkAsync(string path, ObjectMetaCallback callback = null, string dst_path = null, object state = null)
         {
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
             ThreadPool.QueueUserWorkItem(delegate
             {
-                _trace.TraceInfo("BaiduPCS.ConvertFromSymbolLinkAsync called: string path=" + path + ", ObjectMetaCallback callback=" + callback.ToString());
+                if (_enable_function_trace)
+                    _trace.TraceInfo("BaiduPCS.ConvertFromSymbolLinkAsync called: string path=" + path + ", ObjectMetaCallback callback=" + callback?.ToString() + ", string dst_path=" + dst_path);
                 var url = GetLocateDownloadLink(path);
                 if (url.Length == 0)
                 {
