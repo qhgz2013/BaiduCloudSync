@@ -654,7 +654,7 @@ namespace BaiduCloudSync
                     if (_overwrite)
                     {
                         var temp_struct = new _temp_struct { lck = sync_lock, suc = false };
-                        for (int i = 0; i < 3; i++)
+                        for (int i = 0; i < 10; i++)
                         {
                             _remote_cacher.DeletePathAsync(_remote_path, _delete_callback, _selected_account_id, temp_struct);
                             sync_lock.Wait(60000);

@@ -327,7 +327,7 @@ namespace BaiduCloudSync
                             {
                                 Interlocked.Add(ref io_state, 1 << i);
                             }
-                            else
+                            else if (i != 4)
                             {
                                 Tracer.GlobalTracer.TraceWarning("invalid io state detected in " + str[i] + " calculation");
                             }

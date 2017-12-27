@@ -791,12 +791,12 @@ namespace BaiduCloudConsole
                 if (suc)
                 {
                     files = data;
-                    rst_event.Set();
                 }
                 else
                 {
                     Console.WriteLine("获取失败");
                 }
+                rst_event.Set();
             }, order: order, asc: asc, page: page, size: count);
 
             rst_event.Wait();
