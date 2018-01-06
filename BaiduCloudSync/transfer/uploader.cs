@@ -775,7 +775,7 @@ namespace BaiduCloudSync
                                         continue;
                                     }
                                     if (_slice_seq.Count == 0)
-                                        break;
+                                        continue;
                                     //error handling for dequeue failure
                                     if (_slice_seq.TryDequeue(out _task_seq[i]) == false)
                                     {

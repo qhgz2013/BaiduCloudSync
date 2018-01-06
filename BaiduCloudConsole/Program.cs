@@ -229,19 +229,29 @@ namespace BaiduCloudConsole
             //Console.WriteLine("--delete-account --username [用户名]");
             //Console.WriteLine("\t删除指定用户名的登陆信息");
             Console.WriteLine("*** 文件操作 ***");
-            Console.WriteLine("-L | --list [网盘文件路径] [--order [排序:name|size|time] --page [页数] --count [每页显示数量] --desc]");
+            Console.WriteLine("-l | --list [网盘文件路径] [--order [排序:name|size|time] --page [页数] --count [每页显示数量] --desc]");
             Console.WriteLine("\t列出文件夹下所有文件，参数page从1开始");
-            Console.WriteLine("--delete [网盘文件路径]");
+            Console.WriteLine("-x | --delete [网盘文件路径]");
             Console.WriteLine("\t删除指定路径的文件或文件夹");
+            Console.WriteLine("-m | --move [源路径] [新路径] [[--overwrite]]");
+            Console.WriteLine("\t移动文件到新路径，默认不会覆盖新路径下的同名文件");
+            Console.WriteLine("-c | --copy [源路径] [新路径] [[--overwrite]]");
+            Console.WriteLine("\t复制文件到新路径，默认不会覆盖新路径下的同名文件");
+            Console.WriteLine("-r | --rename [源路径] [新文件名(不含路径)]");
+            Console.WriteLine("\t将指定路径下的文件重命名");
+            Console.WriteLine("-s | --search [搜索路径] [文件名] [[-re|--regex] [-r|--recursion]]");
+            Console.WriteLine("\t在指定路径下搜索文件，-re开启正则匹配，-r开启文件夹递归搜索");
+            Console.WriteLine();
+            Console.WriteLine("*** 文件链接 ***");
             Console.WriteLine("--to-symbollink [网盘文件路径] [[文件链接路径]]");
             Console.WriteLine("\t将文件转换为文件链接，仅对大于256K的文件有效，可选参数：文件链接路径（默认在文件名后加.symbollink）");
             Console.WriteLine("--from-symbollink [文件链接路径] [[网盘文件路径]]");
             Console.WriteLine("\t将文件链接转换为文件，可选参数：文件路径（默认去掉文件的.symbollink结尾）");
             Console.WriteLine();
             Console.WriteLine("*** 文件传输 ***");
-            Console.WriteLine("-D | --download [网盘文件路径] [本地文件路径] [--threads [下载线程数] --speed [限速(KB/s)]]");
+            Console.WriteLine("-d | --download [网盘文件路径] [本地文件路径] [--threads [下载线程数] --speed [限速(KB/s)]]");
             Console.WriteLine("\t下载文件，可选选项：下载线程数（默认96），限速（默认0，即无限速）");
-            Console.WriteLine("-U | --upload [本地文件路径] [网盘文件路径] [--threads [上传线程数] --speed [限速(KB/s)] --overwrite --encrypt [rsa|aes]]");
+            Console.WriteLine("-u | --upload [本地文件路径] [网盘文件路径] [--threads [上传线程数] --speed [限速(KB/s)] --overwrite --encrypt [rsa|aes]]");
             Console.WriteLine("\t上传文件，可选选项：上传线程数（默认4），限速（默认0，即无限速）\r\n\tencrypt选项开启文件加密，密钥见加密部分，而且网盘的文件拓展名自动加上.bcsd加以辨别和下载的自动解密");
             Console.WriteLine();
             Console.WriteLine("*** 加密部分 ***");
@@ -628,7 +638,7 @@ namespace BaiduCloudConsole
             while (fin_count < total_count)
             {
                 loop_count++;
-                for (int i = uploaders.Count; i < 5 && i < remote_files.Count; i++)
+                for (int i = uploaders.Count; i < 5 && alloc_count < remote_files.Count; i++)
                 {
                     var uploader = new Uploader(_local_file_cacher, _remote_file_cacher, local_files[alloc_count], remote_files[alloc_count],
                         0, overwrite, max_thread, speed_limit, _key_manager, !string.IsNullOrEmpty(encrypt_str));
@@ -1154,19 +1164,194 @@ namespace BaiduCloudConsole
                 Console.WriteLine("转换失败，详细日志可见 global-trace.log");
 
         }
+
+        private static void _exec_move(string[] cmd)
+        {
+            if (cmd.Length < 3)
+            {
+                Console.WriteLine("参数不足");
+                return;
+            }
+            else if (cmd.Length > 4)
+            {
+                Console.WriteLine("参数过多");
+                return;
+            }
+
+            var src = cmd[1];
+            var dst = cmd[2];
+            var rst_event = new ManualResetEventSlim();
+            bool suc = false;
+            bool overwrite = false;
+            if (cmd.Length == 4 && cmd[3] == "--overwrite")
+                overwrite = true;
+            _remote_file_cacher.MovePathAsync(src, dst, (s, data, state) =>
+            {
+                suc = s;
+                rst_event.Set();
+            }, ondup: overwrite ? BaiduPCS.ondup.overwrite : BaiduPCS.ondup.newcopy);
+
+            rst_event.Wait();
+            if (suc)
+                Console.WriteLine("移动成功：{0} -> {1}", src, dst);
+            else
+                Console.WriteLine("移动失败：{0} -> {1}", src, dst);
+        }
+        private static void _exec_copy(string[] cmd)
+        {
+            if (cmd.Length < 3)
+            {
+                Console.WriteLine("参数不足");
+                return;
+            }
+            else if (cmd.Length > 4)
+            {
+                Console.WriteLine("参数过多");
+                return;
+            }
+
+            var src = cmd[1];
+            var dst = cmd[2];
+            var rst_event = new ManualResetEventSlim();
+            bool suc = false;
+            bool overwrite = false;
+            if (cmd.Length == 4 && cmd[3] == "--overwrite")
+                overwrite = true;
+            _remote_file_cacher.CopyPathAsync(src, dst, (s, data, state) =>
+            {
+                suc = s;
+                rst_event.Set();
+            }, ondup: overwrite ? BaiduPCS.ondup.overwrite : BaiduPCS.ondup.newcopy);
+
+            rst_event.Wait();
+            if (suc)
+                Console.WriteLine("复制成功：{0} -> {1}", src, dst);
+            else
+                Console.WriteLine("复制失败：{0} -> {1}", src, dst);
+        }
+
+        private static void _exec_rename(string[] cmd)
+        {
+            if (cmd.Length < 3)
+            {
+                Console.WriteLine("参数不足");
+                return;
+            }
+            else if (cmd.Length > 3)
+            {
+                Console.WriteLine("参数过多");
+                return;
+            }
+
+            var src = cmd[1];
+            var newname = cmd[2];
+            var rst_event = new ManualResetEventSlim();
+            bool suc = false;
+            _remote_file_cacher.RenameAsync(src, newname, (s, data, state) =>
+            {
+                suc = s;
+                rst_event.Set();
+            });
+
+            rst_event.Wait();
+            if (suc)
+                Console.WriteLine("重命名成功：{0} -> {1}", src, newname);
+            else
+                Console.WriteLine("重命名失败：{0} -> {1}", src, newname);
+        }
+
+        private static void _exec_search(string[] cmd)
+        {
+            if (cmd.Length < 3)
+            {
+                Console.WriteLine("参数不足");
+                return;
+            }
+
+            var path = cmd[1];
+            var keyword = cmd[2];
+
+            bool enable_regex = false, enable_recursion = false;
+            int index = 3;
+            for (int i = index; i < cmd.Length; i++)
+            {
+                switch (cmd[i])
+                {
+                    case "-re":
+                    case "--regex":
+                        enable_regex = true;
+                        break;
+                    case "-r":
+                    case "--recursion":
+                        enable_recursion = true;
+                        break;
+
+                    default:
+                        Console.WriteLine("非法参数：" + cmd[i]);
+                        return;
+                }
+            }
+
+            var sync_lock = new ManualResetEventSlim();
+            bool success = false;
+            ObjectMetadata[] result = null;
+            _remote_file_cacher.QueryFileListAsync(path, keyword, (suc, data, state) =>
+            {
+                success = suc;
+                result = data;
+                sync_lock.Set();
+            }, enable_regex: enable_regex, recursion: enable_recursion);
+            sync_lock.Wait();
+            if (success)
+            {
+                var padding = new string(' ', Console.WindowWidth);
+                var head = ("文件名" + padding).Substring(0, 37) + ("大小" + padding).Substring(0, 13) + ("创建时间" + padding).Substring(0, 14) + ("修改时间" + padding).Substring(0, 14);
+                Console.WriteLine(head);
+                foreach (var file in result)
+                {
+                    var str_filename = file.ServerFileName;
+                    var len_filename = Encoding.Default.GetByteCount(str_filename);
+                    if (len_filename > 40)
+                    {
+                        while (len_filename > 36)
+                        {
+                            str_filename = str_filename.Substring(0, str_filename.Length - 1);
+                            len_filename = Encoding.Default.GetByteCount(str_filename);
+                        }
+                        if (len_filename == 36)
+                            str_filename += "... ";
+                        else
+                            str_filename += " ... ";
+                    }
+                    else
+                        str_filename = string.Format("{0,-" + (40 + str_filename.Length - len_filename) + "}", str_filename);
+
+                    Console.Write(str_filename);
+
+                    var size = string.Format("{0,-15}", file.IsDir ? "<DIR>" : _format_bytes((long)file.Size));
+                    Console.Write(size);
+
+                    var ctime = string.Format("{0,-18}", util.FromUnixTimestamp(file.ServerCTime).ToString("yyyy-MM-dd HH:mm"));
+                    var mtime = string.Format("{0,-18}", util.FromUnixTimestamp(file.ServerMTime).ToString("yyyy-MM-dd HH:mm"));
+                    Console.WriteLine(ctime + mtime);
+                }
+            }
+            else
+                Console.WriteLine("搜索失败");
+        }
         private static void _exec_command(string[] cmd)
         {
-            switch (cmd[0])
+            switch (cmd[0].ToLower())
             {
-                case "-L":
+                case "-l":
                 case "--list":
                     _exec_list(cmd);
                     break;
-                case "-D":
+                case "-d":
                 case "--download":
                     _exec_download(cmd);
                     break;
-                case "-U":
+                case "-u":
                 case "--upload":
                     _exec_upload(cmd);
                     break;
@@ -1185,10 +1370,11 @@ namespace BaiduCloudConsole
                 case "--delete-key":
                     _exec_delete_key(cmd);
                     break;
-                case "-H":
+                case "-h":
                 case "--help":
                     _print_help();
                     break;
+                case "-x":
                 case "--delete":
                     _exec_delete(cmd);
                     break;
@@ -1197,6 +1383,22 @@ namespace BaiduCloudConsole
                     break;
                 case "--from-symbollink":
                     _exec_from_symbollink(cmd);
+                    break;
+                case "-m":
+                case "--move":
+                    _exec_move(cmd);
+                    break;
+                case "-c":
+                case "--copy":
+                    _exec_copy(cmd);
+                    break;
+                case "-r":
+                case "--rename":
+                    _exec_rename(cmd);
+                    break;
+                case "-s":
+                case "--search":
+                    _exec_search(cmd);
                     break;
                 case "--reset-cache":
                     _remote_file_cacher.ResetCache(0);

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using GlobalUtil;
+using System.Text.RegularExpressions;
 
 namespace BaiduCloudSync
 {
@@ -142,22 +143,25 @@ namespace BaiduCloudSync
                 _file_diff_thread.Join();
                 _file_diff_thread = null;
             }
-            if (_sql_trs != null)
+            lock (_sql_lock)
             {
-                _sql_trs.Commit();
-                _sql_trs.Dispose();
-                _sql_trs = null;
-            }
-            if (_sql_cmd != null)
-            {
-                _sql_cmd.Dispose();
-                _sql_cmd = null;
-            }
-            if (_sql_con != null)
-            {
-                _sql_con.Close();
-                _sql_con.Dispose();
-                _sql_con = null;
+                if (_sql_trs != null)
+                {
+                    _sql_trs.Commit();
+                    _sql_trs.Dispose();
+                    _sql_trs = null;
+                }
+                if (_sql_cmd != null)
+                {
+                    _sql_cmd.Dispose();
+                    _sql_cmd = null;
+                }
+                if (_sql_con != null)
+                {
+                    _sql_con.Close();
+                    _sql_con.Dispose();
+                    _sql_con = null;
+                }
             }
         }
         ~RemoteFileCacher()
@@ -217,6 +221,7 @@ namespace BaiduCloudSync
         //sql数据缓存
         private string _sql_cache_path; //缓存路径
         private List<ObjectMetadata> _sql_query_result;
+        private BaiduPCS.FileOrder _sql_cache_order;
 
         #region comparison classes implement
         private class _sort_meta : IComparer<ObjectMetadata>
@@ -307,8 +312,13 @@ namespace BaiduCloudSync
                         item.Value.finish_event.Wait(1000);
                     }
                 }
+                //reseting cache files
+                _sql_cache_path = null;
+                _sql_query_result = null;
+
                 //waiting next event
                 _update_required.Wait();
+                Thread.Sleep(3000); //prevent from calling continuously
             }
         }
         //http异步请求线程回调
@@ -365,6 +375,7 @@ namespace BaiduCloudSync
                     return;
                 if (_account_data[index].delete_flag)
                 {
+                    _account_data[index].start_flag = false;
                     _account_data[index].finish_event.Set();
                     return;
                 }
@@ -390,6 +401,7 @@ namespace BaiduCloudSync
                         return;
                     if (_account_data[index].delete_flag)
                     {
+                        _account_data[index].start_flag = false;
                         _account_data[index].finish_event.Set();
                         return;
                     }
@@ -472,6 +484,7 @@ namespace BaiduCloudSync
                     {
                         _account_data[index].finish_event.Set();
                         _account_data[index].data_dirty = false;
+                        _account_data[index].start_flag = false;
                     }
                 }
             }
@@ -492,7 +505,7 @@ namespace BaiduCloudSync
                 //to memory cache
                 lock (_sql_lock)
                 {
-                    if (_sql_cache_path != path)
+                    if (_sql_cache_path == null || _sql_cache_path != path || _sql_cache_order != order)
                     {
                         _sql_cache_path = path;
                         _sql_cmd.CommandText = sql_text;
@@ -528,6 +541,7 @@ namespace BaiduCloudSync
                         meta_list.Sort(new _sort_meta(order, asc));
 
                         _sql_query_result = meta_list;
+                        _sql_cache_order = order;
                     }
 
                     //return from cache
@@ -542,6 +556,76 @@ namespace BaiduCloudSync
             });
         }
 
+        private void _wait_file_diff_cancelled()
+        {
+            lock (_account_data_external_lock)
+            {
+                foreach (var item in _account_data)
+                {
+                    item.Value.start_flag = false;
+                }
+            }
+            while (_update_required.IsSet) Thread.Sleep(10);
+        }
+
+        private ObjectMetadata[] _query_file_list_from_sql(string path, string keyword, int account_id, BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name, bool asc = true, bool enable_regex = false, bool recursion = false)
+        {
+            bool success = false;
+            ObjectMetadata[] ret = null;
+            var sync_lock = new ManualResetEventSlim();
+
+            var internal_dir = new List<string>();
+
+            _get_file_list_from_sql(path, (suc, data, s) =>
+            {
+                if (suc)
+                {
+                    var matched_list = new List<ObjectMetadata>();
+                    foreach (var item in data)
+                    {
+                        if (enable_regex)
+                        {
+                            if (Regex.Match(item.ServerFileName, keyword, RegexOptions.IgnoreCase).Success)
+                                matched_list.Add(item);
+                        }
+                        else
+                        {
+                            if (item.ServerFileName.ToLower().Contains(keyword.ToLower()))
+                                matched_list.Add(item);
+                        }
+
+                        if (item.IsDir)
+                            internal_dir.Add(item.Path);
+                    }
+                    ret = matched_list.ToArray();
+                }
+
+                success = suc;
+                sync_lock.Set();
+            }, account_id, order, asc, 1, int.MaxValue);
+
+            sync_lock.Wait();
+
+
+            if (recursion)
+            {
+                foreach (var item in internal_dir)
+                {
+                    var new_data = _query_file_list_from_sql(item, keyword, account_id, order, asc, enable_regex, recursion);
+                    if (new_data == null)
+                        return null;
+                    else
+                    {
+                        var src_len = ret.Length;
+                        Array.Resize(ref ret, src_len + new_data.Length);
+                        Array.Copy(new_data, 0, ret, src_len, new_data.Length);
+                    }
+                }
+            }
+
+
+            return ret;
+        }
         #region public functions inherits from pcs api
         /// <summary>
         /// 获取所有账号信息
@@ -734,14 +818,7 @@ namespace BaiduCloudSync
         public void ResetCache(int id)
         {
             if (!_account_data.ContainsKey(id)) throw new ArgumentOutOfRangeException("id");
-            lock (_account_data_external_lock)
-            {
-                foreach (var item in _account_data)
-                {
-                    item.Value.start_flag = false;
-                }
-            }
-            while (_update_required.IsSet) Thread.Sleep(10);
+            _wait_file_diff_cancelled();
             lock (_account_data_external_lock)
             {
                 lock (_sql_lock)
@@ -798,6 +875,49 @@ namespace BaiduCloudSync
                     _get_file_list_from_sql(path, callback, account_id, order, asc, page, size, state);
                 }
             }
+        }
+
+        /// <summary>
+        /// 搜索指定文件夹下面的文件
+        /// </summary>
+        /// <param name="path">要搜索的文件夹路径</param>
+        /// <param name="keyword">关键字</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="account_id">账号id</param>
+        /// <param name="order">排序顺序</param>
+        /// <param name="asc">正序</param>
+        /// <param name="enable_regex">是否开启正则匹配</param>
+        /// <param name="recursion">递归查询</param>
+        /// <param name="state">附加回调参数</param>
+        public void QueryFileListAsync(string path, string keyword, BaiduPCS.MultiObjectMetaCallback callback, int account_id = 0, BaiduPCS.FileOrder order = BaiduPCS.FileOrder.name, bool asc = true, bool enable_regex = false, bool recursion = false, object state = null)
+        {
+            //todo: add recursion query for the sub folders
+            if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
+            if (string.IsNullOrEmpty(keyword)) throw new ArgumentNullException("keyword");
+            if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
+            while (_update_required.IsSet || _account_data[account_id].data_dirty) Thread.Sleep(10);
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                lock (_account_data_external_lock)
+                {
+                    var result = _query_file_list_from_sql(path, keyword, account_id, order, asc, enable_regex, recursion);
+
+                    if (result == null)
+                    {
+                        callback?.Invoke(false, null, state);
+                    }
+                    else
+                    {
+                        callback?.Invoke(true, result, state);
+                    }
+                }
+            });
+        }
+
+        public void QueryFileByFsID(long fs_id, BaiduPCS.ObjectMetaCallback callback, int account_id = 0, object state = null)
+        {
+
         }
         /// <summary>
         /// 创建文件夹

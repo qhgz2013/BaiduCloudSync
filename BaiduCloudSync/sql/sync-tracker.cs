@@ -57,7 +57,48 @@ namespace BaiduCloudSync
         }
         private void _initialize_sql_tables()
         {
+            _sql_con = new SQLiteConnection("Data Source='" + _HIDDEN_TRACKER_DIR_NAME + "/" + _HIDDEN_TRACKER_FILE_NAME + "'; Version=3;");
+            _sql_con.Open();
+            _sql_cmd = new SQLiteCommand(_sql_con);
+            _sql_trs = _sql_con.BeginTransaction();
 
+            var query_table_count = "select count(*) from sqlite_master where type = 'table'";
+            _sql_cmd.CommandText = query_table_count;
+            var count = Convert.ToInt32(_sql_cmd.ExecuteScalar());
+            var create_local_file_table = "create table LocalFiles (" +
+                "Path varchar(300) not null," +
+                "Path_SHA1 binary(20) primary key," +
+                "CRC32 binary(4) not null," +
+                "MD5 binary(16) not null," +
+                "SHA1 binary(20) not null," +
+                "Size bigint not null)";
+            var create_remote_file_table = "create table RemoteFiles (" +
+                "Path varchar(300) not null unique,"+
+                "FS_ID bigint primary key,"+
+                "MD5 binary(16) not null,"+
+                "Size bigint not null)";
+            var create_mapping_table = "create table FileMapping (" +
+                "Src_Path_SHA1 binary(20) primary key,"+
+                "Dst_FS_ID bigint not null)";
+            var create_dbvar_table = "create table DbVars (Key varchar(512) primary key, Value varchar(65536))";
+            var insert_version = "insert into DbVars(Key, Value) values ('Version', '1.0.0')";
+
+            if (count == 0)
+            {
+                _sql_cmd.CommandText = create_local_file_table;
+                _sql_cmd.ExecuteNonQuery();
+                _sql_cmd.CommandText = create_mapping_table;
+                _sql_cmd.ExecuteNonQuery();
+                _sql_cmd.CommandText = create_remote_file_table;
+                _sql_cmd.ExecuteNonQuery();
+                _sql_cmd.CommandText = create_dbvar_table;
+                _sql_cmd.ExecuteNonQuery();
+                _sql_cmd.CommandText = insert_version;
+                _sql_cmd.ExecuteNonQuery();
+
+                _sql_trs.Commit();
+                _sql_trs = _sql_con.BeginTransaction();
+            }
         }
         public void Dispose()
         {
