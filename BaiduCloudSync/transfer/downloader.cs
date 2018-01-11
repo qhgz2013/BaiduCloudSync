@@ -289,28 +289,19 @@ namespace BaiduCloudSync
         }
 
         #region callbacks
-        //PCS API -> Locate url
-        //private void _main_url_request_callback(bool suc, string[] urls, object state)
-        //{
-        //    _url_expire_time = DateTime.Now.AddSeconds(30);
-        //    _main_url_refresh_callback(suc, urls, state);
-        //    _monitor_thread = new Thread(_monitor_thread_callback);
-        //    _monitor_thread.Name = "Download Monitor";
-        //    _monitor_thread.IsBackground = false;
-        //    _monitor_thread.Start();
-
-        //}
-
+        //刷新url的回调函数
         private void _main_url_refresh_callback(bool suc, string[] urls, object state)
         {
             if (suc && urls != null && urls.Length > 0)
                 lock (_url_lock)
                 {
+                    //成功，并且url数大于0时，覆盖原url，将url的有效时长设为半个小时
                     _urls = urls;
                     _url_expire_time = DateTime.Now.AddHours(0.5);
                 }
             else
             {
+                //失败，增加url的时长为30s（避免多次触发url刷新），然后在3s后重试，增加重试的失败次数
                 _url_expire_time = DateTime.Now.AddSeconds(30);
                 Thread.Sleep(3000);
                 _url_fail_to_fetch_count++;
@@ -318,19 +309,25 @@ namespace BaiduCloudSync
                     _api.GetAccount(_data.AccountID).GetLocateDownloadLinkAsync(_data.Path, _main_url_refresh_callback);
                 else
                 {
-                    lock (_thread_flag_lock)
-                        _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_ERROR;
-                    Pause();
-                    try { TaskError?.Invoke(this, new EventArgs()); }
-                    catch { }
+                    //重试失败次数多于最大阈值时，增加error的标志，并且暂停该任务（跨线程暂停）
+                    if (_url_fail_to_fetch_count >= _MAX_URL_FAIL_COUNT)
+                    {
+                        lock (_thread_flag_lock)
+                            _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_ERROR;
+                        Pause();
+                        try { TaskError?.Invoke(this, new EventArgs()); }
+                        catch { }
+                    }
                 }
             }
         }
         //RAM stream -> File stream
         private void _monitor_thread_callback()
         {
+            //设置线程启动相关变量
             _monitor_thread_created.Set();
             _start_time = DateTime.Now;
+            //管理任务状态
             bool pause_to_start = false;
             lock (_thread_flag_lock)
             {
@@ -339,17 +336,19 @@ namespace BaiduCloudSync
                 if (pause_to_start)
                     _download_thread_flag = (_download_thread_flag & ~_DOWNLOAD_THREAD_FLAG_PAUSED);
             }
+            //缓存最大线程数，避免中途更改
             var max_thread = _max_thread;
 
-            //pre allocating file
+            //预分配空间（todo：改为set-length，提高效率）
             _downloaded_size = 0;
             try { PreAllocBlockStarted?.Invoke(this, new EventArgs()); } catch { }
             if (_file_stream.Length != (long)_data.Size)
             {
                 if (_file_stream.Length > (long)_data.Size)
-                    _file_stream.SetLength((long)_data.Size);
+                    _file_stream.SetLength((long)_data.Size); //文件长度大于预分配长度，直接截断
                 else
                 {
+                    //从当前长度开始按0填充
                     _file_stream.Seek(0, SeekOrigin.End);
                     _downloaded_size = _file_stream.Length;
                     var blank_buffer = new byte[_MIN_IO_FLUSH_DATA_LENGTH];
@@ -367,7 +366,7 @@ namespace BaiduCloudSync
             try { PreAllocBlockFinished?.Invoke(this, new EventArgs()); } catch { }
             _downloaded_size = 0;
 
-            //allocating memory
+            //分配多线程的变量数组
             _guid_list = new Guid[max_thread];
             _last_receive = new DateTime[max_thread];
             _buffer_stream = new QueueStream[max_thread];
@@ -385,12 +384,12 @@ namespace BaiduCloudSync
 
             var buffer = new byte[_MIN_IO_FLUSH_DATA_LENGTH];
             var next_loop_time = DateTime.Now.AddSeconds(1);
-            //monitor loop
+            //监控循环
             #region monitor loop
             while (true)
             {
 
-                //url update
+                //当url的有效时间已过时，刷新url
                 if (_url_expire_time < DateTime.Now)
                 {
                     _url_expire_time = _url_expire_time.AddSeconds(30);
@@ -398,6 +397,7 @@ namespace BaiduCloudSync
                     _api.GetAccount(_data.AccountID).GetLocateDownloadLinkAsync(_data.Path, _main_url_refresh_callback);
                 }
 
+                //管理任务标识
                 #region thread flag handling
                 bool ispause = false, iscancel = false;
 
@@ -477,7 +477,7 @@ namespace BaiduCloudSync
                 }
                 #endregion
 
-                //url check
+                //url合理检测
                 if (_urls == null || _urls.Length == 0)
                 {
                     Thread.Sleep(100);
@@ -489,7 +489,7 @@ namespace BaiduCloudSync
                 {
                     lock (_thread_data_lock[i])
                     {
-                        //flushing buffer stream
+                        //将内存的缓存数据流写入到硬盘中
                         if ((_guid_list[i] == Guid.Empty && _buffer_stream[i].Length > 0) || (_buffer_stream[i].Length > _MIN_IO_FLUSH_DATA_LENGTH))
                         {
                             _file_stream.Seek(_io_position[i], SeekOrigin.Begin);
@@ -501,6 +501,7 @@ namespace BaiduCloudSync
                             }
                         }
 
+                        //检测任务分配状态，自动开始新的分段下载
                         if (_guid_list[i] == Guid.Empty && (DateTime.Now - _last_receive[i]).TotalSeconds > 3.0)
                         {
                             if (started_tasks < _PARALLEL_START_REQUEST_COUNT)
@@ -508,7 +509,6 @@ namespace BaiduCloudSync
                                 _guid_list[i] = _dispatcher.AllocateNewTask(out _position[i]);
                                 if (_guid_list[i] != Guid.Empty)
                                 {
-                                    //Tracer.GlobalTracer.TraceInfo("data request begin: #" + i);
                                     _last_receive[i] = DateTime.Now;
                                     try
                                     {
@@ -517,16 +517,15 @@ namespace BaiduCloudSync
                                     }
                                     catch { }
 
-                                    //Tracer.GlobalTracer.TraceInfo("seeking io position #" + i + " to " + _io_position[i]);
                                     started_tasks++;
                                 }
                             }
                         }
-                        //auto dropping timeout requests
+
+                        //自动中断超时的请求
                         else if (_guid_list[i] != Guid.Empty && (DateTime.Now - _last_receive[i]).TotalSeconds > 35.0)
                         {
                             _request[i].Close();
-                            //Tracer.GlobalTracer.TraceInfo("data request cancelled (request timed out): #" + i);
                             _request[i] = new NetStream();
                             _dispatcher.ReleaseTask(_guid_list[i]);
                             _guid_list[i] = Guid.Empty;
@@ -536,7 +535,7 @@ namespace BaiduCloudSync
 
                 _current_bytes = 0;
 
-                //speed update
+                //更新速度
                 var cur_len = _dispatcher.CompletedLength;
                 _last_5s_length.RemoveFirst();
                 _last_5s_length.AddLast(cur_len);
@@ -547,14 +546,14 @@ namespace BaiduCloudSync
                 Tracer.GlobalTracer.TraceInfo("Downloading: " + cur_len + "/" + _data.Size + " [" + (_average_speed_5s / 1024).ToString("0.00") + "KB/s]");
 
                 if (cur_len == _data.Size) break;
-                //timer interval
+                //时钟控制（1s）
                 var ts = (next_loop_time - DateTime.Now).TotalMilliseconds;
                 next_loop_time = next_loop_time.AddSeconds(1);
                 if (ts >= 1.0) Thread.Sleep((int)ts);
             }
             #endregion
 
-            //finished
+            //下载完成
             _file_stream.Close();
             for (int i = 0; i < _request.Length; i++)
             {
@@ -574,7 +573,7 @@ namespace BaiduCloudSync
             _monitor_thread = null;
             _end_time = DateTime.Now;
 
-            //file decryption
+            //文件解密
             if (_data.Path.EndsWith(".bcsd"))
             {
                 _download_thread_flag |= _DOWNLOAD_THREAD_FLAG_DECRYPTING;
@@ -585,12 +584,11 @@ namespace BaiduCloudSync
             }
             _download_thread_flag = (_download_thread_flag | _DOWNLOAD_THREAD_FLAG_FINISHED) & ~_DOWNLOAD_THREAD_FLAG_STARTED;
 
-            //Tracer.GlobalTracer.TraceInfo("Download finished");
             try { TaskFinished?.Invoke(this, new EventArgs()); }
             catch { }
         }
 
-        //TCP stream -> RAM stream
+        //数据传输的回调函数
         private void _data_transfer_callback(NetStream ns, object state)
         {
             const int buffer_size = 2048;
@@ -600,14 +598,20 @@ namespace BaiduCloudSync
             //debug
             try
             {
+                //http状态检查
+                //空引用
                 if (ns == null)
                     throw new InvalidDataException("NetStream closed and set to null");
+                //guid不匹配（通常是该任务已经触发主动超时后更改了新的guid值）
                 lock (_thread_data_lock[index])
                     if (id != _guid_list[index])
                         throw new InvalidDataException("Guid mismatched, ignored");
+                //空http响应
                 if (ns.HTTP_Response == null) return;
+                //状态码不匹配
                 if (ns.HTTP_Response.StatusCode != System.Net.HttpStatusCode.OK && ns.HTTP_Response.StatusCode != System.Net.HttpStatusCode.PartialContent)
                     throw new InvalidDataException("Status code check failed");
+                //数据长度不匹配
                 if (ns.HTTP_Response.ContentLength + (long)_position[index] != (long)_data.Size)
                     throw new InvalidDataException("Content-Length mismatched, ignored");
                 var response_url = ns.HTTP_Response.ResponseUri.ToString();
@@ -619,14 +623,13 @@ namespace BaiduCloudSync
                 ulong total_read = 0;
                 do
                 {
-                    //state check
+                    //状态检查，非下载状态时退出接收循环
                     if (((_download_thread_flag & 0xffffff) & ~(_DOWNLOAD_THREAD_FLAG_STARTED | _DOWNLOAD_THREAD_FLAG_START_REQUESTED)) != 0)
                     {
-                        //exit
                         break;
                     }
 
-                    //loop for reading data
+                    //循环读取数据
                     var cur_bytes = Interlocked.Read(ref _current_bytes);
                     if (_speed_limit == 0 || cur_bytes < _speed_limit)
                     {
@@ -639,7 +642,7 @@ namespace BaiduCloudSync
                         continue;
                     }
 
-                    //overwriting data, no exception allowed here!
+                    //写入数据到内存
                     lock (_thread_data_lock[index])
                     {
                         if (_guid_list[index] == Guid.Empty || _guid_list[index] != id)
@@ -692,30 +695,33 @@ namespace BaiduCloudSync
             try
             {
                 if (File.Exists(_output_path + ".decrypting"))
-                    File.Delete(_output_path + ".decrypting");
+                    File.Delete(_output_path + ".decrypting"); //删除已有的冲突文件
 
                 //重命名
                 if (_output_path.EndsWith(".bcsd"))
                 {
+                    //xxxxx.bcsd -> xxxxx.decrypting
                     _output_path = _output_path.Substring(0, _output_path.Length - 5);
                     File.Move(_output_path + ".bcsd", _output_path + ".decrypting");
                 }
                 else
-                    File.Move(_output_path, _output_path + ".decrypting");
+                    File.Move(_output_path, _output_path + ".decrypting"); //xxxxx.xx -> xxxxx.xx.decrypting
 
                 var fs = new FileStream(_output_path + ".decrypting", FileMode.Open, FileAccess.Read, FileShare.None);
-                var identifier = fs.ReadByte();
+                var identifier = fs.ReadByte(); //读取文件首字节判断加密类型
                 fs.Close();
 
                 if (identifier == FileEncrypt.FLG_DYNAMIC_KEY && _key_manager.HasRsaKey)
                 {
                     try
                     {
+                        //解密文件并删除加密文件
                         FileEncrypt.DecryptFile(_output_path + ".decrypting", _output_path, _key_manager.RSAPrivateKey);
                         File.Delete(_output_path + ".decrypting");
                     }
                     catch
                     {
+                        //出错后取消解密，将文件重新命名
                         File.Move(_output_path + ".decrypting", _output_path);
                     }
                 }
@@ -733,6 +739,7 @@ namespace BaiduCloudSync
                 }
                 else
                 {
+                    //加密类型不匹配，重新命名
                     File.Move(_output_path + ".decrypting", _output_path);
                 }
             }

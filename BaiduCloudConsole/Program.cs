@@ -17,7 +17,7 @@ namespace BaiduCloudConsole
         private static LocalFileCacher _local_file_cacher;
         private static KeyManager _key_manager;
 
-        private static string _version = "1.0.0 pre-alpha";
+        private static string _version = "1.0.1 pre-alpha";
         private static void _debug_function()
         {
             //KEEP IT EMPTY if you are to build a release executable file!
@@ -251,7 +251,7 @@ namespace BaiduCloudConsole
             Console.WriteLine("*** 文件传输 ***");
             Console.WriteLine("-d | --download [网盘文件路径] [本地文件路径] [--threads [下载线程数] --speed [限速(KB/s)]]");
             Console.WriteLine("\t下载文件，可选选项：下载线程数（默认96），限速（默认0，即无限速）");
-            Console.WriteLine("-u | --upload [本地文件路径] [网盘文件路径] [--threads [上传线程数] --speed [限速(KB/s)] --overwrite --encrypt [rsa|aes]]");
+            Console.WriteLine("-u | --upload [本地文件路径] [网盘文件路径] [--threads [上传线程数] --speed [限速(KB/s)] --overwrite --encrypt [rsa|aes] --tasks [并行任务数]]");
             Console.WriteLine("\t上传文件，可选选项：上传线程数（默认4），限速（默认0，即无限速）\r\n\tencrypt选项开启文件加密，密钥见加密部分，而且网盘的文件拓展名自动加上.bcsd加以辨别和下载的自动解密");
             Console.WriteLine();
             Console.WriteLine("*** 加密部分 ***");
@@ -535,6 +535,7 @@ namespace BaiduCloudConsole
             var speed_limit = 0;
             var encrypt_str = "";
             var overwrite = false;
+            var parallel_task = 3;
             #region inputs
             if (cmd.Length > 3)
             {
@@ -589,6 +590,24 @@ namespace BaiduCloudConsole
                             overwrite = true;
                             index++;
                             break;
+                        case "--tasks":
+                            if (index + 1 >= cmd.Length)
+                            {
+                                Console.WriteLine("参数不足");
+                                return;
+                            }
+                            if (int.TryParse(cmd[index+1], out parallel_task) == false)
+                            {
+                                Console.WriteLine("并行任务数 {0} 无法转换为整型", cmd[index + 1]);
+                                return;
+                            }
+                            if (parallel_task < 1)
+                            {
+                                Console.WriteLine("任务数必须要大于0");
+                                return;
+                            }
+                            index += 2;
+                            break;
                         default:
                             Console.WriteLine("未知参数：{0}", cmd[index]);
                             return;
@@ -638,7 +657,7 @@ namespace BaiduCloudConsole
             while (fin_count < total_count)
             {
                 loop_count++;
-                for (int i = uploaders.Count; i < 5 && alloc_count < remote_files.Count; i++)
+                for (int i = uploaders.Count; i < parallel_task && alloc_count < remote_files.Count; i++)
                 {
                     var uploader = new Uploader(_local_file_cacher, _remote_file_cacher, local_files[alloc_count], remote_files[alloc_count],
                         0, overwrite, max_thread, speed_limit, _key_manager, !string.IsNullOrEmpty(encrypt_str));

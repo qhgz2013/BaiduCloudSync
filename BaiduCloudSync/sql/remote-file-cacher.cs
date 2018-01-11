@@ -318,7 +318,7 @@ namespace BaiduCloudSync
 
                 //waiting next event
                 _update_required.Wait();
-                Thread.Sleep(3000); //prevent from calling continuously
+                Thread.Sleep(10000); //prevent from calling continuously
             }
         }
         //http异步请求线程回调
@@ -379,6 +379,7 @@ namespace BaiduCloudSync
                     _account_data[index].finish_event.Set();
                     return;
                 }
+                Tracer.GlobalTracer.TraceInfo("FILE DIFF cursor: " + util.Hex(MD5.ComputeHash(_account_data[index].cursor)) + " -> " + util.Hex(MD5.ComputeHash(next_cursor)));
                 _account_data[index].cursor = next_cursor;
             }
             //updating sql
@@ -390,6 +391,7 @@ namespace BaiduCloudSync
                 _sql_cmd.Parameters["@next_cursor"].Value = next_cursor;
                 _sql_cmd.ExecuteNonQuery();
                 _sql_cmd.Parameters.Clear();
+                Tracer.GlobalTracer.TraceInfo("FILE DIFF SQL UPDATED");
             }
 
             if (has_more)
@@ -416,6 +418,7 @@ namespace BaiduCloudSync
                 "(@FS_ID, @Category, @IsDir, @LocalCTime, @LocalMTime, @OperID, @Path, @ServerCTime, @ServerFileName, @ServerMTime, @Size, @Unlist, @MD5, @account_id)";
             var update_sql = "update FileList set Category = @Category, IsDir = @IsDir, LocalCTime = @LocalCTime, LocalMTime = @LocalMTime, OperID = @OperID, Path = @Path, ServerCTime = @ServerCTime, ServerFileName = @ServerFileName, ServerMTime = @ServerMTime, Size = @Size, Unlist = @Unlist, MD5 = @MD5, account_id = @account_id where FS_ID = @FS_ID";
             var query_sql = "select count(*) from FileList where FS_ID = @FS_ID";
+            int overwrite_count = 0; //记录update的次数
             lock (_sql_lock)
                 foreach (var item in result)
                 {
@@ -437,7 +440,8 @@ namespace BaiduCloudSync
                         else
                         {
                             _sql_cmd.CommandText = update_sql;
-                            Tracer.GlobalTracer.TraceWarning("[W] FS_ID " + item.FS_ID + "(" + item.Path + ") has already cached in sql, overwriting data!");
+                            overwrite_count++;
+                            //Tracer.GlobalTracer.TraceWarning("[W] FS_ID " + item.FS_ID + "(" + item.Path + ") has already cached in sql, overwriting data!");
                         }
                         _sql_cmd.Parameters.Add("@Category", System.Data.DbType.Int32);
                         _sql_cmd.Parameters["@Category"].Value = (int)item.Category;
@@ -470,6 +474,8 @@ namespace BaiduCloudSync
                     }
                 }
 
+            if (overwrite_count > 0)
+                Tracer.GlobalTracer.TraceWarning("Overwriting " + overwrite_count + " entries (same fs_id), possibly it's a bug?");
             //completed fetch, interrupting monitor thread
             lock (_sql_lock)
             {
@@ -895,28 +901,92 @@ namespace BaiduCloudSync
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException("path");
             if (string.IsNullOrEmpty(keyword)) throw new ArgumentNullException("keyword");
             if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-            while (_update_required.IsSet || _account_data[account_id].data_dirty) Thread.Sleep(10);
 
             ThreadPool.QueueUserWorkItem(delegate
             {
-                lock (_account_data_external_lock)
+                try
                 {
-                    var result = _query_file_list_from_sql(path, keyword, account_id, order, asc, enable_regex, recursion);
+                    while (_update_required.IsSet || _account_data[account_id].data_dirty) Thread.Sleep(10);
+                    lock (_account_data_external_lock)
+                    {
+                        var result = _query_file_list_from_sql(path, keyword, account_id, order, asc, enable_regex, recursion);
 
-                    if (result == null)
-                    {
-                        callback?.Invoke(false, null, state);
+                        if (result == null)
+                        {
+                            callback?.Invoke(false, null, state);
+                        }
+                        else
+                        {
+                            callback?.Invoke(true, result, state);
+                        }
                     }
-                    else
-                    {
-                        callback?.Invoke(true, result, state);
-                    }
+                }
+                catch (Exception ex)
+                {
+                    Tracer.GlobalTracer.TraceError(ex);
+                    callback?.Invoke(false, null, state);
                 }
             });
         }
 
+        /// <summary>
+        /// 根据文件id查询文件信息
+        /// </summary>
+        /// <param name="fs_id">文件id</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="account_id">账号id</param>
+        /// <param name="state">附加参数</param>
         public void QueryFileByFsID(long fs_id, BaiduPCS.ObjectMetaCallback callback, int account_id = 0, object state = null)
         {
+            if (fs_id == 0) throw new ArgumentOutOfRangeException("fs_id");
+            if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    while (_update_required.IsSet || _account_data[account_id].data_dirty) Thread.Sleep(10);
+                    var new_meta = new ObjectMetadata();
+                            bool suc = false;
+                    lock (_account_data_external_lock)
+                    {
+                        lock (_sql_lock)
+                        {
+                            var sql_text = "select FS_ID, Category, IsDir, LocalCTime, LocalMTime, OperID, Path, ServerCTime, ServerFileName, ServerMTime, Size, Unlist, MD5" +
+                " from FileList where account_id = " + account_id + " and FS_ID = " + fs_id;
+                            _sql_cmd.CommandText = sql_text;
+                            var dr = _sql_cmd.ExecuteReader();
+
+                            if (dr.Read())
+                            {
+                                suc = true;
+                                if (!dr.IsDBNull(0)) new_meta.FS_ID = (ulong)(long)dr[0];
+                                if (!dr.IsDBNull(1)) new_meta.Category = (uint)(int)dr[1];
+                                if (!dr.IsDBNull(2)) new_meta.IsDir = (byte)dr[2] != 0;
+                                if (!dr.IsDBNull(3)) new_meta.LocalCTime = (ulong)(long)dr[3];
+                                if (!dr.IsDBNull(4)) new_meta.LocalMTime = (ulong)(long)dr[4];
+                                if (!dr.IsDBNull(5)) new_meta.OperID = (uint)(int)dr[5];
+                                if (!dr.IsDBNull(6)) new_meta.Path = (string)dr[6];
+                                if (!dr.IsDBNull(7)) new_meta.ServerCTime = (ulong)(long)dr[7];
+                                if (!dr.IsDBNull(8)) new_meta.ServerFileName = (string)dr[8];
+                                if (!dr.IsDBNull(9)) new_meta.ServerMTime = (ulong)(long)dr[9];
+                                if (!dr.IsDBNull(10)) new_meta.Size = (ulong)(long)dr[10];
+                                if (!dr.IsDBNull(11)) new_meta.Unlist = (uint)(int)dr[11];
+                                if (!dr.IsDBNull(12)) new_meta.MD5 = util.Hex((byte[])dr[12]);
+                                new_meta.AccountID = account_id;
+                            }
+                            dr.Close();
+
+                        }
+                    }
+
+                    try { callback?.Invoke(suc, new_meta, state); } catch { }
+                }
+                catch (Exception ex)
+                {
+                    Tracer.GlobalTracer.TraceError(ex);
+                    callback?.Invoke(false, new ObjectMetadata(), state);
+                }
+            });
 
         }
         /// <summary>

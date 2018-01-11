@@ -12,3 +12,47 @@
 10. 实现RSA pem的标准解析 (see: https://msdn.microsoft.com/en-us/library/windows/desktop/bb648645(v=vs.85).aspx) 【finished】
 11. 建立非窗体的命令解析界面(命令行后台操作)
 12. 多账号网盘RAID
+
+Known issues:
+
+System.Data.SQLite.SQLiteException (0x80004005): attempt to write a readonly database
+attempt to write a readonly database
+   在 System.Data.SQLite.SQLite3.Reset(SQLiteStatement stmt)
+   在 System.Data.SQLite.SQLite3.Step(SQLiteStatement stmt)
+   在 System.Data.SQLite.SQLiteDataReader.NextResult()
+   在 System.Data.SQLite.SQLiteDataReader..ctor(SQLiteCommand cmd, CommandBehavior behave)
+   在 System.Data.SQLite.SQLiteCommand.ExecuteReader(CommandBehavior behavior)
+   在 System.Data.SQLite.SQLiteCommand.ExecuteNonQuery(CommandBehavior behavior)
+   在 System.Data.SQLite.SQLiteTransaction.Begin(Boolean deferredLock)
+   在 System.Data.SQLite.SQLiteConnection.BeginDbTransaction(IsolationLevel isolationLevel)
+   在 System.Data.SQLite.SQLiteConnection.BeginTransaction()
+   在 BaiduCloudSync.RemoteFileCacher._initialize_sql_tables() 位置 C:\Users\qhgz2\OneDrive\coding\BaiduCloudSync\BaiduCloudSync\sql\remote-file-cacher.cs:行号 72
+   在 BaiduCloudSync.RemoteFileCacher..ctor() 位置 C:\Users\qhgz2\OneDrive\coding\BaiduCloudSync\BaiduCloudSync\sql\remote-file-cacher.cs:行号 125
+   在 BaiduCloudConsole.Program._check_and_login() 位置 C:\Users\qhgz2\OneDrive\coding\BaiduCloudSync\BaiduCloudConsole\Program.cs:行号 66
+   在 BaiduCloudConsole.Program.Main(String[] args) 位置 C:\Users\qhgz2\OneDrive\coding\BaiduCloudSync\BaiduCloudConsole\Program.cs:行号 43
+
+未经处理的异常:  System.ObjectDisposedException: 无法访问已释放的对象。
+对象名:“SQLiteConnection”。
+   在 System.Data.SQLite.SQLiteConnection.CheckDisposed()
+   在 System.Data.SQLite.SQLiteConnection.Close()
+   在 BaiduCloudSync.RemoteFileCacher.Dispose()
+   在 BaiduCloudSync.RemoteFileCacher.Finalize()
+
+
+百度bdstoken授权返回问题
+
+
+未经处理的异常:  System.NullReferenceException: 未将对象引用设置到对象的实例。
+   在 GlobalUtil.NetUtils.Parameters.Add[T](String key, T value) 位置 C:\Users\qhgz2\OneDrive\coding\BaiduCloudSync\BaiduCloudSync\util\net-util.cs:行号 158
+   在 BaiduCloudSync.BaiduPCS.GetFileDiffAsync(String cursor, FileDiffCallback callback, Object state) 位置 C:\Users\qhgz2\OneDrive\coding\BaiduCloudSync\BaiduCloudSync\api\baidu-pcs-async.cs:行号 779
+   在 BaiduCloudSync.RemoteFileCacher._file_diff_thread_callback() 位置 C:\Users\qhgz2\OneDrive\coding\BaiduCloudSync\BaiduCloudSync\sql\remote-file-cacher.cs:行号 301
+   在 System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state, Boolean preserveSyncCtx)
+   在 System.Threading.ExecutionContext.Run(ExecutionContext executionContext, ContextCallback callback, Object state, Boolean preserveSyncCtx)
+   在 System.Threading.ExecutionContext.Run(ExecutionContext executionContext, ContextCallback callback, Object state)
+   在 System.Threading.ThreadHelper.ThreadStart()
+
+
+   文件大小计算错误（缓存问题）
+
+
+   上传的超时中断问题
