@@ -512,6 +512,7 @@ namespace BaiduCloudSync
                                     _last_receive[i] = DateTime.Now;
                                     try
                                     {
+                                        _request[i].UserAgent = "netdisk;5.7.2.3;PC;PC-Windows;10.0.16299;WindowsBaiduYunGuanJia";
                                         _request[i].HttpGetAsync(_urls[i % _urls.Length], _data_transfer_callback, new _temp_strcut { id = _guid_list[i], index = i }, range: (long)_position[i]);
                                         _io_position[i] = (long)_position[i];
                                     }

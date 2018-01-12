@@ -775,7 +775,7 @@ namespace BaiduCloudSync
                     {
                         var ts = TimeSpan.FromSeconds(15);
                         Thread.Sleep(ts);
-                        _init_login_data();
+                        _init_pcs_auth_data();
                         __next_update_thread = null;
                     });
                     __next_update_thread.IsBackground = true;

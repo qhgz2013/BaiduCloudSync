@@ -39,20 +39,4 @@ attempt to write a readonly database
    在 BaiduCloudSync.RemoteFileCacher.Finalize()
 
 
-百度bdstoken授权返回问题
-
-
-未经处理的异常:  System.NullReferenceException: 未将对象引用设置到对象的实例。
-   在 GlobalUtil.NetUtils.Parameters.Add[T](String key, T value) 位置 C:\Users\qhgz2\OneDrive\coding\BaiduCloudSync\BaiduCloudSync\util\net-util.cs:行号 158
-   在 BaiduCloudSync.BaiduPCS.GetFileDiffAsync(String cursor, FileDiffCallback callback, Object state) 位置 C:\Users\qhgz2\OneDrive\coding\BaiduCloudSync\BaiduCloudSync\api\baidu-pcs-async.cs:行号 779
-   在 BaiduCloudSync.RemoteFileCacher._file_diff_thread_callback() 位置 C:\Users\qhgz2\OneDrive\coding\BaiduCloudSync\BaiduCloudSync\sql\remote-file-cacher.cs:行号 301
-   在 System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state, Boolean preserveSyncCtx)
-   在 System.Threading.ExecutionContext.Run(ExecutionContext executionContext, ContextCallback callback, Object state, Boolean preserveSyncCtx)
-   在 System.Threading.ExecutionContext.Run(ExecutionContext executionContext, ContextCallback callback, Object state)
-   在 System.Threading.ThreadHelper.ThreadStart()
-
-
-   文件大小计算错误（缓存问题）
-
-
-   上传的超时中断问题
+上传的超时中断问题

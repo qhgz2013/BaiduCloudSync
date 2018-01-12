@@ -378,7 +378,7 @@ namespace BaiduCloudSync
         private void _on_file_io_updated(string path, long current, long total)
         {
             //todo: updating io status
-            if (path == _local_path)
+            if (path.ToLower() == _local_path.ToLower())
             {
                 if ((_upload_thread_flag & _UPLOAD_THREAD_FLAG_DIGEST_REQUESTED) != 0)
                 {
@@ -389,7 +389,7 @@ namespace BaiduCloudSync
         }
         private void _on_file_io_completed(LocalFileData data)
         {
-            if (data.Path == _local_path)
+            if (data.Path.ToLower() == _local_path.ToLower())
             {
                 _local_data = data;
                 _upload_thread_flag = _upload_thread_flag & ~(_UPLOAD_THREAD_FLAG_DIGEST_REQUESTED | _UPLOAD_THREAD_FLAG_DIGEST_CALCULATING);
@@ -398,7 +398,7 @@ namespace BaiduCloudSync
         }
         private void _on_file_io_aborted(string path)
         {
-            if (path == _local_path)
+            if (path.ToLower() == _local_path.ToLower())
             {
                 _upload_thread_flag = (_upload_thread_flag | _UPLOAD_THREAD_FLAG_ERROR) & ~(_UPLOAD_THREAD_FLAG_DIGEST_REQUESTED | _UPLOAD_THREAD_FLAG_DIGEST_CALCULATING);
                 _file_io_response.Set();

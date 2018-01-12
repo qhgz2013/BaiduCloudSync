@@ -956,7 +956,7 @@ namespace BaiduCloudSync
         /// <param name="path">网盘文件路径</param>
         /// <param name="callback">回调函数，包含任务分配的id和网络数据流</param>
         /// <param name="ondup">同名覆盖方式</param>
-        public void UploadBeginAsync(ulong content_length, string path, UploadCallback callback, ondup ondup = ondup.overwrite, object state = null)
+        public Guid UploadBeginAsync(ulong content_length, string path, UploadCallback callback, ondup ondup = ondup.overwrite, object state = null)
         {
             if (_enable_function_trace)
                 _trace.TraceInfo("BaiduPCS.UploadBeginAsync called: ulong content_length=" + content_length + ", string path=" + path + ", UploadCallback callback=" + callback?.ToString() + ", ondup ondup=" + ondup.ToString());
@@ -987,6 +987,7 @@ namespace BaiduCloudSync
             var foot_bytes = Encoding.UTF8.GetBytes(foot);
 
             long total_length = head_bytes.Length + foot_bytes.Length + (long)content_length;
+            var guid = Guid.NewGuid();
 
             try
             {
@@ -996,7 +997,6 @@ namespace BaiduCloudSync
                     try
                     {
                         sender.RequestStream.Write(head_bytes, 0, head_bytes.Length);
-                        var guid = Guid.NewGuid();
                         var data = new _upload_data { stream = sender, boundary = boundary };
                         lock (_upload_external_lock)
                             _upload_queue.Add(guid, data);
@@ -1017,6 +1017,7 @@ namespace BaiduCloudSync
                 ns.Close();
                 throw ex;
             }
+            return guid;
         }
 
         public void UploadCancelAsync(Guid task_id)
@@ -1226,7 +1227,7 @@ namespace BaiduCloudSync
         /// <param name="uploadid">上传id</param>
         /// <param name="sequence">文件序号</param>
         /// <param name="callback">回调函数，包含任务分配的id和网络数据流</param>
-        public void UploadSliceBeginAsync(ulong content_length, string path, string uploadid, int sequence, UploadCallback callback, object state = null)
+        public Guid UploadSliceBeginAsync(ulong content_length, string path, string uploadid, int sequence, UploadCallback callback, object state = null)
         {
             if (_enable_function_trace)
                 _trace.TraceInfo("BaiduPCS.UploadSliceBeginAync called: ulong content_length=" + content_length + ", string path=" + path + ", string uploadid=" + uploadid + ", int sequence=" + sequence + ", SliceUploadCallback callback=" + callback?.ToString());
@@ -1262,6 +1263,7 @@ namespace BaiduCloudSync
             var foot_bytes = Encoding.UTF8.GetBytes(foot);
 
             long total_length = head_bytes.Length + foot_bytes.Length + (long)content_length;
+            var guid = Guid.NewGuid();
 
             try
             {
@@ -1271,7 +1273,6 @@ namespace BaiduCloudSync
                     try
                     {
                         sender.RequestStream.Write(head_bytes, 0, head_bytes.Length);
-                        var guid = Guid.NewGuid();
                         var data = new _upload_data2 { stream = sender, boundary = boundary, uploadid = uploadid, index = sequence };
                         lock (_slice_upload_external_lock)
                             _slice_upload_queue.Add(guid, data);
@@ -1292,6 +1293,7 @@ namespace BaiduCloudSync
                 ns.Close();
                 throw ex;
             }
+            return guid;
         }
 
         /// <summary>
@@ -1599,12 +1601,12 @@ namespace BaiduCloudSync
             var ns = new NetStream();
             ns.CookieKey = _auth.CookieIdentifier;
             ns.TimeOut = 60000;
+            ns.UserAgent = "netdisk;5.7.2.3;PC;PC-Windows;10.0.16299;WindowsBaiduYunGuanJia";
             var param = new Parameters();
             param.Add("method", "locatedownload");
             param.Add("app_id", APPID);
             param.Add("ver", "4.0");
             param.Add("path", path);
-
             try
             {
                 ns.HttpPostAsync(PCS_FILE_URL, 0, (sender, e) =>

@@ -1091,12 +1091,12 @@ namespace BaiduCloudSync
             }
         }
 
-        public void UploadSliceBeginAsync(ulong content_length, string path, string uploadid, int sequence, BaiduPCS.UploadCallback callback, int account_id = 0, object state = null)
+        public Guid UploadSliceBeginAsync(ulong content_length, string path, string uploadid, int sequence, BaiduPCS.UploadCallback callback, int account_id = 0, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.UploadSliceBeginAsync(content_length, path, uploadid, sequence, callback, state);
+                return _account_data[account_id].pcs.UploadSliceBeginAsync(content_length, path, uploadid, sequence, callback, state);
             }
         }
         public void UploadSliceCancelAsync(Guid task_id, int account_id = 0)
@@ -1116,12 +1116,12 @@ namespace BaiduCloudSync
             }
         }
 
-        public void UploadBeginAsync(ulong content_length, string path, BaiduPCS.UploadCallback callback, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite, int account_id = 0, object state = null)
+        public Guid UploadBeginAsync(ulong content_length, string path, BaiduPCS.UploadCallback callback, BaiduPCS.ondup ondup = BaiduPCS.ondup.overwrite, int account_id = 0, object state = null)
         {
             lock (_account_data_external_lock)
             {
                 if (!_account_data.ContainsKey(account_id)) throw new ArgumentOutOfRangeException("account_id");
-                _account_data[account_id].pcs.UploadBeginAsync(content_length, path, callback, ondup, state);
+                return _account_data[account_id].pcs.UploadBeginAsync(content_length, path, callback, ondup, state);
             }
         }
         public void UploadEndAsync(Guid task_id, BaiduPCS.ObjectMetaCallback callback, int account_id = 0, object state = null)
