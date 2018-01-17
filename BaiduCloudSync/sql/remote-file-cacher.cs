@@ -274,9 +274,15 @@ namespace BaiduCloudSync
         private void _file_diff_thread_callback()
         {
             _file_diff_thread_started.Set();
+            DateTime loop_time = DateTime.MinValue;
             while (!_thread_abort_event.IsSet)
             {
                 _update_required.Reset();
+                var ts = DateTime.Now - loop_time;
+                if (ts < TimeSpan.FromSeconds(10))
+                {
+                    Thread.Sleep((int)(TimeSpan.FromSeconds(10) - ts).TotalMilliseconds);
+                }
 
                 lock (_account_data_external_lock)
                 {
@@ -318,7 +324,7 @@ namespace BaiduCloudSync
 
                 //waiting next event
                 _update_required.Wait();
-                Thread.Sleep(10000); //prevent from calling continuously
+                loop_time = DateTime.Now;
             }
         }
         //http异步请求线程回调
