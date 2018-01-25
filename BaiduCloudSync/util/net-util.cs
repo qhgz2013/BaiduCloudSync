@@ -1396,7 +1396,7 @@ namespace GlobalUtil
             /// 注：该方法仅用于较小的数据量
             /// </summary>
             /// <returns></returns>
-            private byte[] ReadResponseBinary()
+            public byte[] ReadResponseBinary()
             {
                 try
                 {

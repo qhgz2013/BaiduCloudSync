@@ -17,14 +17,13 @@ namespace BaiduCloudConsole
         private static LocalFileCacher _local_file_cacher;
         private static KeyManager _key_manager;
 
-        private static string _version = "1.0.1 pre-alpha";
+        private static string _version = "1.0.2 pre-alpha";
         private static void _debug_function()
         {
             //KEEP IT EMPTY if you are to build a release executable file!
         }
         private static void Main(string[] args)
         {
-            //var suc = ThreadPool.SetMinThreads(1, 1);
             if (!Directory.Exists("data"))
                 Directory.CreateDirectory("data");
             NetStream.LoadCookie("data/cookie.dat");
@@ -229,30 +228,48 @@ namespace BaiduCloudConsole
             //Console.WriteLine("--delete-account --username [用户名]");
             //Console.WriteLine("\t删除指定用户名的登陆信息");
             Console.WriteLine("*** 文件操作 ***");
-            Console.WriteLine("-l | --list [网盘文件路径] [--order [排序:name|size|time] --page [页数] --count [每页显示数量] --desc]");
-            Console.WriteLine("\t列出文件夹下所有文件，参数page从1开始");
-            Console.WriteLine("-x | --delete [网盘文件路径]");
-            Console.WriteLine("\t删除指定路径的文件或文件夹");
-            Console.WriteLine("-m | --move [源路径] [新路径] [[--overwrite]]");
+            Console.WriteLine("-l | --list [网盘文件路径|FS ID] [--order [排序:name|size|time] --page [页数] --count [每页显示数量] --desc]");
+            Console.WriteLine("\t列出文件夹下所有文件");
+            Console.WriteLine("\t\t必要：网盘的文件路径(以/开头)或者文件的fs id");
+            Console.WriteLine("\t\torder：可选，文件的排序顺序，name为按名称排序，size为按文件大小，time为按修改时间");
+            Console.WriteLine("\t\tpage：可选，当前页数，从1开始计数");
+            Console.WriteLine("\t\tcount：可选，每页显示的结果数");
+            Console.WriteLine("\t\tdesc：可选，带有该参数后以降序排序，默认为升序排序");
+            Console.WriteLine("-x | --delete [网盘文件路径|FS ID] [[网盘文件路径|FS ID] ...]");
+            Console.WriteLine("\t删除指定路径的文件或文件夹(可指定多个文件路径/fs id)");
+            Console.WriteLine("-m | --move [源路径|FS ID] [新路径|FS ID] [[--overwrite]]");
             Console.WriteLine("\t移动文件到新路径，默认不会覆盖新路径下的同名文件");
-            Console.WriteLine("-c | --copy [源路径] [新路径] [[--overwrite]]");
+            Console.WriteLine("-c | --copy [源路径|FS ID] [新路径|FS ID] [[--overwrite]]");
             Console.WriteLine("\t复制文件到新路径，默认不会覆盖新路径下的同名文件");
-            Console.WriteLine("-r | --rename [源路径] [新文件名(不含路径)]");
+            Console.WriteLine("-r | --rename [源路径|FS ID] [新文件名(不含路径)]");
             Console.WriteLine("\t将指定路径下的文件重命名");
-            Console.WriteLine("-s | --search [搜索路径] [文件名] [[-re|--regex] [-r|--recursion]]");
+            Console.WriteLine("-s | --search [搜索路径|FS ID] [文件名] [[-re|--regex] [-r|--recursion]]");
             Console.WriteLine("\t在指定路径下搜索文件，-re开启正则匹配，-r开启文件夹递归搜索");
             Console.WriteLine();
             Console.WriteLine("*** 文件链接 ***");
-            Console.WriteLine("--to-symbollink [网盘文件路径] [[文件链接路径]]");
-            Console.WriteLine("\t将文件转换为文件链接，仅对大于256K的文件有效，可选参数：文件链接路径（默认在文件名后加.symbollink）");
-            Console.WriteLine("--from-symbollink [文件链接路径] [[网盘文件路径]]");
+            Console.WriteLine("--to-symbollink [网盘文件路径|FS ID] [[文件链接路径]]");
+            Console.WriteLine("\t将文件转换为文件链接，可选参数：文件链接路径（默认在文件名后加.symbollink）");
+            Console.WriteLine("\t暂不支持文件夹直接转换");
+            Console.WriteLine("--from-symbollink [文件链接路径|FS ID] [[网盘文件路径]]");
             Console.WriteLine("\t将文件链接转换为文件，可选参数：文件路径（默认去掉文件的.symbollink结尾）");
-            Console.WriteLine();
+            Console.WriteLine("\t暂不支持文件夹直接转换");
+            Console.WriteLine(); 
             Console.WriteLine("*** 文件传输 ***");
-            Console.WriteLine("-d | --download [网盘文件路径] [本地文件路径] [--threads [下载线程数] --speed [限速(KB/s)]]");
-            Console.WriteLine("\t下载文件，可选选项：下载线程数（默认96），限速（默认0，即无限速）");
+            Console.WriteLine("-d | --download [网盘文件路径|FS ID] [本地文件路径] [--threads [下载线程数] --speed [限速(KB/s)]]");
+            Console.WriteLine("\t下载文件");
+            Console.WriteLine("\t\t必要：网盘的文件路径(以/开头)或者文件/文件夹的fs id");
+            Console.WriteLine("\t\t必要：本地文件的路径，包含文件名的绝对/相对路径");
+            Console.WriteLine("\t\tthreads：可选，并行下载的线程数，被限速后平均10KB/s/线程，可根据实际网络上限进行调整");
+            Console.WriteLine("\t\tspeed：可选，下载限速，单位为KB/s");
             Console.WriteLine("-u | --upload [本地文件路径] [网盘文件路径] [--threads [上传线程数] --speed [限速(KB/s)] --overwrite --encrypt [rsa|aes] --tasks [并行任务数]]");
-            Console.WriteLine("\t上传文件，可选选项：上传线程数（默认4），限速（默认0，即无限速）\r\n\tencrypt选项开启文件加密，密钥见加密部分，而且网盘的文件拓展名自动加上.bcsd加以辨别和下载的自动解密");
+            Console.WriteLine("\t上传文件");
+            Console.WriteLine("\t\t必要：本地文件的路径，包含文件名的绝对/相对路径");
+            Console.WriteLine("\t\t必要：网盘的文件路径（以/开头）");
+            Console.WriteLine("\t\tthreads：可选，并行上传的线程数，默认为4，不建议修改，值太大可能会造成大量的超时重传");
+            Console.WriteLine("\t\tspeed：可选，单个上传文件的上传限速，单位为KB/s");
+            Console.WriteLine("\t\toverwrite：可选，开启该选项后会覆盖同名文件");
+            Console.WriteLine("\t\tencrypt：可选，文件全局加密，加密后网盘文件会以.bcsd拓展名结束\r\n\t\t注：解密只能使用本软件或者自己按照文件格式进行解密");
+            Console.WriteLine("\t\ttasks：可选，并行上传的文件数，默认5");
             Console.WriteLine();
             Console.WriteLine("*** 加密部分 ***");
             Console.WriteLine("--show-key");
@@ -370,6 +387,26 @@ namespace BaiduCloudConsole
             }
             #endregion
 
+            var query_fsid_finish = new ManualResetEventSlim();
+            long fs_id;
+            bool query_success = false;
+            if (long.TryParse(remote_path, out fs_id))
+            {
+                Console.WriteLine("查询文件夹路径中...");
+                _remote_file_cacher.QueryFileByFsID(fs_id, (s, data, state) =>
+                {
+                    query_success = true;
+                    remote_path = data.Path;
+                    query_fsid_finish.Set();
+                });
+                query_fsid_finish.Wait();
+                query_fsid_finish.Reset();
+                if (!query_success)
+                {
+                    Console.WriteLine("查询文件夹失败，请查看该fs id是否存在");
+                }
+            }
+
             Console.WriteLine("读取文件信息……");
             List<string> local_files;
             List<ObjectMetadata> remote_files;
@@ -446,18 +483,19 @@ namespace BaiduCloudConsole
                 }
             }
         }
-        private static string _format_bytes(long b)
+        private static string _format_bytes(long b, int precision = 1)
         {
+            var fp = new string('0', precision);
             if (b < 0x400)
                 return b.ToString() + "B";
             else if (b < 0x100000)
-                return ((double)b / 0x400).ToString("0.0") + "KB";
+                return ((double)b / 0x400).ToString("0." + fp) + "KB";
             else if (b < 0x40000000)
-                return ((double)b / 0x100000).ToString("0.0") + "MB";
+                return ((double)b / 0x100000).ToString("0." + fp) + "MB";
             else if (b < 0x10000000000)
-                return ((double)b / 0x40000000).ToString("0.0") + "GB";
+                return ((double)b / 0x40000000).ToString("0." + fp) + "GB";
             else
-                return ((double)b / 0x10000000000).ToString("0.0") + "TB";
+                return ((double)b / 0x10000000000).ToString("0." + fp) + "TB";
         }
         private struct _temp_callback_state
         {
@@ -596,7 +634,7 @@ namespace BaiduCloudConsole
                                 Console.WriteLine("参数不足");
                                 return;
                             }
-                            if (int.TryParse(cmd[index+1], out parallel_task) == false)
+                            if (int.TryParse(cmd[index + 1], out parallel_task) == false)
                             {
                                 Console.WriteLine("并行任务数 {0} 无法转换为整型", cmd[index + 1]);
                                 return;
@@ -813,6 +851,35 @@ namespace BaiduCloudConsole
                 }
             }
 
+            long fs_id;
+            if (long.TryParse(path, out fs_id))
+            {
+                Console.WriteLine("根据FS ID查询路径中");
+                var fs_id_finish = new ManualResetEventSlim();
+                var query_success = false;
+                var is_file = true;
+                _remote_file_cacher.QueryFileByFsID(fs_id, (suc, data, state) =>
+                {
+                    query_success = suc;
+                    path = data.Path;
+                    fs_id_finish.Set();
+                    is_file = !data.IsDir;
+                });
+
+                fs_id_finish.Wait();
+                if (!query_success)
+                {
+                    Console.WriteLine("查询失败，请检查输入是否正确");
+                    return;
+                }
+                if (is_file)
+                {
+                    Console.WriteLine("查询到该id为文件，路径为：{0}，请用其父级目录列出文件列表", path);
+                    return;
+                }
+
+            }
+
             var rst_event = new ManualResetEventSlim();
             ObjectMetadata[] files = null;
             _remote_file_cacher.GetFileListAsync(path, (suc, data, state) =>
@@ -833,29 +900,35 @@ namespace BaiduCloudConsole
             {
                 Console.WriteLine("{0} 的文件信息: ", path);
                 var padding = new string(' ', Console.WindowWidth);
-                //40,15,18,18
-                var head = ("文件名" + padding).Substring(0, 37) + ("大小" + padding).Substring(0, 13) + ("创建时间" + padding).Substring(0, 14) + ("修改时间" + padding).Substring(0, 14);
+                //20,40,15,18,18
+                var head = ("FS ID" + padding).Substring(0, 20) + ("文件名" + padding).Substring(0, 37) + ("大小" + padding).Substring(0, 13) + ("创建时间" + padding).Substring(0, 14) + ("修改时间" + padding).Substring(0, 14);
                 Console.WriteLine(head);
                 foreach (var file in files)
                 {
-                    var str_filename = file.ServerFileName;
-                    var len_filename = Encoding.Default.GetByteCount(str_filename);
-                    if (len_filename > 40)
-                    {
-                        while (len_filename > 36)
-                        {
-                            str_filename = str_filename.Substring(0, str_filename.Length - 1);
-                            len_filename = Encoding.Default.GetByteCount(str_filename);
-                        }
-                        if (len_filename == 36)
-                            str_filename += "... ";
-                        else
-                            str_filename += " ... ";
-                    }
-                    else
-                        str_filename = string.Format("{0,-" + (40 + str_filename.Length - len_filename) + "}", str_filename);
+                    var file_name = file.ServerFileName;
+                    Console.Write("{0,-20}", file.FS_ID);
 
-                    Console.Write(str_filename);
+                    var test_cursor = new List<int>();
+                    foreach (var item in file.ServerFileName)
+                    {
+                        Console.Write(item);
+                        test_cursor.Add(Console.CursorLeft);
+                        if (Console.CursorLeft >= 59) //20+40-1
+                        {
+                            int file_name_length = -1;
+                            for (int i = test_cursor.Count - 1; i >= 0; i--)
+                            {
+                                if (test_cursor[i] >= 56) continue;
+                                file_name_length = test_cursor[i];
+                                break;
+                            }
+                            Console.CursorLeft = file_name_length;
+                            Console.Write(new string(' ', 59 - Console.CursorLeft - 3));
+                            Console.Write("...");
+                        }
+                    }
+                    if (Console.CursorLeft <= 60)
+                        Console.Write(new string(' ', 60 - Console.CursorLeft));
 
                     var size = string.Format("{0,-15}", file.IsDir ? "<DIR>" : _format_bytes((long)file.Size));
                     Console.Write(size);
@@ -1120,9 +1193,40 @@ namespace BaiduCloudConsole
                 Console.WriteLine("参数不足");
                 return;
             }
-            var path = cmd[1];
+            var list_delete = new List<string>(cmd);
+            list_delete.RemoveAt(0); //command
+            bool printed_querying = false;
+            var query_finish_event = new ManualResetEventSlim();
+            for (int i = 0; i < list_delete.Count; i++)
+            {
+                long fs_id;
+                if (long.TryParse(list_delete[i], out fs_id))
+                {
+                    query_finish_event.Reset();
+                    if (!printed_querying)
+                    {
+                        Console.WriteLine("查询文件路径中");
+                        printed_querying = true; //不重复打印此消息
+                    }
+
+                    var query_success = false;
+                    _remote_file_cacher.QueryFileByFsID(fs_id, (suc, data, state) =>
+                    {
+                        query_success = suc;
+                        list_delete[i] = data.Path;
+                        query_finish_event.Set();
+                    });
+                    query_finish_event.Wait();
+
+                    if (!query_success)
+                    {
+                        Console.WriteLine("查询ID {0}失败，请查看该FS ID是否存在", fs_id);
+                        return;
+                    }
+                }
+            }
             var rst_event = new ManualResetEventSlim();
-            _remote_file_cacher.DeletePathAsync(path, (suc, data, state) =>
+            _remote_file_cacher.DeletePathAsync(list_delete, (suc, data, state) =>
             {
                 rst_event.Set();
             });
@@ -1141,6 +1245,33 @@ namespace BaiduCloudConsole
             if (cmd.Length == 3)
                 dst_path = cmd[2];
 
+            var query_fsid_finish = new ManualResetEventSlim();
+            long fs_id;
+            bool query_success = false;
+            bool is_dir = true;
+            if (long.TryParse(src_path, out fs_id))
+            {
+                Console.WriteLine("查询源文件的文件路径中...");
+                _remote_file_cacher.QueryFileByFsID(fs_id, (s, data, state) =>
+                {
+                    query_success = true;
+                    src_path = data.Path;
+                    is_dir = data.IsDir;
+                    query_fsid_finish.Set();
+                });
+                query_fsid_finish.Wait();
+                query_fsid_finish.Reset();
+                if (!query_success)
+                {
+                    Console.WriteLine("查询源文件失败，请查看该fs id是否存在");
+                    return;
+                }
+                if (is_dir)
+                {
+                    Console.WriteLine("暂不支持文件夹批量转换");
+                    return;
+                }
+            }
             var rst_event = new ManualResetEventSlim();
             bool suc = false;
             _remote_file_cacher.ConvertToSymbolLinkAsync(src_path, (s, data, state) =>
@@ -1168,6 +1299,33 @@ namespace BaiduCloudConsole
             if (cmd.Length == 3)
                 dst_path = cmd[2];
 
+            var query_fsid_finish = new ManualResetEventSlim();
+            long fs_id;
+            bool query_success = false;
+            bool is_dir = true;
+            if (long.TryParse(src_path, out fs_id))
+            {
+                Console.WriteLine("查询源文件的文件路径中...");
+                _remote_file_cacher.QueryFileByFsID(fs_id, (s, data, state) =>
+                {
+                    query_success = true;
+                    src_path = data.Path;
+                    is_dir = data.IsDir;
+                    query_fsid_finish.Set();
+                });
+                query_fsid_finish.Wait();
+                query_fsid_finish.Reset();
+                if (!query_success)
+                {
+                    Console.WriteLine("查询源文件失败，请查看该fs id是否存在");
+                    return;
+                }
+                if (is_dir)
+                {
+                    Console.WriteLine("暂不支持文件夹批量转换");
+                    return;
+                }
+            }
             var rst_event = new ManualResetEventSlim();
             bool suc = false;
             _remote_file_cacher.ConvertFromSymbolLinkAsync(src_path, (s, data, state) =>
@@ -1199,6 +1357,42 @@ namespace BaiduCloudConsole
 
             var src = cmd[1];
             var dst = cmd[2];
+            var query_fsid_finish = new ManualResetEventSlim();
+            long fs_id;
+            bool query_success = false;
+            if (long.TryParse(src, out fs_id))
+            {
+                Console.WriteLine("查询源文件夹的文件路径中...");
+                _remote_file_cacher.QueryFileByFsID(fs_id, (s, data, state) =>
+                {
+                    query_success = true;
+                    src = data.Path;
+                    query_fsid_finish.Set();
+                });
+                query_fsid_finish.Wait();
+                query_fsid_finish.Reset();
+                if (!query_success)
+                {
+                    Console.WriteLine("查询源文件夹失败，请查看该fs id是否存在");
+                    return;
+                }
+            }
+            if (long.TryParse(dst, out fs_id))
+            {
+                Console.WriteLine("查询目标文件夹的文件路径中...");
+                _remote_file_cacher.QueryFileByFsID(fs_id, (s, data, state) =>
+                {
+                    query_success = true;
+                    dst = data.Path;
+                    query_fsid_finish.Set();
+                });
+                query_fsid_finish.Wait();
+                if (!query_success)
+                {
+                    Console.WriteLine("查询目标文件夹失败，请查看该fs id是否存在");
+                    return;
+                }
+            }
             var rst_event = new ManualResetEventSlim();
             bool suc = false;
             bool overwrite = false;
@@ -1231,6 +1425,43 @@ namespace BaiduCloudConsole
 
             var src = cmd[1];
             var dst = cmd[2];
+
+            var query_fsid_finish = new ManualResetEventSlim();
+            long fs_id;
+            bool query_success = false;
+            if (long.TryParse(src, out fs_id))
+            {
+                Console.WriteLine("查询源文件夹的文件路径中...");
+                _remote_file_cacher.QueryFileByFsID(fs_id, (s, data, state) =>
+                {
+                    query_success = true;
+                    src = data.Path;
+                    query_fsid_finish.Set();
+                });
+                query_fsid_finish.Wait();
+                query_fsid_finish.Reset();
+                if (!query_success)
+                {
+                    Console.WriteLine("查询源文件夹失败，请查看该fs id是否存在");
+                    return;
+                }
+            }
+            if (long.TryParse(dst, out fs_id))
+            {
+                Console.WriteLine("查询目标文件夹的文件路径中...");
+                _remote_file_cacher.QueryFileByFsID(fs_id, (s, data, state) =>
+                {
+                    query_success = true;
+                    dst = data.Path;
+                    query_fsid_finish.Set();
+                });
+                query_fsid_finish.Wait();
+                if (!query_success)
+                {
+                    Console.WriteLine("查询目标文件夹失败，请查看该fs id是否存在");
+                    return;
+                }
+            }
             var rst_event = new ManualResetEventSlim();
             bool suc = false;
             bool overwrite = false;
@@ -1264,6 +1495,26 @@ namespace BaiduCloudConsole
 
             var src = cmd[1];
             var newname = cmd[2];
+            var query_fsid_finish = new ManualResetEventSlim();
+            long fs_id;
+            bool query_success = false;
+            if (long.TryParse(src, out fs_id))
+            {
+                Console.WriteLine("查询源文件夹的文件路径中...");
+                _remote_file_cacher.QueryFileByFsID(fs_id, (s, data, state) =>
+                {
+                    query_success = true;
+                    src = data.Path;
+                    query_fsid_finish.Set();
+                });
+                query_fsid_finish.Wait();
+                query_fsid_finish.Reset();
+                if (!query_success)
+                {
+                    Console.WriteLine("查询源文件夹失败，请查看该fs id是否存在");
+                    return;
+                }
+            }
             var rst_event = new ManualResetEventSlim();
             bool suc = false;
             _remote_file_cacher.RenameAsync(src, newname, (s, data, state) =>
@@ -1289,6 +1540,34 @@ namespace BaiduCloudConsole
 
             var path = cmd[1];
             var keyword = cmd[2];
+
+            var query_fsid_finish = new ManualResetEventSlim();
+            long fs_id;
+            bool query_success = false;
+            bool is_file = true;
+            if (long.TryParse(path, out fs_id))
+            {
+                Console.WriteLine("查询文件夹路径中...");
+                _remote_file_cacher.QueryFileByFsID(fs_id, (s, data, state) =>
+                {
+                    query_success = true;
+                    path = data.Path;
+                    is_file = !data.IsDir;
+                    query_fsid_finish.Set();
+                });
+                query_fsid_finish.Wait();
+                query_fsid_finish.Reset();
+                if (!query_success)
+                {
+                    Console.WriteLine("查询文件夹失败，请查看该fs id是否存在");
+                    return;
+                }
+                if (is_file)
+                {
+                    Console.WriteLine("查询到该fs id为文件，无法进行搜索");
+                    return;
+                }
+            }
 
             bool enable_regex = false, enable_recursion = false;
             int index = 3;
@@ -1324,28 +1603,36 @@ namespace BaiduCloudConsole
             if (success)
             {
                 var padding = new string(' ', Console.WindowWidth);
-                var head = ("文件名" + padding).Substring(0, 37) + ("大小" + padding).Substring(0, 13) + ("创建时间" + padding).Substring(0, 14) + ("修改时间" + padding).Substring(0, 14);
+
+                //20,40,15,18,18
+                var head = ("FS ID" + padding).Substring(0, 20) + ("文件名" + padding).Substring(0, 37) + ("大小" + padding).Substring(0, 13) + ("创建时间" + padding).Substring(0, 14) + ("修改时间" + padding).Substring(0, 14);
                 Console.WriteLine(head);
                 foreach (var file in result)
                 {
-                    var str_filename = file.ServerFileName;
-                    var len_filename = Encoding.Default.GetByteCount(str_filename);
-                    if (len_filename > 40)
-                    {
-                        while (len_filename > 36)
-                        {
-                            str_filename = str_filename.Substring(0, str_filename.Length - 1);
-                            len_filename = Encoding.Default.GetByteCount(str_filename);
-                        }
-                        if (len_filename == 36)
-                            str_filename += "... ";
-                        else
-                            str_filename += " ... ";
-                    }
-                    else
-                        str_filename = string.Format("{0,-" + (40 + str_filename.Length - len_filename) + "}", str_filename);
+                    var file_name = file.ServerFileName;
+                    Console.Write("{0,-20}", file.FS_ID);
 
-                    Console.Write(str_filename);
+                    var test_cursor = new List<int>();
+                    foreach (var item in file.ServerFileName)
+                    {
+                        Console.Write(item);
+                        test_cursor.Add(Console.CursorLeft);
+                        if (Console.CursorLeft >= 59) //20+40-1
+                        {
+                            int file_name_length = -1;
+                            for (int i = test_cursor.Count - 1; i >= 0; i--)
+                            {
+                                if (test_cursor[i] >= 56) continue;
+                                file_name_length = test_cursor[i];
+                                break;
+                            }
+                            Console.CursorLeft = file_name_length;
+                            Console.Write(new string(' ', 59 - Console.CursorLeft - 3));
+                            Console.Write("...");
+                        }
+                    }
+                    if (Console.CursorLeft <= 60)
+                        Console.Write(new string(' ', 60 - Console.CursorLeft));
 
                     var size = string.Format("{0,-15}", file.IsDir ? "<DIR>" : _format_bytes((long)file.Size));
                     Console.Write(size);
