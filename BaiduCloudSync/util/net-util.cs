@@ -62,7 +62,7 @@ namespace GlobalUtil
             //默认是否忽略系统代理（在默认代理为空的时候起效）
             public const bool DEFAULT_IGNORE_SYSTEM_PROXY = false;
             //默认的user agent（截取自chrome）
-            public const string DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36";
+            public const string DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36";
             //默认发送的数据类型（MIME type）
             public const string DEFAULT_CONTENT_TYPE_PARAM = "application/x-www-form-urlencoded; charset=" + DEFAULT_ENCODING;
             public const string DEFAULT_CONTENT_TYPE_BINARY = "application/octet-stream";
@@ -86,7 +86,13 @@ namespace GlobalUtil
 
             #region Cookie Segment
             //默认保存cookie的容器
-            public static Dictionary<string, CookieContainer> DefaultCookieContainer = new Dictionary<string, CookieContainer>();
+            public static Dictionary<string, CookieContainer> DefaultCookieContainer = _create_container();
+            private static Dictionary<string, CookieContainer> _create_container()
+            {
+                var ret = new Dictionary<string, CookieContainer>();
+                ret.Add(DEFAULT_COOKIE_GROUP, new CookieContainer());
+                return ret;
+            }
             private static ReaderWriterLock _slock = new ReaderWriterLock();
             /// <summary>
             /// 从文件中读取cookie
@@ -188,7 +194,12 @@ namespace GlobalUtil
                 {
                     sb.Append(item.Key);
                     if (!string.IsNullOrEmpty(item.Key)) sb.Append('=');
-                    if (enableUrlEncode) sb.Append(Uri.EscapeDataString(item.Value));
+                    if (enableUrlEncode)
+                    {
+                        int max_i = (int)Math.Ceiling(item.Value.Length / 100.0);
+                        for (int i = 0; i < max_i; i++)
+                            sb.Append(Uri.EscapeDataString(item.Value.Substring(i * 100, Math.Min(100, item.Value.Length - 100 * i))));
+                    }
                     else sb.Append(item.Value);
                     sb.Append('&');
                 }
@@ -521,10 +532,10 @@ namespace GlobalUtil
             /// <returns></returns>
             public static CookieCollection ParseCookie(string header, string defaultDomain)
             {
-                if (_enableTracing)
-                {
-                    Tracer.GlobalTracer.TraceInfo("ParseCookie called: string header=" + header + ", string defaultDomain=" + defaultDomain);
-                }
+                //if (_enableTracing)
+                //{
+                //    Tracer.GlobalTracer.TraceInfo("ParseCookie called: string header=" + header + ", string defaultDomain=" + defaultDomain);
+                //}
                 if (string.IsNullOrEmpty(defaultDomain)) throw new ArgumentNullException(defaultDomain);
 
                 var ret = new CookieCollection();
@@ -780,6 +791,8 @@ namespace GlobalUtil
                         var post_url = url;
                         if (urlParam != null) post_url += "?" + urlParam.BuildQueryString();
 
+                        if (_enableTracing)
+                            Tracer.GlobalTracer.TraceInfo("GET " + post_url);
                         HTTP_Request = (HttpWebRequest)WebRequest.Create(post_url);
                         //HTTP_Request.KeepAlive = true;
                         HTTP_Request.ConnectionGroupName = "defaultConnectionGroup";
@@ -1036,6 +1049,8 @@ namespace GlobalUtil
                         var post_url = url;
                         if (urlParam != null) post_url += "?" + urlParam.BuildQueryString();
 
+                        if (_enableTracing)
+                            Tracer.GlobalTracer.TraceInfo("POST " + post_url);
                         HTTP_Request = (HttpWebRequest)WebRequest.Create(post_url);
                         HTTP_Request.KeepAlive = true;
                         HTTP_Request.ConnectionGroupName = "defaultConnectionGroup";
@@ -1404,34 +1419,26 @@ namespace GlobalUtil
                     byte[] container = null;
                     if (HTTP_Response == null) return null;
                     if (ResponseStream == null) return null;
+                    List<byte> ls_container = null;
                     if (HTTP_Response.ContentLength < 0)
-                    {
-                        var ls_container = new List<byte>(4096);
-                        var buffer = new byte[4096];
-                        var bytes_readed = 0;
-                        do
-                        {
-                            bytes_readed = ResponseStream.Read(buffer, 0, 4096);
-                            var available_bytes = new byte[bytes_readed];
-                            Array.Copy(buffer, 0, available_bytes, 0, bytes_readed);
-                            ls_container.AddRange(available_bytes);
-                        } while (bytes_readed > 0);
-                        container = ls_container.ToArray();
-                        ls_container.Clear();
-                    }
+                        ls_container = new List<byte>(4096);
                     else
+                        ls_container = new List<byte>((int)HTTP_Response.ContentLength);
+                    var buffer = new byte[4096];
+                    var bytes_readed = 0;
+                    do
                     {
-                        container = new byte[HTTP_Response.ContentLength];
-                        var index = 0;
-                        var buffer = new byte[4096];
-                        var bytes_readed = 0;
-                        do
-                        {
-                            bytes_readed = ResponseStream.Read(buffer, 0, 4096);
-                            Array.Copy(buffer, 0, container, index, bytes_readed);
-                            index += bytes_readed;
-                        } while (bytes_readed > 0);
-                    }
+                        bytes_readed = ResponseStream.Read(buffer, 0, 4096);
+                        var available_bytes = new byte[bytes_readed];
+                        Array.Copy(buffer, 0, available_bytes, 0, bytes_readed);
+                        ls_container.AddRange(available_bytes);
+                    } while (bytes_readed > 0);
+                    container = ls_container.ToArray();
+                    if (HTTP_Response.ContentLength >= 0 && HTTP_Response.ContentLength != ls_container.Count)
+                        Tracer.GlobalTracer.TraceWarning(string.Format("HTTP Transfer warning: Expected {0:#,###} bytes data, but got {1:#,###} bytes",
+                            HTTP_Response.ContentLength, ls_container.Count));
+                    ls_container.Clear();
+
                     return container;
                 }
                 catch (Exception ex)

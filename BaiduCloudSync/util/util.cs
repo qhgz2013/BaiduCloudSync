@@ -3,6 +3,7 @@
 // 放一些常用的函数
 //
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -156,6 +157,30 @@ namespace GlobalUtil
             if (_in < 0x100000) return (_in / (double)0x400).ToString("0.000") + "KB";
             if (_in < 0x40000000) return (_in / (double)0x100000).ToString("0.000") + "MB";
             return (_in / (double)0x40000000).ToString("0.000") + "GB";
+        }
+
+        /// <summary>
+        /// 递归创建一个新的文件路径
+        /// </summary>
+        /// <param name="path">新的文件夹路径</param>
+        public static void CreateDirectory(string path)
+        {
+            var dir_info = new DirectoryInfo(path);
+            var stack = new Stack<DirectoryInfo>();
+            stack.Push(dir_info);
+            while (dir_info.Parent != null)
+            {
+                if (dir_info.Exists)
+                    break;
+                stack.Push(dir_info);
+                dir_info = dir_info.Parent;
+            }
+            while (stack.Count > 0)
+            {
+                dir_info = stack.Pop();
+                if (!dir_info.Exists)
+                    dir_info.Create();
+            }
         }
     }
 }

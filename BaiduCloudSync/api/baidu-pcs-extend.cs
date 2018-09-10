@@ -222,6 +222,7 @@ namespace BaiduCloudSync
                         dst_path = path.EndsWith(".symbollink") ? path.Substring(0, path.Length - 11) : (path + "." + path.Split('.').Last());
 
                     var data = RapidUploadRaw(dst_path, content_length, content_md5, content_crc32, slice_md5);
+                    callback?.Invoke(true, data, state);
                 }
                 catch (Exception ex)
                 {
