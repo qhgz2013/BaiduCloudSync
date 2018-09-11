@@ -82,9 +82,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="oauth\CaptchaRequiredException.cs" />
+    <Compile Include="oauth\InvalidCaptchaException.cs" />
+    <Compile Include="oauth\LoginFailedException.cs" />
     <Compile Include="oauth\NotLoggedInException.cs" />
     <Compile Include="oauth\IAuth.cs" />
     <Compile Include="oauth\OAuthPCWebImpl.cs" />
+    <Compile Include="oauth\WrongPasswordException.cs" />
     <Compile Include="util\icon-extractor.cs" />
     <Compile Include="util\secure\crypto-rsa-der.cs" />
     <Compile Include="util\queue-stream.cs" />

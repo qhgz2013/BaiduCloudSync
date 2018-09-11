@@ -182,5 +182,18 @@ namespace GlobalUtil
                     dir_info.Create();
             }
         }
+
+        /// <summary>
+        /// 利用正则表达式去除js代码的回调函数
+        /// </summary>
+        /// <param name="str_to_escape">js代码，格式为js_func(json_data)</param>
+        /// <returns></returns>
+        public static string EscapeCallbackFunction(string str_to_escape)
+        {
+            var re = System.Text.RegularExpressions.Regex.Match(str_to_escape, @"[^\(]+\((.*)\)");
+            if (re.Success)
+                return re.Result("$1");
+            return null;
+        }
     }
 }

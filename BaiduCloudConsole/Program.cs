@@ -8,6 +8,8 @@ using GlobalUtil;
 using GlobalUtil.NetUtils;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Drawing;
+using System.Diagnostics;
 
 namespace BaiduCloudConsole
 {
@@ -15,10 +17,26 @@ namespace BaiduCloudConsole
     {
         private static void Main(string[] args)
         {
-            Tracer.GlobalTracer.TraceError(new BaiduCloudSync.oauth.NotLoggedInException());
-            Tracer.GlobalTracer.TraceError(new BaiduCloudSync.oauth.NotLoggedInException("123"));
+            var oauth = new BaiduCloudSync.oauth.OAuthPCWebImpl();
+            Console.WriteLine("username:");
+            var username = Console.ReadLine();
+            Console.WriteLine("password:");
+            var password = Console.ReadLine();
 
-            Tracer.GlobalTracer.TraceError(new BaiduCloudSync.oauth.NotLoggedInException("123", new IOException()));
+            try
+            {
+                oauth.Login(username, password);
+            }
+            catch (BaiduCloudSync.oauth.CaptchaRequiredException)
+            {
+                var img = (Image)oauth.GetCaptcha();
+                Console.WriteLine("captcha:");
+                img.Save("a.bmp", System.Drawing.Imaging.ImageFormat.Bmp);
+                var proc = Process.Start("a.bmp");
+                var captcha = Console.ReadLine();
+
+                oauth.Login(username, password, captcha);
+            }
         }
     }
 }
