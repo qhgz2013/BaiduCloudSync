@@ -82,18 +82,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="api\baidu-oauth.cs" />
-    <Compile Include="api\baidu-pcs-async.cs" />
-    <Compile Include="api\baidu-pcs.cs" />
-    <Compile Include="api\baidu-pcs-extend.cs" />
-    <Compile Include="sql\sql-struct.cs" />
-    <Compile Include="sql\remote-file-cacher.cs" />
-    <Compile Include="sql\local-file-cacher.cs" />
-    <Compile Include="sql\sync-tracker.cs" />
-    <Compile Include="testbench\test-bench.cs" />
-    <Compile Include="transfer\downloader.cs" />
-    <Compile Include="transfer\itransfer.cs" />
-    <Compile Include="transfer\uploader.cs" />
+    <Compile Include="oauth\NotLoggedInException.cs" />
+    <Compile Include="oauth\IAuth.cs" />
+    <Compile Include="oauth\OAuthPCWebImpl.cs" />
     <Compile Include="util\icon-extractor.cs" />
     <Compile Include="util\secure\crypto-rsa-der.cs" />
     <Compile Include="util\queue-stream.cs" />

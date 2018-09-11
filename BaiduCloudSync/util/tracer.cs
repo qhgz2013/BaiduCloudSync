@@ -17,7 +17,7 @@ namespace GlobalUtil
         private ReaderWriterLock _lock;
         private StreamWriter _writer;
         private bool _output_debug_message;
-        private string _default_trace_fmt = "[{0}] [{1}] [{2} - {3}] {4}";
+        private string _default_trace_fmt = "[{0}] [{1}] [{2} - {3}] [{5}.{6}] {4}";
 
         private void write_trace(string fmt, params object[] args)
         {
@@ -62,22 +62,36 @@ namespace GlobalUtil
         public event TraceHandler InfoTraced, WarningTraced, ErrorTraced;
         public void TraceInfo(string info)
         {
-            write_trace(_default_trace_fmt, get_current_time(), "Info", get_current_thread_id(), get_current_thread_name(), info);
+            var method = new StackTrace().GetFrame(1).GetMethod();
+            var method_space = method.DeclaringType.FullName;
+            var method_name = method.Name;
+            write_trace(_default_trace_fmt, get_current_time(), "Info", get_current_thread_id(), get_current_thread_name(), info, method_space, method_name);
             InfoTraced?.Invoke(info);
         }
         public void TraceWarning(string info)
         {
-            write_trace(_default_trace_fmt, get_current_time(), "Warning", get_current_thread_id(), get_current_thread_name(), info);
+            var method = new StackTrace().GetFrame(1).GetMethod();
+            var method_space = method.DeclaringType.FullName;
+            var method_name = method.Name;
+            write_trace(_default_trace_fmt, get_current_time(), "Warning", get_current_thread_id(), get_current_thread_name(), info, method_space, method_name);
             WarningTraced?.Invoke(info);
         }
         public void TraceError(string info)
         {
-            write_trace(_default_trace_fmt, get_current_time(), "Error", get_current_thread_id(), get_current_thread_name(), info);
+            var method = new StackTrace().GetFrame(1).GetMethod();
+            var method_space = method.DeclaringType.FullName;
+            var method_name = method.Name;
+            write_trace(_default_trace_fmt, get_current_time(), "Error", get_current_thread_id(), get_current_thread_name(), info, method_space, method_name);
             ErrorTraced?.Invoke(info);
         }
         public void TraceError(Exception ex)
         {
-            TraceError(ex.ToString());
+            var method = new StackTrace().GetFrame(1).GetMethod();
+            var method_space = method.DeclaringType.FullName;
+            var method_name = method.Name;
+            var info = ex.ToString();
+            write_trace(_default_trace_fmt, get_current_time(), "Error", get_current_thread_id(), get_current_thread_name(), info, method_space, method_name);
+            ErrorTraced?.Invoke(info);
         }
 
         public void Dispose()
@@ -89,7 +103,7 @@ namespace GlobalUtil
         {
             var method = new StackTrace().GetFrame(1).GetMethod();
 
-            var method_space = method.DeclaringType.Name;
+            var method_space = method.DeclaringType.FullName;
             var method_name = method.Name;
 
             var sb = new StringBuilder();
