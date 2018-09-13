@@ -18,24 +18,53 @@ namespace BaiduCloudConsole
         private static void Main(string[] args)
         {
             var oauth = new BaiduCloudSync.oauth.OAuthPCWebImpl();
-            Console.WriteLine("username:");
-            var username = Console.ReadLine();
-            Console.WriteLine("password:");
-            var password = Console.ReadLine();
 
-            try
+            string username = null, password = null, captcha = null;
+            bool keep_captcha = false;
+            for (;;)
             {
-                oauth.Login(username, password);
-            }
-            catch (BaiduCloudSync.oauth.CaptchaRequiredException)
-            {
-                var img = (Image)oauth.GetCaptcha();
-                Console.WriteLine("captcha:");
-                img.Save("a.bmp", System.Drawing.Imaging.ImageFormat.Bmp);
-                var proc = Process.Start("a.bmp");
-                var captcha = Console.ReadLine();
+                if (!keep_captcha)
+                {
+                    Console.WriteLine("username:");
+                    username = Console.ReadLine();
+                    Console.WriteLine("password:");
+                    password = Console.ReadLine();
+                }
+                keep_captcha = false;
+                try
+                {
+                    oauth.Login(username, password, captcha);
+                    break;
+                }
+                catch (BaiduCloudSync.oauth.WrongPasswordException)
+                {
+                    Console.WriteLine("Password incorrect");
+                }
+                catch (BaiduCloudSync.oauth.InvalidCaptchaException)
+                {
+                    Console.WriteLine("验证码错误");
 
-                oauth.Login(username, password, captcha);
+                    var img = (Image)oauth.GetCaptcha();
+                    Console.WriteLine("captcha:");
+                    img.Save("a.bmp", System.Drawing.Imaging.ImageFormat.Bmp);
+                    var proc = Process.Start("a.bmp");
+                    captcha = Console.ReadLine();
+                    keep_captcha = true;
+                }
+                catch (BaiduCloudSync.oauth.CaptchaRequiredException)
+                {
+                    var img = (Image)oauth.GetCaptcha();
+                    Console.WriteLine("captcha:");
+                    img.Save("a.bmp", System.Drawing.Imaging.ImageFormat.Bmp);
+                    var proc = Process.Start("a.bmp");
+                    captcha = Console.ReadLine();
+                    keep_captcha = true;
+                }
+                finally
+                {
+                    if (!keep_captcha)
+                        captcha = null;
+                }
             }
         }
     }

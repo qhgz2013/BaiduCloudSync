@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using GlobalUtil.NetUtils;
 using GlobalUtil;
 using Newtonsoft.Json;
@@ -14,25 +12,30 @@ namespace BaiduCloudSync.oauth
 {
     public class OAuthPCWebImpl : IAuth
     {
-        //用于区分不同账号的cookie所需要的key
+        // 用于区分不同账号的cookie所需要的key
         private string _identifier;
-        //用于重复调用login需要的持久变量
-        private string _token;
-        private string _gid;
+        // 用于重复调用login需要的持久变量
+        private string _token; // 登陆所需的token，惰性加载，null时执行初始化（调用http请求）
+        private string _gid; // 随机生成的guid，只不过是31位的
+        // 验证码相关
         private string _codestring;
         private string _vcodetype;
 
-        private bool _captcha_generated;
+        private bool _captcha_generated; // 指示验证码是否已经生成，用于刷新验证码
         public OAuthPCWebImpl(string identifier = null)
         {
             if (identifier == null)
             {
-                //通过表单的随机生成算法生成当前cookie所属的key
+                // 通过表单的随机生成算法生成当前cookie所属的key
                 identifier = util.GenerateFormDataBoundary();
             }
             _identifier = identifier;
             _gid = Guid.NewGuid().ToString().Substring(1);
         }
+        /// <summary>
+        /// 获取一个新的验证码，返回一个System.Drawing.Image实例
+        /// </summary>
+        /// <returns></returns>
         public object GetCaptcha()
         {
             _get_token();
@@ -51,10 +54,10 @@ namespace BaiduCloudSync.oauth
             }
             else
             {
-                _captcha_generated = true;
                 // first time generating the captcha
                 if (string.IsNullOrEmpty(_codestring)) return null;
-                else return _cgi_bin_genimage(_codestring);
+                _captcha_generated = true;
+                return _cgi_bin_genimage(_codestring);
             }
         }
 
@@ -62,6 +65,9 @@ namespace BaiduCloudSync.oauth
         {
             throw new NotImplementedException();
         }
+
+        // 下面这一堆函数都是跟服务器通讯的，又臭又长，还要来一堆异常处理
+        // ps: 有个参数dv是根据js随机生成的，我没看js代码，这个字段我用了一个固定值来代替，暂时没有影响登陆的过程
 
         // method implementation of GET /v2/api/?getapi
         private string _v2_api__getapi(string gid)
@@ -237,10 +243,12 @@ namespace BaiduCloudSync.oauth
             {
                 Tracer.GlobalTracer.TraceInfo("Posting: login");
 
-                var rsa_param = Crypto.RSA_ImportPEMPublicKey(rsa_publickey);
-                var encrypted_password = Crypto.RSA_StringEncrypt(password, rsa_param);
-                password = Convert.ToBase64String(encrypted_password);
+                // 对明文密码进行RSA，并转换为base64的字符串
+                var rsa_param = Crypto.RSA_ImportPEMPublicKey(rsa_publickey); //导入public key
+                var encrypted_password = Crypto.RSA_StringEncrypt(password, rsa_param); //加密
+                password = Convert.ToBase64String(encrypted_password); //to base64
 
+                // 登陆要POST的数据
                 var body = new Parameters();
                 body.Add("staticpage", "https://pan.baidu.com/res/static/thirdparty/pass_v3_jump.html");
                 body.Add("charset", "UTF-8");
@@ -284,8 +292,6 @@ namespace BaiduCloudSync.oauth
                 ns.HttpPost("https://passport.baidu.com/v2/api/?login", body, headerParam: header);
 
                 var response = ns.ReadResponseString();
-
-                Tracer.GlobalTracer.TraceInfo(response);
 
                 var ret = new _login_result();
 
@@ -347,7 +353,8 @@ namespace BaiduCloudSync.oauth
             }
         }
 
-        // method implementation of /v2/?regetcodestr
+        // 这里的单词好像是re-g-get-code-str，不知道是不是我英语不行
+        // method implementation of /v2/?reggetcodestr
         private struct _regetcodestr_result
         {
             public string verifysign;
@@ -400,7 +407,7 @@ namespace BaiduCloudSync.oauth
         }
 
 
-        // handling token
+        //初始化token并返回token
         private string _get_token()
         {
             var ns = new NetStream();
@@ -423,35 +430,51 @@ namespace BaiduCloudSync.oauth
             }
             return _token;
         }
+        /// <summary>
+        /// 通过网盘的登陆接口登陆到百度
+        /// </summary>
+        /// <param name="username">用户名/手机/邮箱</param>
+        /// <param name="password">密码</param>
+        /// <param name="captcha">验证码，不需要时为null，在调用Login捕获到CaptchaRequiredException或是InvalidCaptchaException时，都需要传入该参数</param>
+        /// <returns></returns>
         public bool Login(string username, string password, object captcha = null)
         {
-            var ns = new NetStream();
-            ns.CookieKey = _identifier;
             try
             {
+                // #1 HTTP request: token request
                 _get_token();
 
+                // #2 HTTP request: login check
                 var captcha_data = _v2_api__logincheck(_token, username);
-                if (!string.IsNullOrEmpty(captcha_data.codestring))
+                //需要验证码并且验证码为空时，引发CaptchaRequiredException
+                if (!string.IsNullOrEmpty(captcha_data.codestring) && captcha == null)
                 {
-                    // todo: handle this
                     _codestring = captcha_data.codestring;
                     _vcodetype = captcha_data.vcodetype;
-                    throw new NotImplementedException("not implemented scene: logincheck with codestring != empty");
+                    throw new CaptchaRequiredException();
                 }
 
+                // #3 HTTP request: get public key (RSA password encryption)
                 var rsa_key = _v2_getpublickey(_token, _gid);
 
+                // #4 HTTP request: post login
                 var login_result = _v2_api__login(_token, _codestring, _gid, username, password, rsa_key.key, rsa_key.pubkey, (string)captcha);
+                //对登陆结果返回的验证码字段进行赋值
                 if (!string.IsNullOrEmpty(login_result.vcodetype)) _vcodetype = login_result.vcodetype;
                 if (!string.IsNullOrEmpty(login_result.codestring)) _codestring = login_result.codestring;
                 switch (login_result.errno)
                 {
                     case "0":
+                        //登陆成功
                         return true;
                     case "4":
+                        //密码错误
                         throw new WrongPasswordException();
+                    case "6":
+                        //验证码错误
+                        throw new InvalidCaptchaException();
                     case "257":
+                        //需要验证码
                         throw new CaptchaRequiredException();
                     default:
                         throw new LoginFailedException("Login failed with response code " + login_result.errno);
