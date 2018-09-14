@@ -86,6 +86,10 @@
     <Compile Include="api\baidu-pcs-async.cs" />
     <Compile Include="api\baidu-pcs.cs" />
     <Compile Include="api\baidu-pcs-extend.cs" />
+    <Compile Include="api\CaptchaRequiredException.cs" />
+    <Compile Include="api\InvalidCaptchaException.cs" />
+    <Compile Include="api\LoginFailedException.cs" />
+    <Compile Include="api\WrongPasswordException.cs" />
     <Compile Include="sql\sql-struct.cs" />
     <Compile Include="sql\remote-file-cacher.cs" />
     <Compile Include="sql\local-file-cacher.cs" />

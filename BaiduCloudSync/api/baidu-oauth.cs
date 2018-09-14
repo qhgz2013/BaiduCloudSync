@@ -35,108 +35,6 @@ namespace BaiduCloudSync
         #region login request
         #region private functions
         /// <summary>
-        /// 获取api信息
-        /// </summary>
-        /// <returns>api token</returns>
-        /// <remarks>throwable</remarks>
-        private JObject _oauth_getapi()
-        {
-            Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_getapi called: void");
-            try
-            {
-                var ns = new NetStream();
-                ns.CookieKey = _cookie_identifier;
-                ns.RetryDelay = 1000;
-                ns.RetryTimes = 3;
-                ns.HttpGet(_BAIDU_ROOT_URL);
-                ns.Close();
-            }
-            catch (Exception)
-            {
-
-                throw new Exception("访问百度失败，请检查互联网设置");
-            }
-            var param = new Parameters();
-            param.Add("tpl", "mn");
-            param.Add("apiver", "v3");
-            param.Add("tt", _get_unixtime());
-            param.Add("class", "login");
-            param.Add("gid", _get_guid());
-            param.Add("logintype", "dialogLogin");
-            param.Add("callback", "bd__cbs__7s1rgg");
-
-            var querystring = param.BuildQueryString();
-            var url = _OAUTH_GETAPI_URL + "&" + querystring;
-            try
-            {
-                var  ns = new NetStream();
-                ns.CookieKey = _cookie_identifier;
-                ns.RetryDelay = 1000;
-                ns.RetryTimes = 3;
-                ns.HttpGet(url);
-                var responseText = ns.ReadResponseString();
-                ns.Close();
-
-                //sample returns:
-                /*
-                 * bd__cbs__vyf7wy({"errInfo":{        "no": "0"    },    "data": {        "rememberedUserName" : "",        "codeString" : "",        "token" : "c06a130938733657c4dcf79c18f0ef5f",        "cookie" : "1",        "usernametype":"",        "spLogin" : "rate",        "disable":"",        "loginrecord":{            'email':[            ],            'phone':[            ]        }    }})
-                 */
-                responseText = _escape_callback_function(responseText);
-                return (JObject)JsonConvert.DeserializeObject(responseText);
-            }
-            catch (Exception ex)
-            {
-
-                throw new Exception("获取登陆信息失败，请检查互联网设置: -1", ex);
-            }
-        }
-        /// <summary>
-        /// 登陆检测
-        /// </summary>
-        /// <param name="token">获得的token</param>
-        /// <param name="username">用户名</param>
-        /// <returns></returns>
-        /// <remarks>throwable</remarks>
-        private JObject _oauth_logincheck(string token, string username)
-        {
-            Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_logincheck called: token=" + token + ", username=" + username);
-            var param = new Parameters();
-            param.Add("token", token);
-            param.Add("tpl", "mn");
-            param.Add("apiver", "v3");
-            param.Add("tt", _get_unixtime());
-            param.Add("sub_source", "leadsetpwd");
-            param.Add("username", username);
-            param.Add("isphone", false);
-            param.Add("callback", "bd__cbs__1nfmz7");
-
-            var querystring = param.BuildQueryString();
-            var url = _OAUTH_GETAPI_URL + "&" + querystring;
-            try
-            {
-                var ns = new NetStream();
-                ns.CookieKey = _cookie_identifier;
-                ns.RetryDelay = 1000;
-                ns.RetryTimes = 3;
-                ns.HttpGet(url);
-                var responseText = ns.ReadResponseString();
-                ns.Close();
-
-                //sample return:
-                /*
-                 * bd__cbs__l0wi2m({"errInfo":{        "no": "0"    },    "data": {        "codeString" : "",        "vcodetype" : "",        "userid" : "",        "mobile" : ""    }})
-                 */
-                responseText = _escape_callback_function(responseText);
-                return (JObject)JsonConvert.DeserializeObject(responseText);
-            }
-            catch (Exception ex)
-            {
-
-                throw new Exception("获取登陆信息失败，请检查互联网设置: -2", ex);
-            }
-
-        }
-        /// <summary>
         /// 生成guid
         /// </summary>
         /// <returns></returns>
@@ -161,217 +59,369 @@ namespace BaiduCloudSync
         {
             return Regex.Match(strIn, @"^bd__cbs__([0-9a-zA-Z]+)\((?<json>.*)\)\s*$").Result("${json}");
         }
-        /// <summary>
-        /// 登陆主函数
-        /// </summary>
-        /// <param name="token">token</param>
-        /// <param name="username">用户名称</param>
-        /// <param name="password">密码</param>
-        /// <param name="codestring">验证码的code</param>
-        /// <param name="verifycode">验证码的值</param>
-        /// <returns></returns>
-        /// <remarks>throwable</remarks>
-        private string _oauth_login(string token, string username, string password, string codestring = "", string verifycode = "")
+
+        // method implementation of GET /v2/api/?getapi
+        private string _v2_api__getapi(string gid)
         {
-            Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_login called: token=" + token + ", username=" + username + ", password=*, codestring=" + codestring + ", verifycode=" + verifycode);
-            var param = new Parameters();
-            param.Add("staticpage", "http://www.baidu.com/cache/user/html/v3Jump.html");
-            param.Add("charset", "UTF-8");
-            param.Add("token", token);
-            param.Add("tpl", "mn");
-            param.Add("subpro", "");
-            param.Add("apiver", "v3");
-            param.Add("tt", _get_unixtime());
-            param.Add("codestring", codestring);
-            param.Add("safeflg", 0);
-            param.Add("u", "https://www.baidu.com/");
-            param.Add("isPhone", "");
-            param.Add("detect", 1);
-            param.Add("gid", _get_guid());
-            param.Add("quick_user", 0);
-            param.Add("logintype", "dialogLogin");
-            param.Add("logLoginType", "pc_loginDialog");
-            param.Add("idc", "");
-            param.Add("loginmerge", true);
-            param.Add("splogin", "rate");
-            param.Add("username", username);
-            param.Add("password", password);
-            if (!string.IsNullOrEmpty(codestring)) param.Add("verifycode", verifycode);
-            param.Add("mem_pass", "on");
-            var rand = new Random();
-            param.Add("ppui_logintime", rand.Next(5000, 20000)); //i don't know what is it but it is safer to generate a random number
-            param.Add("countrycode", "");
-            param.Add("callback", "parent.bd__pcbs__1zc9vx");
+            var ns = new NetStream();
+            ns.CookieKey = _cookie_identifier;
 
             try
             {
-                var ns = new NetStream();
-                ns.CookieKey = _cookie_identifier;
-                ns.RetryDelay = 1000;
-                ns.RetryTimes = 3;
-                ns.HttpPost(_OAUTH_LOGIN_URL, param);
-                var str = ns.ReadResponseString();
-                ns.Close();
+                Tracer.GlobalTracer.TraceInfo("Fetching: getapi");
 
-                //sample return:
-                /*
-                <!DOCTYPE html>
-                <html>
-                <head>
-                <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-                </head>
-                <body>
-                <script type="text/javascript">
+                var query_param = new Parameters();
+                query_param.Add("tpl", "netdisk");
+                query_param.Add("subpro", "netdisk_web");
+                query_param.Add("apiver", "v3");
+                query_param.Add("tt", (long)(util.ToUnixTimestamp(DateTime.Now) * 1000));
+                query_param.Add("class", "login");
+                query_param.Add("gid", gid);
+                query_param.Add("loginversion", "v4");
+                query_param.Add("logintype", "basicLogin");
+                query_param.Add("traceid", "");
+                query_param.Add("callback", "bd__cbs__abcdef");
 
+                var referer = new Parameters();
+                referer.Add("Referer", "https://pan.baidu.com/");
 
-	                var href = decodeURIComponent("https:\/\/www.baidu.com\/cache\/user\/html\/v3Jump.html")+"?"
+                ns.HttpGet("https://passport.baidu.com/v2/api/?getapi&" + query_param.BuildQueryString(), headerParam: referer);
+                var api_result = ns.ReadResponseString();
+                api_result = _escape_callback_function(api_result);
+                var json_api_result = JsonConvert.DeserializeObject(api_result) as JObject;
+                var errno = json_api_result["errInfo"].Value<string>("no");
+                if (errno != "0") throw new LoginFailedException("failed to get token: " + json_api_result.ToString());
 
-                var accounts = '&accounts='
-
-                href += "err_no=257&callback=parent.bd__pcbs__1zc9vx&codeString=tcG8106c18e7ffae2eb02f314e64301db7e585e980765047b18&userName=13560119976&phoneNumber=&mail=&hao123Param=&u=https://www.baidu.com/&tpl=&secstate=&gotourl=&authtoken=&loginproxy=&resetpwd=&vcodetype=24f1cjZNRjKMAuXXx\/jh6GM1UiN1NrTR\/1rG+Lvz++HwkK+stBNbKqZSN1uOvaY1ZsPBcGKEcbDe2\/Gkp0z1b5YMEXNUP\/hqug99&lstr=&ltoken=&bckv=&bcsync=&bcchecksum=&code=&bdToken=&realnameswitch=&setpwdswitch=&bctime=&bdstoken=&authsid=&jumpset=&appealurl="+accounts;
-
-
-                if(window.location){
-                    window.location.replace(href);
-                }else{
-                   document.location.replace(href); 
-                }
-                </script>
-                </body>
-                </html>
-                */
-                return str;
+                return json_api_result["data"].Value<string>("token");
+            }
+            catch (LoginFailedException ex)
+            {
+                throw ex;
             }
             catch (Exception ex)
             {
-
-                throw new Exception("登陆请求发送失败", ex);
+                throw new LoginFailedException("getapi failed", ex);
+            }
+            finally
+            {
+                ns.Close();
             }
         }
-        /// <summary>
-        /// 获取验证码图片
-        /// </summary>
-        /// <param name="codestring">验证码的code</param>
-        /// <returns></returns>
-        /// <remarks>throwable</remarks>
-        private Image _oauth_genimage(string codestring)
+
+        // method implementation of GET /v2/api/?logincheck
+        private struct _logincheck_result
         {
-            Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_genimage called: codestring=" + codestring);
+            public string codestring;
+            public string vcodetype;
+        }
+        private _logincheck_result _v2_api__logincheck(string token, string username)
+        {
+            var ns = new NetStream();
+            ns.CookieKey = _cookie_identifier;
+
             try
             {
-                var url = _OAUTH_CAPTCHA_URL + "?" + codestring;
+                Tracer.GlobalTracer.TraceInfo("Fetching: logincheck");
 
-                var ns = new NetStream();
-                ns.CookieKey = _cookie_identifier;
-                ns.RetryDelay = 1000;
-                ns.RetryTimes = 3;
+                var param = new Parameters();
+                param.Add("token", token);
+                param.Add("tpl", "netdisk");
+                param.Add("subpro", "netdisk_web");
+                param.Add("apiver", "v3");
+                param.Add("tt", (long)(util.ToUnixTimestamp(DateTime.Now) * 1000));
+                param.Add("sub_source", "leadsetpwd");
+                param.Add("username", username);
+                param.Add("loginversion", "v4");
+                param.Add("dv", "i_do_not_know_this_param");
+                param.Add("traceid", "");
+                param.Add("callback", "bd__cbs__ababab");
 
-                ns.HttpGet(url);
+                var referer = new Parameters();
+                referer.Add("Referer", "https://pan.baidu.com/");
 
-                //transfer to local memory stream
-                var ss = new MemoryStream();
-                int readcount = 0;
-                byte[] buf = new byte[4096];
-                do
+                ns.HttpGet("https://passport.baidu.com/v2/api/?logincheck&" + param.BuildQueryString(), headerParam: referer);
+
+                var api_result = ns.ReadResponseString();
+                api_result = _escape_callback_function(api_result);
+
+                var json_api_result = JsonConvert.DeserializeObject(api_result) as JObject;
+                var errno = json_api_result["errInfo"].Value<string>("no");
+                if (errno != "0") throw new LoginFailedException("failed to get logincheck: " + api_result.ToString());
+
+                return new _logincheck_result()
                 {
-                    readcount = ns.ResponseStream.Read(buf, 0, 4096);
-                    ss.Write(buf, 0, readcount);
-                } while (readcount != 0);
-                ss.Position = 0;
-
-                //creating image from local memory stream
-                //sample return: an image(binary data)
-                return Image.FromStream(ss);
+                    codestring = json_api_result["data"].Value<string>("codeString"),
+                    vcodetype = json_api_result["data"].Value<string>("vcodetype")
+                };
+            }
+            catch (LoginFailedException ex)
+            {
+                throw ex;
             }
             catch (Exception ex)
             {
-
-                throw new Exception("获取验证码图片失败", ex);
+                throw new LoginFailedException("logincheck failed", ex);
             }
         }
-        /// <summary>
-        /// 检查验证码是否输入正确
-        /// </summary>
-        /// <param name="token">token</param>
-        /// <param name="codestring">验证码code</param>
-        /// <param name="verifycode">验证码值</param>
-        /// <returns></returns>
-        /// <remarks>throwable</remarks>
-        private JObject _oauth_checkvcode(string token, string codestring, string verifycode)
-        {
-            Tracer.GlobalTracer.TraceInfo("BaiduOAuth._oauth_checkvcode called: token=" + token + ", codestring=" + codestring + ", verifycode=" + verifycode);
-            var param = new Parameters();
-            param.Add("token", token);
-            param.Add("tpl", "mn");
-            param.Add("apiver", "v3");
-            param.Add("tt", _get_unixtime());
-            param.Add("verifycode", verifycode);
-            param.Add("codestring", codestring);
-            param.Add("callback", "bd__cbs__1l7o0h");
 
-            var querystring = param.BuildQueryString();
-            var url = _OAUTH_CHECKVCODE_URL + "&" + querystring;
+        // method implementation of GET /v2/getpublickey
+        private struct _getpublickey_result
+        {
+            public string key;
+            public string pubkey;
+        }
+        private _getpublickey_result _v2_getpublickey(string token, string gid)
+        {
+            var ns = new NetStream();
+            ns.CookieKey = _cookie_identifier;
             try
             {
+                Tracer.GlobalTracer.TraceInfo("Fetching: getpublickey");
 
-                var ns = new NetStream();
-                ns.CookieKey = _cookie_identifier;
-                ns.RetryDelay = 1000;
-                ns.RetryTimes = 3;
-                ns.HttpGet(url);
-                var responseText = ns.ReadResponseString();
-                ns.Close();
-                //sample returns:
-                /*
-                 * bd__cbs__1l7o0h({"errInfo":{        "no": "500002",        "msg": "验证码错误."    },    "data": {    }})
-                 * bd__cbs__gbeza5({"errInfo":{        "no": "0",        "msg": ""    },    "data": {    }})
-                */
-                responseText = _escape_callback_function(responseText);
-                return (JObject)JsonConvert.DeserializeObject(responseText);
+                var param = new Parameters();
+                param.Add("token", token);
+                param.Add("tpl", "netdisk");
+                param.Add("subpro", "netdisk_web");
+                param.Add("apiver", "v3");
+                param.Add("tt", (long)(util.ToUnixTimestamp(DateTime.Now) * 1000));
+                param.Add("gid", gid);
+                param.Add("loginversion", "v4");
+                param.Add("traceid", "");
+                param.Add("callback", "bd__cbs__emmmmm");
+
+                var referer = new Parameters();
+                referer.Add("Referer", "https://pan.baidu.com/");
+
+                ns.HttpGet("https://passport.baidu.com/v2/getpublickey", urlParam: param, headerParam: referer);
+
+                var api_result = ns.ReadResponseString();
+                api_result = _escape_callback_function(api_result);
+
+                var json_api_result = JsonConvert.DeserializeObject(api_result) as JObject;
+
+                var errno = json_api_result.Value<string>("errno");
+                if (errno != "0") throw new LoginFailedException("failed to get getpublickey: " + json_api_result.ToString());
+
+                return new _getpublickey_result()
+                {
+                    key = json_api_result.Value<string>("key"),
+                    pubkey = json_api_result.Value<string>("pubkey")
+                };
+            }
+            catch (LoginFailedException ex)
+            {
+                throw ex;
             }
             catch (Exception ex)
             {
-
-                throw new Exception("检查验证码失败", ex);
+                throw new LoginFailedException("get getpublickey failed", ex);
             }
         }
-        /// <summary>
-        /// 重新获得验证码的code
-        /// </summary>
-        /// <param name="token">token</param>
-        /// <param name="vcodetype"></param>
-        /// <returns></returns>
-        private JObject _reget_codestring(string token, string vcodetype)
-        {
-            Tracer.GlobalTracer.TraceInfo("BaiduOAuth._reget_codestring called: token=" + token + ", vcodetype=" + vcodetype);
-            var param = new Parameters();
-            param.Add("token", token);
-            param.Add("tpl", "mn");
-            param.Add("apiver", "v3");
-            param.Add("tt", _get_unixtime());
-            param.Add("fr", "login");
-            param.Add("vcodetype", vcodetype);
-            param.Add("callback", "bd__cbs__rxnynd");
 
-            var url = _OAUTH_REGET_CODESTR_URL + "&" + param.BuildQueryString();
+        // method implementation of /v2/api/?login
+        private struct _login_result
+        {
+            public string errno;
+            public string codestring;
+            public string vcodetype;
+        }
+        private _login_result _v2_api__login(string token, string codestring, string gid, string username, string password, string rsakey, string rsa_publickey, string verify_code)
+        {
+            var ns = new NetStream();
+            ns.CookieKey = _cookie_identifier;
+
             try
             {
-                var ns = new NetStream();
-                ns.CookieKey = _cookie_identifier;
-                ns.RetryDelay = 1000;
-                ns.RetryTimes = 3;
-                ns.HttpGet(url);
-                var str = ns.ReadResponseString();
-                ns.Close();
-                var json = _escape_callback_function(str);
-                return (JObject)JsonConvert.DeserializeObject(json);
+                Tracer.GlobalTracer.TraceInfo("Posting: login");
+
+                // 对明文密码进行RSA，并转换为base64的字符串
+                var rsa_param = Crypto.RSA_ImportPEMPublicKey(rsa_publickey); //导入public key
+                var encrypted_password = Crypto.RSA_StringEncrypt(password, rsa_param); //加密
+                password = Convert.ToBase64String(encrypted_password); //to base64
+
+                // 登陆要POST的数据
+                var body = new Parameters();
+                body.Add("staticpage", "https://pan.baidu.com/res/static/thirdparty/pass_v3_jump.html");
+                body.Add("charset", "UTF-8");
+                body.Add("token", token);
+                body.Add("tpl", "netdisk");
+                body.Add("subpro", "netdisk_web");
+                body.Add("apiver", "v3");
+                body.Add("tt", (long)(util.ToUnixTimestamp(DateTime.Now) * 1000));
+                body.Add("codestring", codestring == null ? "" : codestring);
+                body.Add("safeflg", "0");
+                body.Add("u", "https://pan.baidu.com/disk/home");
+                body.Add("isPhone", "");
+                body.Add("detect", "1");
+                body.Add("gid", gid);
+                body.Add("quick_user", "0");
+                body.Add("logintype", "basicLogin");
+                body.Add("logLoginType", "pc_loginBasic");
+                body.Add("idc", "");
+                body.Add("loginmerge", "true");
+                body.Add("foreignusername", "");
+                body.Add("username", username);
+                body.Add("password", password);
+                if (verify_code != null)
+                    body.Add("verifycode", verify_code);
+                body.Add("mem_pass", "on");
+                body.Add("rsakey", rsakey);
+                body.Add("crypttype", "12");
+                body.Add("ppui_logintime", new Random().Next(5000, 15000)); // random range [5000, 15000)
+                body.Add("countrycode", "");
+                body.Add("fp_uid", "");
+                body.Add("fp_info", "");
+                body.Add("login_version", "v4");
+                body.Add("dv", "i_do_not_know_this_parameter");
+                body.Add("traceid", "");
+                body.Add("callback", "parent.bd__pcbs__fuckbd");
+
+                var header = new Parameters();
+                header.Add("Origin", "https://pan.baidu.com");
+                header.Add("Referer", "https://pan.baidu.com/");
+
+                ns.HttpPost("https://passport.baidu.com/v2/api/?login", body, headerParam: header);
+
+                var response = ns.ReadResponseString();
+
+                var ret = new _login_result();
+
+                // parsing login result
+                var match = Regex.Match(response, "href\\s\\+=\\s\"([^\"]+)\"");
+                if (!match.Success) throw new LoginFailedException("could not get login status code from HTML response");
+
+                var response_param = match.Result("$1");
+                match = Regex.Match(response_param, @"&?([^=]+)=([^&]*)");
+                var response_key_values = new Dictionary<string, string>();
+                while (match.Success)
+                {
+                    response_key_values.Add(match.Result("$1"), match.Result("$2"));
+                    match = match.NextMatch();
+                }
+
+                if (!response_key_values.TryGetValue("err_no", out ret.errno)) throw new LoginFailedException("could not get errno from HTML response");
+                if (!response_key_values.TryGetValue("codeString", out ret.codestring)) throw new LoginFailedException("could not get codestring from HTML response");
+                if (!response_key_values.TryGetValue("vcodetype", out ret.vcodetype)) throw new LoginFailedException("could not get vcodetype from HTML response");
+
+                _captcha_generated = false;
+                return ret;
+            }
+            catch (LoginFailedException ex)
+            {
+                throw ex;
             }
             catch (Exception ex)
             {
-                throw new Exception("重新获取验证码失败", ex);
+                throw new LoginFailedException("post login failed", ex);
             }
-
+            finally
+            {
+                ns.Close();
+            }
         }
+
+        // method implementation of /cgi-bin/genimage
+        private Image _cgi_bin_genimage(string codestring)
+        {
+            var ns = new NetStream();
+            ns.CookieKey = _cookie_identifier;
+            try
+            {
+                Tracer.GlobalTracer.TraceInfo("Fetching: genimage");
+
+                ns.HttpGet("https://passport.baidu.com/cgi-bin/genimage?" + codestring);
+                var binary_data = ns.ReadResponseBinary();
+                var ms = new MemoryStream(binary_data);
+                return Image.FromStream(ms);
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+            finally
+            {
+                ns.Close();
+            }
+        }
+
+        // 这里的单词好像是re-g-get-code-str，不知道是不是我英语不行
+        // method implementation of /v2/?reggetcodestr
+        private struct _regetcodestr_result
+        {
+            public string verifysign;
+            public string verifystr;
+        }
+        private _regetcodestr_result _v2__reggetcodestr(string token, string vcodetype)
+        {
+            var ns = new NetStream();
+            ns.CookieKey = _cookie_identifier;
+
+            try
+            {
+                Tracer.GlobalTracer.TraceInfo("Fetching: reggetcodestr");
+
+                var param = new Parameters();
+                param.Add("token", token);
+                param.Add("tpl", "netdisk");
+                param.Add("subpro", "netdisk_web");
+                param.Add("apiver", "v3");
+                param.Add("tt", (long)(util.ToUnixTimestamp(DateTime.Now) * 1000));
+                param.Add("fr", "login");
+                param.Add("loginversion", "v4");
+                param.Add("vcodetype", vcodetype);
+                param.Add("traceid", "");
+                param.Add("callback", "bd__cbs__nyanya");
+
+                var referer = new Parameters();
+                referer.Add("Referer", "https://pan.baidu.com/");
+
+                ns.HttpGet("https://passport.baidu.com/v2/?reggetcodestr&" + param.BuildQueryString(), headerParam: referer);
+
+                var api_result = ns.ReadResponseString();
+                api_result = _escape_callback_function(api_result);
+
+                var json_api_result = JsonConvert.DeserializeObject(api_result) as JObject;
+
+                var errno = json_api_result["errInfo"].Value<string>("no");
+                if (errno != "0") throw new Exception("get captcha failed");
+
+                return new _regetcodestr_result()
+                {
+                    verifysign = json_api_result["data"].Value<string>("verifySign"),
+                    verifystr = json_api_result["data"].Value<string>("verifyStr")
+                };
+            }
+            finally
+            {
+                ns.Close();
+            }
+        }
+
+
+        //初始化token并返回token
+        private string _get_token()
+        {
+            var ns = new NetStream();
+            ns.CookieKey = _cookie_identifier;
+            try
+            {
+                if (_token == null)
+                {
+                    Tracer.GlobalTracer.TraceInfo("Fetching netdisk main page");
+
+                    ns.HttpGet("https://pan.baidu.com/");
+                    ns.Close();
+
+                    _token = _v2_api__getapi(_get_guid());
+                }
+            }
+            finally
+            {
+                ns.Close();
+            }
+            return _token;
+        }
+        
         #endregion
 
         #region login variables
@@ -384,6 +434,7 @@ namespace BaiduCloudSync
 
         //分辨多用户的标识key
         private string _cookie_identifier;
+        private bool _captcha_generated;
         public string CookieIdentifier { get { return _cookie_identifier; } }
         public BaiduOAuth(string cookieKey = null)
         {
@@ -395,6 +446,7 @@ namespace BaiduCloudSync
             _verifycode = "";
             _codestring = "";
             _vcodetype = "";
+            _captcha_generated = false;
         }
 
         #endregion
@@ -415,64 +467,48 @@ namespace BaiduCloudSync
             _password = password;
             try
             {
-                var json_getapi = _oauth_getapi();
-                var status = json_getapi["errInfo"].Value<string>("no");
-                if (status == "0")
+                // #1 HTTP request: token request
+                _get_token();
+
+                // #2 HTTP request: login check
+                var captcha_data = _v2_api__logincheck(_token, username);
+                //需要验证码并且验证码为空时，引发CaptchaRequiredException
+                if (!string.IsNullOrEmpty(captcha_data.codestring) && _verifycode == null)
                 {
-                    _token = json_getapi["data"].Value<string>("token");
-                    if (string.IsNullOrEmpty(_token)) throw new ArgumentNullException("获取的token为空");
+                    _codestring = captcha_data.codestring;
+                    _vcodetype = captcha_data.vcodetype;
+                    LoginCaptchaRequired?.Invoke();
+                    throw new CaptchaRequiredException();
                 }
-                else
-                    throw new ArgumentException("获取错误：code=" + status);
 
-                var json_logincheck = _oauth_logincheck(_token, _username);
-                status = json_getapi["errInfo"].Value<string>("no");
-                if (status != "0")
-                    throw new ArgumentException("获取错误：code=" + status);
+                // #3 HTTP request: get public key (RSA password encryption)
+                var rsa_key = _v2_getpublickey(_token, _get_guid());
 
-                var html_login = _oauth_login(_token, _username, _password, _codestring, _verifycode);
-                var html_login_noline = html_login.Replace("\r", "").Replace("\n", "");
-                var errno = int.Parse(Regex.Match(html_login_noline, @"err_no=(?<errno>\d+)").Result("${errno}"));
-                _failed_code = errno;
-                _codestring = "";
-                _vcodetype = "";
-                switch (errno)
+                // #4 HTTP request: post login
+                var login_result = _v2_api__login(_token, _codestring, _get_guid(), username, password, rsa_key.key, rsa_key.pubkey, _verifycode);
+                //对登陆结果返回的验证码字段进行赋值
+                if (!string.IsNullOrEmpty(login_result.vcodetype)) _vcodetype = login_result.vcodetype;
+                if (!string.IsNullOrEmpty(login_result.codestring)) _codestring = login_result.codestring;
+                switch (login_result.errno)
                 {
-                    case 0:
+                    case "0":
+                        //登陆成功
                         LoginSucceeded?.Invoke();
-                        _init_login_data();
                         return true;
-                    case 2:
-                        _failed_reason = "2: 用户名或密码错误";
-                        LoginFailed?.Invoke();
-                        return false;
-                    case 6:
-                        _failed_reason = "6: 验证码错误";
-                        LoginFailed?.Invoke();
-                        return false;
-                    case 7:
-                        _failed_reason = "7: 密码错误";
-                        LoginFailed?.Invoke();
-                        return false;
-                    case 257:
-                        _failed_reason = "257: 需要验证码";
-                        _codestring = Regex.Match(html_login_noline, @"codeString=(?<codeString>[0-9a-zA-Z]*)").Result("${codeString}");
-                        _vcodetype = Regex.Match(html_login_noline, @"vcodetype=(?<vcodetype>[0-9a-zA-Z\\/\+=]+)").Result("${vcodetype}");
-                        _vcodetype = _vcodetype.Replace(@"\/", @"/");
+                    case "257":
                         LoginCaptchaRequired?.Invoke();
-                        LoginFailed?.Invoke();
-                        return false;
+                        throw new CaptchaRequiredException();
                     default:
-                        _failed_reason = errno + ": 未知错误";
-                        LoginFailed?.Invoke();
-                        return false;
+                        _failed_code = int.Parse(login_result.errno);
+                        _failed_reason = "";
+                        throw new LoginFailedException("Login failed with response code " + login_result.errno);
                 }
+
             }
             catch (Exception ex)
             {
-                _failed_reason = ex.ToString();
-                Tracer.GlobalTracer.TraceError(_failed_reason);
-                LoginExceptionRaised?.Invoke();
+                Tracer.GlobalTracer.TraceError(ex);
+                LoginFailed?.Invoke();
                 return false;
             }
         }
@@ -484,16 +520,26 @@ namespace BaiduCloudSync
         public Image GetCaptcha()
         {
             Tracer.GlobalTracer.TraceInfo("BaiduOAuth.GetCaptcha called: void");
-            try
+            _get_token();
+            if (string.IsNullOrEmpty(_vcodetype)) return null;
+            if (_captcha_generated)
             {
-                return _oauth_genimage(_codestring);
+                // re-generate the captcha
+                var new_param = _v2__reggetcodestr(_token, _vcodetype);
+                _codestring = new_param.verifystr;
+                if (string.IsNullOrEmpty(_codestring))
+                {
+                    Tracer.GlobalTracer.TraceWarning("got an empty codestring after requesting re-get codestring");
+                    return null;
+                }
+                return _cgi_bin_genimage(_codestring);
             }
-            catch (Exception ex)
+            else
             {
-                _failed_reason = ex.ToString();
-                Tracer.GlobalTracer.TraceError(_failed_reason);
-                LoginExceptionRaised?.Invoke();
-                return new Bitmap(1, 1);
+                // first time generating the captcha
+                if (string.IsNullOrEmpty(_codestring)) return null;
+                _captcha_generated = true;
+                return _cgi_bin_genimage(_codestring);
             }
         }
         /// <summary>
@@ -505,63 +551,6 @@ namespace BaiduCloudSync
             _verifycode = verifycode;
         }
         public string VerifyCode { get { return _verifycode; } set { _verifycode = value; } }
-        /// <summary>
-        /// 检查验证码是否输入正确
-        /// </summary>
-        /// <param name="verifycode">验证码</param>
-        /// <returns>验证码是否正确</returns>
-        /// <remarks>no throw, return false if failed</remarks>
-        public bool CheckVCode(string verifycode)
-        {
-            Tracer.GlobalTracer.TraceInfo("BaiduOAuth.CheckVCode called: verifycode=" + verifycode);
-            if (string.IsNullOrEmpty(verifycode)) return false;
-            _verifycode = verifycode;
-            try
-            {
-                JObject json = _oauth_checkvcode(_token, _codestring, _verifycode);
-                var errno = json["errInfo"].Value<string>("no");
-                var errmsg = json["errInfo"].Value<string>("msg");
-
-                if (errno == "0")
-                {
-                    return true;
-                }
-                else
-                {
-                    return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                _failed_reason = ex.ToString();
-                Tracer.GlobalTracer.TraceError(_failed_reason);
-                LoginExceptionRaised?.Invoke();
-                return false;
-            }
-        }
-        /// <summary>
-        /// 刷新验证码
-        /// </summary>
-        /// <returns>新的验证码</returns>
-        /// <remarks>no throw, return 1x1 bitmap if failed</remarks>
-        public Image RefreshCaptcha()
-        {
-            Tracer.GlobalTracer.TraceInfo("BaiduOAuth.RefreshCaptcha called: void");
-            try
-            {
-                var json = _reget_codestring(_token, _vcodetype);
-                _codestring = json["data"].Value<string>("verifyStr");
-                return _oauth_genimage(_codestring);
-            }
-            catch (Exception ex)
-            {
-                _failed_reason = ex.ToString();
-                Tracer.GlobalTracer.TraceError(_failed_reason);
-                LoginExceptionRaised?.Invoke();
-                return new Bitmap(1, 1);
-            }
-        }
-
         #endregion
 
         #endregion
@@ -580,10 +569,6 @@ namespace BaiduCloudSync
         /// 登陆需验证码
         /// </summary>
         public event LoginEventHandler LoginCaptchaRequired;
-        /// <summary>
-        /// 登陆过程发生异常错误
-        /// </summary>
-        public event LoginEventHandler LoginExceptionRaised;
         /// <summary>
         /// 登陆失败的原因
         /// </summary>
