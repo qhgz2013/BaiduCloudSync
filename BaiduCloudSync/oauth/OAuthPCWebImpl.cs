@@ -52,6 +52,7 @@ namespace BaiduCloudSync.oauth
             {
                 // re-generate the captcha
                 var new_param = _v2__reggetcodestr(_token, _vcodetype);
+                Tracer.GlobalTracer.TraceInfo(new_param.ToString());
                 _codestring = new_param.verifystr;
                 if (string.IsNullOrEmpty(_codestring))
                 {
@@ -139,6 +140,10 @@ namespace BaiduCloudSync.oauth
         {
             public string codestring;
             public string vcodetype;
+            public override string ToString()
+            {
+                return "{codestring=" + codestring + ", vcodetype=" + vcodetype + "}";
+            }
         }
         private _logincheck_result _v2_api__logincheck(string token, string username)
         {
@@ -195,6 +200,10 @@ namespace BaiduCloudSync.oauth
         {
             public string key;
             public string pubkey;
+            public override string ToString()
+            {
+                return "{key=" + key + ", pubkey=" + pubkey + "}";
+            }
         }
         private _getpublickey_result _v2_getpublickey(string token, string gid)
         {
@@ -250,6 +259,10 @@ namespace BaiduCloudSync.oauth
             public string errno;
             public string codestring;
             public string vcodetype;
+            public override string ToString()
+            {
+                return "{errno=" + errno + ", codestring=" + codestring + ", vcodetype=" + vcodetype + "}";
+            }
         }
         private _login_result _v2_api__login(string token, string codestring, string gid, string username, string password, string rsakey, string rsa_publickey, string verify_code)
         {
@@ -325,6 +338,10 @@ namespace BaiduCloudSync.oauth
                     match = match.NextMatch();
                 }
 
+                Tracer.GlobalTracer.TraceInfo("Regex has parsed the following params from HTML:");
+                foreach (var item in response_key_values)
+                    Tracer.GlobalTracer.TraceInfo(item.Key + ": " + item.Value);
+
                 if (!response_key_values.TryGetValue("err_no", out ret.errno)) throw new LoginFailedException("could not get errno from HTML response");
                 if (!response_key_values.TryGetValue("codeString", out ret.codestring)) throw new LoginFailedException("could not get codestring from HTML response");
                 if (!response_key_values.TryGetValue("vcodetype", out ret.vcodetype)) throw new LoginFailedException("could not get vcodetype from HTML response");
@@ -376,6 +393,10 @@ namespace BaiduCloudSync.oauth
         {
             public string verifysign;
             public string verifystr;
+            public override string ToString()
+            {
+                return "{verifysign=" + verifysign + ", verifystr=" + verifystr + "}";
+            }
         }
         private _regetcodestr_result _v2__reggetcodestr(string token, string vcodetype)
         {
@@ -463,6 +484,7 @@ namespace BaiduCloudSync.oauth
 
                 // #2 HTTP request: login check
                 var captcha_data = _v2_api__logincheck(_token, username);
+                Tracer.GlobalTracer.TraceInfo(captcha_data.ToString());
                 //需要验证码并且验证码为空时，引发CaptchaRequiredException
                 if (!string.IsNullOrEmpty(captcha_data.codestring) && captcha == null)
                 {
@@ -473,9 +495,11 @@ namespace BaiduCloudSync.oauth
 
                 // #3 HTTP request: get public key (RSA password encryption)
                 var rsa_key = _v2_getpublickey(_token, _gid);
+                Tracer.GlobalTracer.TraceInfo(rsa_key.ToString());
 
                 // #4 HTTP request: post login
                 var login_result = _v2_api__login(_token, _codestring, _gid, username, password, rsa_key.key, rsa_key.pubkey, (string)captcha);
+                Tracer.GlobalTracer.TraceInfo(login_result.ToString());
                 // 对登陆结果返回的验证码字段进行赋值
                 if (!string.IsNullOrEmpty(login_result.vcodetype)) _vcodetype = login_result.vcodetype;
                 if (!string.IsNullOrEmpty(login_result.codestring)) _codestring = login_result.codestring;
