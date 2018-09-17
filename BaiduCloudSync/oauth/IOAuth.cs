@@ -6,9 +6,9 @@ using System.Text;
 namespace BaiduCloudSync.oauth
 {
     /// <summary>
-    /// 开放授权接口
+    /// 百度开放授权接口
     /// </summary>
-    public interface IAuth
+    public interface IOAuth
     {
         /// <summary>
         /// 登陆
@@ -33,5 +33,21 @@ namespace BaiduCloudSync.oauth
         /// </summary>
         /// <returns></returns>
         bool IsLogin();
+        /// <summary>
+        /// 获取BAIDUID的cookie值
+        /// </summary>
+        /// <returns></returns>
+        string GetBaiduID();
+        /// <summary>
+        /// 获取BDUSS的cookie值
+        /// </summary>
+        /// <returns></returns>
+        string GetBDUSS();
+        /// <summary>
+        /// 获取STOKEN的cookie值
+        /// </summary>
+        /// <returns></returns>
+        string GetSToken();
+
     }
 }

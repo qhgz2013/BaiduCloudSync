@@ -62,7 +62,7 @@ namespace GlobalUtil
             //默认是否忽略系统代理（在默认代理为空的时候起效）
             public const bool DEFAULT_IGNORE_SYSTEM_PROXY = false;
             //默认的user agent（截取自chrome）
-            public const string DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36";
+            public const string DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36";
             //默认发送的数据类型（MIME type）
             public const string DEFAULT_CONTENT_TYPE_PARAM = "application/x-www-form-urlencoded; charset=" + DEFAULT_ENCODING;
             public const string DEFAULT_CONTENT_TYPE_BINARY = "application/octet-stream";
@@ -131,7 +131,17 @@ namespace GlobalUtil
                 try
                 {
                     _slock.AcquireWriterLock(Timeout.Infinite);
-                    var stream = File.Create(file);
+                    Stream stream;
+                    try
+                    {
+                        stream = File.Create(file);
+                    }
+                    catch (DirectoryNotFoundException)
+                    {
+                        var parent = new FileInfo(file).Directory;
+                        util.CreateDirectory(parent.FullName);
+                        stream = File.Create(file);
+                    }
                     var formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
                     formatter.Serialize(stream, DefaultCookieContainer);
                     stream.Close();

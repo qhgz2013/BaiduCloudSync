@@ -82,11 +82,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Config.cs" />
     <Compile Include="oauth\CaptchaRequiredException.cs" />
     <Compile Include="oauth\InvalidCaptchaException.cs" />
     <Compile Include="oauth\LoginFailedException.cs" />
     <Compile Include="oauth\NotLoggedInException.cs" />
-    <Compile Include="oauth\IAuth.cs" />
+    <Compile Include="oauth\IOAuth.cs" />
     <Compile Include="oauth\OAuthPCWebImpl.cs" />
     <Compile Include="oauth\WrongPasswordException.cs" />
     <Compile Include="util\icon-extractor.cs" />
@@ -103,7 +104,6 @@
     <Compile Include="util\task-dispatcher.cs" />
     <Compile Include="util\tracer.cs" />
     <Compile Include="util\net-util.cs" />
-    <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="util\util.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">

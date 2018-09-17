@@ -10,8 +10,10 @@ using System.IO;
 
 namespace BaiduCloudSync.oauth
 {
-    public class OAuthPCWebImpl : IAuth
+    public class OAuthPCWebImpl : IOAuth
     {
+        // 配置文件
+        private Config _config;
         // 用于区分不同账号的cookie所需要的key
         private string _identifier;
         // 用于重复调用login需要的持久变量
@@ -22,14 +24,20 @@ namespace BaiduCloudSync.oauth
         private string _vcodetype;
 
         private bool _captcha_generated; // 指示验证码是否已经生成，用于刷新验证码
-        public OAuthPCWebImpl(string identifier = null)
+        public OAuthPCWebImpl(string identifier = null, Config config = null)
         {
             if (identifier == null)
             {
                 // 通过表单的随机生成算法生成当前cookie所属的key
                 identifier = util.GenerateFormDataBoundary();
             }
+            if (config == null)
+            {
+                // 使用全局配置
+                config = Config.GlobalConfig;
+            }
             _identifier = identifier;
+            _config = config;
             _gid = Guid.NewGuid().ToString().Substring(1);
         }
         /// <summary>
@@ -63,7 +71,16 @@ namespace BaiduCloudSync.oauth
 
         public bool IsLogin()
         {
-            throw new NotImplementedException();
+            if (NetStream.DefaultCookieContainer.ContainsKey(_identifier))
+            {
+                var cookies = NetStream.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
+                foreach (System.Net.Cookie item in cookies)
+                {
+                    if (item.Name.ToLower() == "stoken")
+                        return true;
+                }
+            }
+            return false;
         }
 
         // 下面这一堆函数都是跟服务器通讯的，又臭又长，还要来一堆异常处理
@@ -459,23 +476,54 @@ namespace BaiduCloudSync.oauth
 
                 // #4 HTTP request: post login
                 var login_result = _v2_api__login(_token, _codestring, _gid, username, password, rsa_key.key, rsa_key.pubkey, (string)captcha);
-                //对登陆结果返回的验证码字段进行赋值
+                // 对登陆结果返回的验证码字段进行赋值
                 if (!string.IsNullOrEmpty(login_result.vcodetype)) _vcodetype = login_result.vcodetype;
                 if (!string.IsNullOrEmpty(login_result.codestring)) _codestring = login_result.codestring;
+                // jump as whatever it likes
                 switch (login_result.errno)
                 {
                     case "0":
-                        //登陆成功
+                        // 登陆成功
+                        NetStream.SaveCookie(_config.CookieFileName);
                         return true;
+                    // https://my.oschina.net/mingyuejingque/blog/521176
+                    case "-1":
+                    case "100005":
+                        throw new LoginFailedException("系统错误,请您稍后再试");
+                    case "1":
+                        throw new LoginFailedException("输入的账号格式不正确");
+                    case "2":
+                        throw new LoginFailedException("输入的账号不存在");
+                    case "3":
+                    case "200010":
+                        throw new InvalidCaptchaException("验证码不存在或已过期，请重新输入");
                     case "4":
-                        //密码错误
-                        throw new WrongPasswordException();
+                        throw new WrongPasswordException("您输入的帐号或密码有误");
+                    case "5":
+                    case "120019":
+                    case "120021":
+                    case "400031":
+                        throw new NotImplementedException("请在弹出的窗口操作,或重新登录");
                     case "6":
-                        //验证码错误
-                        throw new InvalidCaptchaException();
+                        throw new InvalidCaptchaException("您输入的验证码有误");
+                    case "7":
+                        throw new WrongPasswordException("密码错误");
+                    case "16":
+                        throw new LoginFailedException("您的帐号因安全问题已被限制登录");
+                    case "17":
+                        throw new LoginFailedException("您的帐号已锁定");
                     case "257":
-                        //需要验证码
-                        throw new CaptchaRequiredException();
+                        throw new CaptchaRequiredException("请输入验证码");
+                    case "100023":
+                        throw new LoginFailedException("开启Cookie之后才能登录");
+                    case "110024":
+                        throw new LoginFailedException("此帐号暂未激活");
+                    case "120027":
+                        throw new LoginFailedException("百度正在进行系统升级，暂时不能提供服务，敬请谅解");
+                    case "401007":
+                        throw new LoginFailedException("您的手机号关联了其他帐号，请选择登录");
+                    case "500010":
+                        throw new LoginFailedException("登录过于频繁,请24小时后再试");
                     default:
                         throw new LoginFailedException("Login failed with response code " + login_result.errno);
                 }
@@ -494,6 +542,32 @@ namespace BaiduCloudSync.oauth
         public bool Logout()
         {
             throw new NotImplementedException();
+        }
+
+        public string GetBaiduID()
+        {
+            return _get_cookie_val("baiduid");
+        }
+
+        public string GetBDUSS()
+        {
+            return _get_cookie_val("bduss");
+        }
+
+        public string GetSToken()
+        {
+            return _get_cookie_val("stoken");
+        }
+
+        private string _get_cookie_val(string name)
+        {
+            if (!IsLogin())
+                throw new NotLoggedInException();
+            var cookies = NetStream.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
+            foreach (System.Net.Cookie cookie in cookies)
+                if (cookie.Name.ToLower() == name.ToLower())
+                    return cookie.Value;
+            throw new InvalidOperationException();
         }
     }
 }

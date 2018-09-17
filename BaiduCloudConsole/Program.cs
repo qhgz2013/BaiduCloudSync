@@ -17,11 +17,12 @@ namespace BaiduCloudConsole
     {
         private static void Main(string[] args)
         {
-            var oauth = new BaiduCloudSync.oauth.OAuthPCWebImpl();
+            NetStream.LoadCookie("data/cookie.dat");
+            BaiduCloudSync.oauth.IOAuth oauth = new BaiduCloudSync.oauth.OAuthPCWebImpl("default");
 
             string username = null, password = null, captcha = null;
             bool keep_captcha = false;
-            for (;;)
+            while (!oauth.IsLogin())
             {
                 if (!keep_captcha)
                 {
@@ -42,7 +43,7 @@ namespace BaiduCloudConsole
                 }
                 catch (BaiduCloudSync.oauth.InvalidCaptchaException)
                 {
-                    Console.WriteLine("验证码错误");
+                    Console.WriteLine("Captcha incorrect");
 
                     var img = (Image)oauth.GetCaptcha();
                     Console.WriteLine("captcha:");
@@ -66,6 +67,14 @@ namespace BaiduCloudConsole
                         captcha = null;
                 }
             }
+
+            Console.WriteLine("login succeeded");
+            Console.WriteLine("Baiduid: " + oauth.GetBaiduID());
+            Console.WriteLine("Bduss: " + oauth.GetBDUSS());
+            Console.WriteLine("Stoken: " + oauth.GetSToken());
+
+            Console.WriteLine("Press any key to exit");
+            Console.ReadKey();
         }
     }
 }
