@@ -132,7 +132,6 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="代码重构规划.txt" />
     <Content Include="加密说明.txt" />
   </ItemGroup>
   <ItemGroup />
