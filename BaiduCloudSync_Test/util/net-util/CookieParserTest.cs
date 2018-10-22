@@ -7,13 +7,19 @@ namespace BaiduCloudSync_Test.util.net_util
     public class CookieParserTest
     {
         [TestMethod]
-        public void TestParseCookieBasic()
+        public void TestParseCookieBasic1()
         {
             var cookie = GlobalUtil.CookieParser.ParseCookie("Set-Cookie: id=23|3?");
             Assert.AreEqual(cookie.Name, "id");
             Assert.AreEqual(cookie.Value, "23|3?");
         }
-
+        [TestMethod]
+        public void TestParseCookieBasic2()
+        {
+            var cookie = GlobalUtil.CookieParser.ParseCookie("Set-Cookie: id=\"23|3?\"");
+            Assert.AreEqual(cookie.Name, "id");
+            Assert.AreEqual(cookie.Value, "23|3?");
+        }
         [TestMethod]
         public void TestParseCookieWithExpires1()
         {
@@ -149,12 +155,21 @@ namespace BaiduCloudSync_Test.util.net_util
             Assert.AreEqual(cookie.Expires, DateTime.MinValue);
         }
         [TestMethod]
-        public void TestParseCookieWithInvalidExpires1()
+        public void TestParseCookieWithExpires4()
         {
-            var cookie = GlobalUtil.CookieParser.ParseCookie("Set-Cookie: id=2333; Expires=Tuesday, 21 Oct 2018 22:39:00 GMT; HttpOnly");
+            var cookie = GlobalUtil.CookieParser.ParseCookie("Set-Cookie: id=2333; Expires=Sunday, 21 Oct 2018 22:39:00 GMT; HttpOnly");
             Assert.AreEqual(cookie.Name, "id");
             Assert.AreEqual(cookie.Value, "2333");
-            Assert.AreEqual(cookie.Expires, DateTime.MinValue);
+            Assert.AreEqual(cookie.Expires, new DateTime(2018, 10, 21, 22, 39, 0));
+            Assert.IsTrue(cookie.HttpOnly);
+        }
+        [TestMethod]
+        public void TestParseCookieWithExpires5()
+        {
+            var cookie = GlobalUtil.CookieParser.ParseCookie("Set-Cookie: id=2333; Expires=Sun, 21-Oct-2018 22:39:00 GMT; HttpOnly");
+            Assert.AreEqual(cookie.Name, "id");
+            Assert.AreEqual(cookie.Value, "2333");
+            Assert.AreEqual(cookie.Expires, new DateTime(2018, 10, 21, 22, 39, 0));
             Assert.IsTrue(cookie.HttpOnly);
         }
         [TestMethod]

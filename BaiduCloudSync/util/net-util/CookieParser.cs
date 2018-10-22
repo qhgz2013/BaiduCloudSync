@@ -29,7 +29,7 @@ namespace GlobalUtil
         {
             if (string.IsNullOrEmpty(str))
                 throw new ArgumentNullException("str");
-            const string set_cookie_str = "Set-Cookie:";
+            const string set_cookie_str = "set-cookie:";
             // "Set-Cookie:"
             if (str.Length <= set_cookie_str.Length)
                 throw new ArgumentException("Empty Set-Cookie message");
@@ -151,11 +151,13 @@ namespace GlobalUtil
                 // / (DQUOTE *cookie-octet DQUOTE)
                 if (str.Length == 0 || str[0] != '"')
                     throw new ArgumentException("Parse cookie failed, expected '\"' (near '" + str + "')");
+                str = str.Substring(1);
                 str = _rfc6265_cookie_octet(str, c, out suc);
                 if (!suc)
                     throw new ArgumentException("Parse cookie value failed");
                 if (str.Length == 0 || str[0] != '"')
                     throw new ArgumentException("Parse cookie failed, expected '\"' (near '" + str + "')");
+                str = str.Substring(1);
             }
             return str;
         }
@@ -226,9 +228,9 @@ namespace GlobalUtil
         private static string _rfc6265_expires_av(string str, Cookie c, out bool suc)
         {
             string origin = str;
-            const string expires_av_str = "Expires=";
+            const string expires_av_str = "expires=";
             // "Expires="
-            if (str.Length > expires_av_str.Length && str.Substring(0, expires_av_str.Length) == expires_av_str)
+            if (str.Length > expires_av_str.Length && str.Substring(0, expires_av_str.Length).ToLower() == expires_av_str)
             {
                 str = str.Substring(expires_av_str.Length);
                 // sane-cookie-date
@@ -251,9 +253,9 @@ namespace GlobalUtil
         private static string _rfc6265_max_age_av(string str, Cookie c, out bool suc)
         {
             string origin = str;
-            const string max_age_av_str = "Max-Age=";
+            const string max_age_av_str = "max-age=";
             // "Max-age="
-            if (str.Length > max_age_av_str.Length && str.Substring(0, max_age_av_str.Length) == max_age_av_str)
+            if (str.Length > max_age_av_str.Length && str.Substring(0, max_age_av_str.Length).ToLower() == max_age_av_str)
             {
                 str = str.Substring(max_age_av_str.Length);
                 int max_age = 0;
@@ -288,9 +290,9 @@ namespace GlobalUtil
         private static string _rfc6265_domain_av(string str, Cookie c, out bool suc)
         {
             string origin = str;
-            const string domain_av_str = "Domain=";
+            const string domain_av_str = "domain=";
             // "Domain="
-            if (str.Length > domain_av_str.Length && str.Substring(0, domain_av_str.Length) == domain_av_str)
+            if (str.Length > domain_av_str.Length && str.Substring(0, domain_av_str.Length).ToLower() == domain_av_str)
             {
                 str = str.Substring(domain_av_str.Length);
                 // domain-value
@@ -310,9 +312,9 @@ namespace GlobalUtil
         private static string _rfc6265_path_av(string str, Cookie c, out bool suc)
         {
             string origin = str;
-            const string path_av_str = "Path=";
+            const string path_av_str = "path=";
             // "Path="
-            if (str.Length > path_av_str.Length && str.Substring(0, path_av_str.Length) == path_av_str)
+            if (str.Length > path_av_str.Length && str.Substring(0, path_av_str.Length).ToLower() == path_av_str)
             {
                 str = str.Substring(path_av_str.Length);
                 // domain-value
@@ -333,9 +335,9 @@ namespace GlobalUtil
         private static string _rfc6265_secure_av(string str, Cookie c, out bool suc)
         {
             string origin = str;
-            const string secure_av_str = "Secure";
+            const string secure_av_str = "secure";
             // "Secure"
-            if (str.Length >= secure_av_str.Length && str.Substring(0, secure_av_str.Length) == secure_av_str)
+            if (str.Length >= secure_av_str.Length && str.Substring(0, secure_av_str.Length).ToLower() == secure_av_str)
             {
                 str = str.Substring(secure_av_str.Length);
                 suc = true;
@@ -351,9 +353,9 @@ namespace GlobalUtil
         private static string _rfc6265_httponly_av(string str, Cookie c, out bool suc)
         {
             string origin = str;
-            const string httponly_av_str = "HttpOnly";
+            const string httponly_av_str = "httponly";
             // "HttpOnly"
-            if (str.Length >= httponly_av_str.Length && str.Substring(0, httponly_av_str.Length) == httponly_av_str)
+            if (str.Length >= httponly_av_str.Length && str.Substring(0, httponly_av_str.Length).ToLower() == httponly_av_str)
             {
                 str = str.Substring(httponly_av_str.Length);
                 suc = true;
@@ -446,10 +448,14 @@ namespace GlobalUtil
             date = null;
 
             // weekday
-            int weekday;
-            str = _rfc2616_weekday(str, out weekday, out suc);
+            int wkday;
+            str = _rfc2616_weekday(str, out wkday, out suc);
             if (!suc)
-                return origin;
+            {
+                str = _rfc2616_wkday(str, out wkday, out suc);
+                if (!suc)
+                    return origin;
+            }
 
             // ","
             suc = false;
@@ -484,7 +490,7 @@ namespace GlobalUtil
 
             // "GMT"
             suc = false;
-            if (str.Length < 3 || str.Substring(0, 3) != "GMT")
+            if (str.Length < 3 || str.Substring(0, 3).ToLower() != "gmt")
                 return origin;
             str = str.Substring(3);
 
@@ -495,7 +501,7 @@ namespace GlobalUtil
             for (int century = current_century; century < 100; century++)
             {
                 validate_date = temp_date.Value.AddYears(century * 100);
-                if ((int)validate_date.DayOfWeek == weekday)
+                if ((int)validate_date.DayOfWeek == wkday)
                 {
                     temp_date = validate_date;
                     suc = true;
@@ -520,9 +526,13 @@ namespace GlobalUtil
 
             // wkday
             int wkday;
-            str = _rfc2616_wkday(str, out wkday, out suc);
+            str = _rfc2616_weekday(str, out wkday, out suc);
             if (!suc)
-                return origin;
+            {
+                str = _rfc2616_wkday(str, out wkday, out suc);
+                if (!suc)
+                    return origin;
+            }
 
             // SP
             str = _rfc2616_sp(str, out suc);
@@ -573,9 +583,13 @@ namespace GlobalUtil
             suc = false;
 
             int wkday;
-            str = _rfc2616_wkday(str, out wkday, out suc);
+            str = _rfc2616_weekday(str, out wkday, out suc);
             if (!suc)
-                return origin;
+            {
+                str = _rfc2616_wkday(str, out wkday, out suc);
+                if (!suc)
+                    return origin;
+            }
 
             // ","
             suc = false;
@@ -585,8 +599,6 @@ namespace GlobalUtil
 
             // SP
             str = _rfc2616_sp(str, out suc);
-            if (!suc)
-                return origin;
 
             // date1
             str = _rfc2616_date1(str, ref temp_date, out suc);
@@ -610,7 +622,7 @@ namespace GlobalUtil
 
             // "GMT"
             suc = false;
-            if (str.Length < 3 || str.Substring(0, 3) != "GMT")
+            if (str.Length < 3 || str.Substring(0, 3).ToLower() != "gmt")
                 return origin;
             str = str.Substring(3);
 
@@ -638,10 +650,14 @@ namespace GlobalUtil
                 return origin;
             str = str.Substring(2);
 
-            // SP
+            // SP | "-"
             str = _rfc2616_sp(str, out suc);
             if (!suc)
-                return origin;
+            {
+                if (str.Length == 0 || str[0] != '-')
+                    return origin;
+                str = str.Substring(1);
+            }
 
             // month
             int int_month;
@@ -649,10 +665,14 @@ namespace GlobalUtil
             if (!suc)
                 return origin;
 
-            // SP
+            // SP | "-"
             str = _rfc2616_sp(str, out suc);
             if (!suc)
-                return origin;
+            {
+                if (str.Length == 0 || str[0] != '-')
+                    return origin;
+                str = str.Substring(1);
+            }
 
             // 4DIGIT
             suc = false;
@@ -690,11 +710,14 @@ namespace GlobalUtil
                 return origin;
             str = str.Substring(2);
 
-            // "-"
-            suc = false;
-            if (str.Length == 0 || str[0] != '-')
-                return origin;
-            str = str.Substring(1);
+            // SP | "-"
+            str = _rfc2616_sp(str, out suc);
+            if (!suc)
+            {
+                if (str.Length == 0 || str[0] != '-')
+                    return origin;
+                str = str.Substring(1);
+            }
 
             // month
             int int_month;
@@ -702,11 +725,14 @@ namespace GlobalUtil
             if (!suc)
                 return origin;
 
-            // "-"
-            suc = false;
-            if (str.Length == 0 || str[0] != '-')
-                return origin;
-            str = str.Substring(1);
+            // SP | "-"
+            str = _rfc2616_sp(str, out suc);
+            if (!suc)
+            {
+                if (str.Length == 0 || str[0] != '-')
+                    return origin;
+                str = str.Substring(1);
+            }
 
             // 2DIGIT
             suc = false;
@@ -782,7 +808,7 @@ namespace GlobalUtil
 
         private static string _rfc2616_month(string str, out int month, out bool suc)
         {
-            string[] months = new string[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+            string[] months = new string[] { "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec" };
             if (str.Length < 3)
             {
                 suc = false;
@@ -793,7 +819,7 @@ namespace GlobalUtil
             int int_month = 1;
             foreach (var mon in months)
             {
-                if (mon == exact_month)
+                if (mon == exact_month.ToLower())
                 {
                     suc = true;
                     month = int_month;
@@ -862,14 +888,14 @@ namespace GlobalUtil
         }
         private static string _rfc2616_weekday(string str, out int weekday, out bool suc)
         {
-            string[] days = new string[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+            string[] days = new string[] { "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday" };
             int index = 0;
             foreach (var day in days)
             {
                 if (str.Length < day.Length)
                     continue;
                 var exact_day = str.Substring(0, day.Length);
-                if (day == exact_day)
+                if (day == exact_day.ToLower())
                 {
                     suc = true;
                     weekday = index;
@@ -891,7 +917,7 @@ namespace GlobalUtil
         }
         private static string _rfc2616_wkday(string str, out int wkday, out bool suc)
         {
-            string[] days = new string[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+            string[] days = new string[] { "sun", "mon", "tue", "wed", "thu", "fri", "sat" };
             if (str.Length < 3)
             {
                 suc = false;
@@ -902,7 +928,7 @@ namespace GlobalUtil
             int index = 0;
             foreach (var day in days)
             {
-                if (day == exact_day)
+                if (day == exact_day.ToLower())
                 {
                     suc = true;
                     wkday = index;
