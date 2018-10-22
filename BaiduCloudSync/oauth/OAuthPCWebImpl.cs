@@ -120,9 +120,9 @@ namespace BaiduCloudSync.oauth
 
                 return json_api_result["data"].Value<string>("token");
             }
-            catch (LoginFailedException ex)
+            catch (LoginFailedException)
             {
-                throw ex;
+                throw;
             }
             catch (Exception ex)
             {
@@ -184,9 +184,9 @@ namespace BaiduCloudSync.oauth
                     vcodetype = json_api_result["data"].Value<string>("vcodetype")
                 };
             }
-            catch (LoginFailedException ex)
+            catch (LoginFailedException)
             {
-                throw ex;
+                throw;
             }
             catch (Exception ex)
             {
@@ -242,9 +242,9 @@ namespace BaiduCloudSync.oauth
                     pubkey = json_api_result.Value<string>("pubkey")
                 };
             }
-            catch (LoginFailedException ex)
+            catch (LoginFailedException)
             {
-                throw ex;
+                throw;
             }
             catch (Exception ex)
             {
@@ -348,9 +348,9 @@ namespace BaiduCloudSync.oauth
                 _captcha_generated = false;
                 return ret;
             }
-            catch (LoginFailedException ex)
+            catch (LoginFailedException)
             {
-                throw ex;
+                throw;
             }
             catch (Exception ex)
             {
@@ -376,9 +376,9 @@ namespace BaiduCloudSync.oauth
                 var ms = new MemoryStream(binary_data);
                 return Image.FromStream(ms);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw ex;
+                throw;
             }
             finally
             {
@@ -552,9 +552,9 @@ namespace BaiduCloudSync.oauth
                 }
 
             }
-            catch (LoginFailedException ex)
+            catch (LoginFailedException)
             {
-                throw ex;
+                throw;
             }
             catch (Exception ex)
             {

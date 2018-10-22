@@ -13,7 +13,7 @@ using System.Threading;
 
 namespace GlobalUtil
 {
-    public partial class NetStream : IDisposable
+    public sealed class NetStream : IDisposable
     {
         #region Constants
         //请求方法
@@ -516,9 +516,9 @@ namespace GlobalUtil
                 _fail_times = 0;
                 return _httpGetAsync(url, callback, state, headerParam, urlParam, range);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw ex;
+                throw;
             }
             finally
             {
@@ -614,7 +614,7 @@ namespace GlobalUtil
                 {
                     if (EnableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
                     _fail_times++;
-                    if (RetryTimes >= 0 && _fail_times > RetryTimes) throw ex;
+                    if (RetryTimes >= 0 && _fail_times > RetryTimes) throw;
                     if (RetryDelay > 0) Thread.Sleep(RetryDelay);
                 }
             } while (true);
@@ -694,9 +694,9 @@ namespace GlobalUtil
                     {
                         _httpGetAsync(_url, _callback, _state, _header_param, _url_param, _range);
                     }
-                    catch (Exception ex2)
+                    catch (Exception)
                     {
-                        throw ex2;
+                        throw;
                     }
                     return; //ignore responsing error data
                 }
@@ -725,7 +725,7 @@ namespace GlobalUtil
                                 break;
                         }
                     }
-                    catch (Exception ex2) { throw ex2; }
+                    catch (Exception) { throw; }
                 }
 
                 try
@@ -777,9 +777,9 @@ namespace GlobalUtil
                 _fail_times = 0;
                 return _httpPostAsync(url, postLength, callback, state, postContentType, headerParam, urlParam, range);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw ex;
+                throw;
             }
             finally
             {
@@ -899,19 +899,19 @@ namespace GlobalUtil
                                     break;
                             }
                         }
-                        catch (Exception ex2)
+                        catch (Exception)
                         {
-                            throw ex2;
+                            throw;
                         }
                     }
-                    if (RetryTimes >= 0 && _fail_times > RetryTimes) throw ex;
+                    if (RetryTimes >= 0 && _fail_times > RetryTimes) throw;
                     if (RetryDelay > 0) Thread.Sleep(RetryDelay);
                 }
                 catch (Exception ex)
                 {
                     if (EnableTracing) Tracer.GlobalTracer.TraceError(ex.ToString());
                     _fail_times++;
-                    if (RetryTimes >= 0 && _fail_times > RetryTimes) throw ex;
+                    if (RetryTimes >= 0 && _fail_times > RetryTimes) throw;
                     if (RetryDelay > 0) Thread.Sleep(RetryDelay);
                 }
             } while (true);
@@ -947,9 +947,9 @@ namespace GlobalUtil
                     {
                         _httpPostAsync(_url, _post_length, _callback, _state, _post_content_type, _header_param, _url_param, _range);
                     }
-                    catch (Exception ex2)
+                    catch (Exception)
                     {
-                        throw ex2;
+                        throw;
                     }
                     return; //ignore responsing error data
                 }
@@ -1057,7 +1057,7 @@ namespace GlobalUtil
                     }
                     catch (Exception) { }
                 }
-                throw ex;
+                throw;
             }
             catch (Exception ex)
             {
@@ -1145,9 +1145,9 @@ namespace GlobalUtil
                 ResponseStream = null;
                 return str;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw ex;
+                throw;
             }
             finally
             {
@@ -1190,9 +1190,9 @@ namespace GlobalUtil
 
                 return container;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw ex;
+                throw;
             }
             finally
             {

@@ -49,6 +49,7 @@ namespace BaiduCloudSync_Test
     /// <summary>
     /// 在期望引发的异常列表内，未包含该种异常时，引发的异常
     /// </summary>
+    [Serializable]
     internal class UnexpectedExceptionTypeException : Exception
     {
         public UnexpectedExceptionTypeException() : base() { }

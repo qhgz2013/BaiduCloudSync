@@ -66,7 +66,7 @@ namespace BaiduCloudSync
                 flags = SHGFI_Flag.SHGFI_ICON | SHGFI_Flag.SHGFI_SMALLICON;
             //flags |= SHGFI_Flag.SHGFI_USEFILEATTRIBUTES;
             //flags |= SHGFI_Flag.SHGFI_LINKOVERLAY;
-            if (SHGetFileInfo(path, 0, ref shinfo, Marshal.SizeOf(shinfo), flags) == 0)
+            if (SHGetFileInfo(path, 0, ref shinfo, Marshal.SizeOf(shinfo), flags) == IntPtr.Zero)
                 return null;
             Icon ico = Icon.FromHandle(shinfo.hIcon);
             ret = (Icon)ico.Clone();

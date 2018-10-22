@@ -8,6 +8,7 @@ namespace BaiduCloudSync.oauth
     /// <summary>
     /// 登陆失败时引发的异常
     /// </summary>
+    [Serializable]
     public class LoginFailedException : Exception
     {
         public LoginFailedException() : base() { }

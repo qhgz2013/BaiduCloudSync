@@ -5,6 +5,10 @@ using System.Text;
 
 namespace BaiduCloudSync.oauth
 {
+    /// <summary>
+    /// 登陆密码错误时引发的异常
+    /// </summary>
+    [Serializable]
     public class WrongPasswordException : LoginFailedException
     {
         public WrongPasswordException() : base() { }

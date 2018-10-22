@@ -9,7 +9,7 @@ namespace GlobalUtil
     /// <summary>
     /// NetStream参数
     /// </summary>
-    public class Parameters : ICollection<KeyValuePair<string, string>>
+    public sealed class Parameters : ICollection<KeyValuePair<string, string>>
     {
         private List<KeyValuePair<string, string>> _list;
         public Parameters()

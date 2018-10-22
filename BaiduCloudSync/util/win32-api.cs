@@ -6,7 +6,7 @@ using System.Text;
 
 namespace GlobalUtil
 {
-    public class Win32API
+    internal sealed class Win32API
     {
         public struct SHFILEINFO
         {
@@ -19,13 +19,13 @@ namespace GlobalUtil
             public string szTypeName;
         }
         [DllImport("user32.dll")]
-        public static extern int DestroyIcon(IntPtr hIcon);
+        public static extern IntPtr DestroyIcon(IntPtr hIcon);
         [DllImport("shell32.dll", CharSet = CharSet.Auto, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         public static extern IntPtr ExtractIcon(IntPtr hInst, string lpszExeFileName, int nIconIndex);
         [DllImport("shell32.dll", BestFitMapping = false, ThrowOnUnmappableChar = true)]
-        public static extern int SHGetFileInfo(string pszPath, int dwszAttributes, ref SHFILEINFO psfi, int cbFileInfo, SHGFI_Flag uFlags);
+        public static extern IntPtr SHGetFileInfo(string pszPath, int dwszAttributes, ref SHFILEINFO psfi, int cbFileInfo, SHGFI_Flag uFlags);
         [DllImport("shell32.dll", BestFitMapping = false, ThrowOnUnmappableChar = true)]
-        public static extern int SHGetFileInfo(IntPtr pszPath, uint dwszAttributes, ref SHFILEINFO psfi, int cbFileInfo, SHGFI_Flag uFlags);
+        public static extern IntPtr SHGetFileInfo(IntPtr pszPath, uint dwszAttributes, ref SHFILEINFO psfi, int cbFileInfo, SHGFI_Flag uFlags);
 
         public enum SHGFI_Flag
         {
