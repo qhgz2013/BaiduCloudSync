@@ -114,7 +114,7 @@ namespace GlobalUtil
         /// <param name="boundary">边界值</param>
         /// <param name="headers">头部实参</param>
         /// <returns></returns>
-        public static string GenerateFormDataObject(string boundary, NetUtils.Parameters headers)
+        public static string GenerateFormDataObject(string boundary, Parameters headers)
         {
             var sb = new StringBuilder();
             if (string.IsNullOrEmpty(boundary)) return string.Empty;

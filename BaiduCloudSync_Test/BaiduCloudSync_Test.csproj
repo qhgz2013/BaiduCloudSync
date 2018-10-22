@@ -60,6 +60,7 @@
     <Compile Include="oauth\OAuthPCWebImplTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ConfigTest.cs" />
+    <Compile Include="util\net-util\CookieParserTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BaiduCloudSync\BaiduCloudSync.csproj">

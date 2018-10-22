@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading;
 using BaiduCloudSync;
 using GlobalUtil;
-using GlobalUtil.NetUtils;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Drawing;
