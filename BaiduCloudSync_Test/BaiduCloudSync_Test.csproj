@@ -62,6 +62,7 @@
     <Compile Include="ConfigTest.cs" />
     <Compile Include="util\net-util\CookieParserTest.cs" />
     <Compile Include="util\net-util\RangeTest.cs" />
+    <Compile Include="util\net-util\HttpSessionTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BaiduCloudSync\BaiduCloudSync.csproj">

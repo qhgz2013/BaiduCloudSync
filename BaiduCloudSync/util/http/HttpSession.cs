@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 
@@ -67,9 +69,9 @@ namespace GlobalUtil.http
         public const string DEFAULT_ENCODING = "utf-8";
 
         //默认连接重试次数
-        public const uint DEFAULT_RETRY_TIMES = 0;
+        public const int DEFAULT_RETRY_TIMES = 5;
         //默认重试的等待时间（ms）
-        public const uint DEFAULT_RETRY_DELAY = 0;
+        public const int DEFAULT_RETRY_DELAY = 0;
 
         //默认保存cookie的文件名
         public const string DEFAULT_COOKIE_FILE_NAME = "cookie.dat";
@@ -161,7 +163,11 @@ namespace GlobalUtil.http
         }
 
         //是否开启调试输出
-        public static bool EnableTracing = false;
+        public static bool EnableTracing = true;
+        //是否开启异常输出
+        public static bool EnableErrorTracing = true;
+        //是否开启调试输出
+        public static bool EnableInfoTracing = false;
         //测试用的计算HTTP头部和本体字节长度
         private long _request_header_length;
         private long _request_protocol_length;
@@ -171,15 +177,15 @@ namespace GlobalUtil.http
         private long _response_body_length;
         //当前的失败统计次数
         private int _fail_times;
+        private StackedHttpException _exception_thrown_on_max_retry_exceeded;
+        private static int _max_stacked_exception_count = 1000;
         //异步重试保存的变量
+        private string _method;
         private Parameters _header_param;
-        private Parameters _url_param;
-        private Range _range;
         private object _state;
         private string _url;
         private EventHandler<HttpFinishedResponseEventArgs> _callback;
-        private string _post_content_type;
-        private long _post_length;
+        private Stream _post_origin_stream;
 
         #region properties
         /// <summary>
@@ -193,7 +199,7 @@ namespace GlobalUtil.http
         /// <summary>
         /// 请求的数据流（仅限POST）
         /// </summary>
-        public Stream RequestStream { get; private set; }
+        //public Stream RequestStream { get; private set; }
         /// <summary>
         /// 响应的数据流
         /// </summary>
@@ -249,7 +255,7 @@ namespace GlobalUtil.http
         /// <summary>
         /// 使用哪一个cookie
         /// </summary>
-        public string CookieKey { get; set; }
+        public string CookieGroup { get; set; }
         /// <summary>
         /// 当代理url为空时是否跳过系统IE代理
         /// </summary>
@@ -267,6 +273,27 @@ namespace GlobalUtil.http
         /// </summary>
         private void _reset_session()
         {
+            // validating property
+            if (RetryDelay < 0)
+                RetryDelay = 0;
+            if (RetryTimes < -1) RetryTimes = -1;
+            if (TimeOut <= 0)
+                TimeOut = int.MaxValue;
+            if (ReadWriteTimeOut <= 0)
+                ReadWriteTimeOut = int.MaxValue;
+            // reset property 
+            if (string.IsNullOrEmpty(CookieGroup))
+                CookieGroup = DEFAULT_COOKIE_GROUP;
+            if (string.IsNullOrEmpty(Accept))
+                Accept = DEFAULT_ACCEPT;
+            if (string.IsNullOrEmpty(AcceptEncoding))
+                AcceptEncoding = DEFAULT_ACCEPT_ENCODING;
+            if (string.IsNullOrEmpty(AcceptLanguage))
+                AcceptLanguage = DEFAULT_ACCEPT_LANGUAGE;
+            if (string.IsNullOrEmpty(UserAgent))
+                UserAgent = DEFAULT_USER_AGENT;
+            ContentType = null;
+
             // reset all internal variables
             _request_body_length = 0;
             _request_header_length = 0;
@@ -274,26 +301,24 @@ namespace GlobalUtil.http
             _response_body_length = 0;
             _response_header_length = 0;
             _response_protocol_length = 0;
-            _range = null;
             _url = null;
+            _method = null;
             _callback = null;
             _state = null;
-            _post_content_type = null;
-            _post_length = 0;
             _fail_times = 0;
             _header_param = null;
-            _url_param = null;
-            // closing request resources
-            if (RequestStream != null)
+            _exception_thrown_on_max_retry_exceeded = new StackedHttpException("Max retry exceeded");
+            if (_post_origin_stream != null)
             {
                 try
                 {
-                    RequestStream.Close();
-                    RequestStream.Dispose();
+                    _post_origin_stream.Close();
+                    _post_origin_stream.Dispose();
                 }
                 catch { }
-                RequestStream = null;
+                _post_origin_stream = null;
             }
+            // closing request resources
             if (ResponseStream != null)
             {
                 try
@@ -324,35 +349,404 @@ namespace GlobalUtil.http
             }
         }
 
+        /// <summary>
+        /// 在自定义HTTP头前添加默认的HTTP头
+        /// </summary>
+        /// <param name="custom_headers"></param>
+        /// <returns></returns>
+        private Parameters _append_default_header(Parameters custom_headers)
+        {
+            var ret = new Parameters();
+            _append_default_header_internal(ret, STR_ACCEPT, Accept);
+            _append_default_header_internal(ret, STR_ACCEPT_ENCODING, AcceptEncoding);
+            _append_default_header_internal(ret, STR_ACCEPT_LANGUAGE, AcceptLanguage);
+            _append_default_header_internal(ret, STR_USER_AGENT, UserAgent);
+            _merge_parameters(ret, custom_headers);
+            return ret;
+        }
+        private void _merge_parameters(Parameters to, Parameters from)
+        {
+            if (to == null || from == null)
+                return;
+            foreach (var item in from)
+                to.Add(item.Key, item.Value);
+        }
+        private void _append_default_header_internal<T>(Parameters header, string key, T value)
+        {
+            if (header != null && !string.IsNullOrEmpty(value.ToString()))
+                header.Add(key, value);
+        }
+
+        private void _update_request_length()
+        {
+            if (HTTP_Request != null)
+            {
+                // protocol
+                // <Method> SP <URI> SP "HTTP/" <ProtocolVersion> CR LF
+                _request_protocol_length = Encoding.UTF8.GetByteCount(HTTP_Request.Method) +
+                    Encoding.UTF8.GetByteCount(HTTP_Request.RequestUri.PathAndQuery) +
+                    Encoding.UTF8.GetByteCount(HTTP_Request.ProtocolVersion.ToString()) +
+                    9;
+                // headers
+                _request_header_length = _get_header_length(HTTP_Request);
+                // specifying HOST and CONNECTION header (not via headers container)
+                _request_header_length += Encoding.UTF8.GetByteCount((HTTP_Request.KeepAlive ? STR_CONNECTION_KEEP_ALIVE: STR_CONNECTION_CLOSE) + HTTP_Request.Host) + 22;
+                // body
+                _request_body_length = _post_origin_stream == null ? 0 : _post_origin_stream.Length;
+            }
+        }
+        private long _get_header_length(object request_or_response)
+        {
+            // headers
+            // CR LF splitting header and body
+            var length = 2;
+            var headers = _reflect_headers(request_or_response);
+            if (headers == null) return 0;
+            foreach (var key in headers.AllKeys)
+            {
+                // <HeaderName> ":" SP <HeaderValue> CR LF
+                foreach (var value in headers.GetValues(key))
+                {
+                    length += Encoding.UTF8.GetByteCount(key) +
+                        Encoding.UTF8.GetByteCount(value) + 4;
+                }
+            }
+            return length;
+        }
+        private void _update_response_length()
+        {
+            if (HTTP_Response != null)
+            {
+                // protocol
+                // "HTTP/" <ProtocolVersion> SP <StatusCode> SP <StatusDescription> CR LF
+                _response_protocol_length = Encoding.UTF8.GetByteCount(HTTP_Response.ProtocolVersion.ToString()) +
+                    Encoding.UTF8.GetByteCount(((int)HTTP_Response.StatusCode).ToString()) +
+                    Encoding.UTF8.GetByteCount(HTTP_Response.StatusDescription) +
+                    9;
+                // headers
+                _response_header_length = _get_header_length(HTTP_Response);
+                // body
+                _response_body_length = HTTP_Response.ContentLength;
+            }
+        }
+        private NameValueCollection _reflect_headers(object request_or_response)
+        {
+            Type base_type = null;
+            if (typeof(WebRequest).IsInstanceOfType(request_or_response))
+                base_type = typeof(WebRequest);
+            else if (typeof(WebResponse).IsInstanceOfType(request_or_response))
+                base_type = typeof(WebResponse);
+            else
+                return null;
+
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+            var header_property = base_type.GetProperty("Headers").GetValue(request_or_response, null);
+            var inner_container = typeof(WebHeaderCollection).GetField("m_InnerCollection", flags).GetValue(header_property) as NameValueCollection;
+            return inner_container;
+        }
+        public HttpSession()
+        {
+            // initialize using default values
+            RetryTimes = DEFAULT_RETRY_TIMES;
+            RetryDelay = DEFAULT_RETRY_DELAY;
+            TimeOut = DEFAULT_TIMEOUT;
+            ReadWriteTimeOut = DEFAULT_READ_WRITE_TIMEOUT;
+            if (!string.IsNullOrEmpty(DEFAULT_PROXY_URL))
+                ProxyUrl = DEFAULT_PROXY_URL;
+            IgnoreSystemProxy = DEFAULT_IGNORE_SYSTEM_PROXY;
+            CookieGroup = DEFAULT_COOKIE_GROUP;
+
+            Accept = DEFAULT_ACCEPT;
+            AcceptEncoding = DEFAULT_ACCEPT_ENCODING;
+            AcceptLanguage = DEFAULT_ACCEPT_LANGUAGE;
+            UserAgent = DEFAULT_USER_AGENT;
+            ContentType = null;
+        }
+
+        public void Close()
+        {
+            _reset_session();
+        }
         public IAsyncResult HttpGetAsync(string url, EventHandler<HttpFinishedResponseEventArgs> callback, object callback_param = null, Parameters header = null, Parameters query = null, Range range = null)
+        {
+            return _http_async(DEFAULT_GET_METHOD, url, callback, callback_param, header, query, null);
+        }
+
+        public void HttpGet(string url, Parameters header = null, Parameters query = null, Range range = null)
+        {
+            var wait_handle = new ManualResetEventSlim();
+            var iar = HttpGetAsync(url, (s, e) =>
+            {
+                wait_handle.Set();
+            }, wait_handle, header, query, range);
+            iar.AsyncWaitHandle.WaitOne();
+            wait_handle.Wait();
+        }
+
+
+        public void HttpPost(string url, Parameters body, Parameters header = null, Parameters query = null, Range range = null)
+        {
+
+        }
+
+        public string ReadResponseString(Encoding encoding = null)
+        {
+            throw new NotImplementedException();
+        }
+
+        public byte[] ReadResponseBinary()
+        {
+            throw new NotImplementedException();
+        }
+        private IAsyncResult _http_async(string method, string url, EventHandler<HttpFinishedResponseEventArgs> callback, object callback_param, Parameters header, Parameters query, Stream request_stream)
         {
             // reset session
             _reset_session();
 
-            // stores the exception during executing the retry loop
-            List<Exception> raised_exceptions = new List<Exception>();
-            while (RetryTimes == -1 || _fail_times < RetryTimes)
+            // initializing variables
+            _method = method;
+            _url = url;
+            _header_param = header;
+            _state = callback_param;
+            _callback = callback;
+            _post_origin_stream = request_stream;
+            if (_post_origin_stream != null)
+                _post_origin_stream = HttpWebRequestHelper.ConvertToSeekableStream(_post_origin_stream);
+
+            // appending query parameters to url
+            if (query != null)
+            {
+                var query_params = query.BuildQueryString();
+                if (query_params.Length > 0)
+                    _url += "?" + query_params;
+            }
+
+            while (RetryTimes == -1 || _fail_times <= RetryTimes)
             {
                 // retry loop
+                #region retry loop
                 try
                 {
-                    var final_url = url;
-                    // appending query parameters to url
-                    if (query != null)
+                    if (EnableTracing && EnableInfoTracing)
+                        Tracer.GlobalTracer.TraceInfo(method + " " + _url);
+
+                    // creating http request
+                    HTTP_Request = (HttpWebRequest)WebRequest.Create(_url);
+
+
+                    // proxy negotiation
+                    if (IgnoreSystemProxy) HTTP_Request.Proxy = null;
+                    else if (Proxy != null) HTTP_Request.Proxy = Proxy;
+
+                    // appending default header which was set by properties (Accept, Accept-Encoding, Accept-Language, User-Agent)
+                    var header_param = _append_default_header(_header_param);
+
+                    // appending header param to http request
+                    HttpWebRequestHelper.MergeParametersToWebRequestHeader(header_param, HTTP_Request);
+
+                    // cookie
+                    if (UseCookie && !header_param.Contains(STR_COOKIE))
                     {
-                        var query_params = query.BuildQueryString();
-                        if (query_params.Length > 0)
-                            final_url += "?" + query_params;
+                        lock (__global_lock)
+                        {
+                            // create new cookie container with specified CookieKey if necessary
+                            if (!DefaultCookieContainer.ContainsKey(CookieGroup))
+                                DefaultCookieContainer.Add(CookieGroup, new CookieContainer());
+                            // set the specified CookieContainer to this session
+                            HTTP_Request.CookieContainer = DefaultCookieContainer[CookieGroup];
+                        }
                     }
 
-                    _header_param = header;
+                    // request method and timeout value
+                    HTTP_Request.Method = method;
+                    HTTP_Request.ReadWriteTimeout = ReadWriteTimeOut;
+                    HTTP_Request.Timeout = TimeOut;
+
+                    // writing post stream
+                    if (_post_origin_stream != null)
+                    {
+                        _post_origin_stream.Seek(0, SeekOrigin.Begin);
+                        return HTTP_Request.BeginGetRequestStream(_http_async_send_request_body_callback, null);
+                    }
+                    else
+                    {
+                        // otherwise, directly get response
+                        return _http_async_get_response_callback();
+                    }
                 }
                 catch (Exception ex)
                 {
+                    // appending exceptions
+                    _fail_times++;
+                    if (_exception_thrown_on_max_retry_exceeded.Count < _max_stacked_exception_count)
+                        _exception_thrown_on_max_retry_exceeded.Add(ex);
+                    if (EnableTracing && EnableErrorTracing)
+                        Tracer.GlobalTracer.TraceError(ex);
+                }
+                #endregion
+            }
 
+            // loop exited, the only scene is that _fail_times >= RetryTimes
+            // raise exception here
+            throw _exception_thrown_on_max_retry_exceeded;
+        }
+
+        // BeginGetRequestStream后的回调函数
+        private void _http_async_send_request_body_callback(IAsyncResult iar)
+        {
+            try
+            {
+                byte[] buffer = new byte[4096];
+                // async end
+                var stream_out = HTTP_Request.EndGetRequestStream(iar);
+
+                // put the stream
+                while (_post_origin_stream.Position < _post_origin_stream.Length)
+                {
+                    int n_read = _post_origin_stream.Read(buffer, 0, 4096);
+                    if (n_read > 0)
+                        stream_out.Write(buffer, 0, n_read);
+                }
+                stream_out.Close();
+
+                // ask for response
+                _http_async_get_response_callback();
+            }
+            catch (Exception ex)
+            {
+                _handle_mid_stage_exception(ex);
+            }
+        }
+        private IAsyncResult _http_async_get_response_callback()
+        {
+            // updating length properties
+            _update_request_length();
+
+            // async requesting
+            return HTTP_Request.BeginGetResponse(_http_async_response_callback, null);
+        }
+
+        private void _http_async_response_callback(IAsyncResult iar)
+        {
+            try
+            {
+                if (HTTP_Request == null) return;
+
+                // get response, ignoring protocol error
+                try
+                {
+                    HTTP_Response = (HttpWebResponse)HTTP_Request.EndGetResponse(iar);
+                }
+                catch (WebException ex2)
+                {
+                    if (ex2.Status != WebExceptionStatus.ProtocolError)
+                        throw;
+                }
+
+                // handling response cookie
+                if (UseCookie)
+                {
+                    var headers = _reflect_headers(HTTP_Response);
+                    foreach (var header in headers.AllKeys)
+                        if (header.ToLower() == STR_SETCOOKIE.ToLower())
+                        {
+                            var cookies = headers.GetValues(header);
+                            var cc = new CookieCollection();
+                            foreach (var str_cookie in cookies)
+                            {
+                                var cookie = CookieParser.ParseCookie(STR_SETCOOKIE + ": " + str_cookie);
+                                if (string.IsNullOrEmpty(cookie.Domain))
+                                    cookie.Domain = new Uri(_url).Host;
+                                cc.Add(cookie);
+                            }
+                            lock (__global_lock)
+                            {
+                                if (!DefaultCookieContainer.ContainsKey(CookieGroup))
+                                    DefaultCookieContainer.Add(CookieGroup, new CookieContainer());
+                                DefaultCookieContainer[CookieGroup].Add(cc);
+                            }
+                            break;
+                        }
+                }
+
+                // updating length
+                _update_response_length();
+
+                // adapting response stream
+                ResponseStream = _adapt_response_stream(HTTP_Response);
+                _invoke_callback();
+            }
+            catch (Exception ex)
+            {
+                _handle_mid_stage_exception(ex);
+            }
+        }
+
+        private bool _check_request_cancelled(Exception ex)
+        {
+            return (typeof(WebRequest).IsInstanceOfType(ex) && ((WebException)ex).Status == WebExceptionStatus.RequestCanceled);
+        }
+
+        private Stream _adapt_response_stream(HttpWebResponse response)
+        {
+            switch (response.ContentEncoding)
+            {
+                case STR_ACCEPT_ENCODING_GZIP:
+                    return new System.IO.Compression.GZipStream(response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                case STR_ACCEPT_ENCODING_DEFLATE:
+                    return new System.IO.Compression.DeflateStream(response.GetResponseStream(), System.IO.Compression.CompressionMode.Decompress);
+                default:
+                    return HTTP_Response.GetResponseStream();
+            }
+        }
+
+        private void _handle_mid_stage_exception(Exception ex)
+        {
+            // oops, something went wrong when putting stream to internet
+            _fail_times++;
+
+            // log the exception
+            if (_exception_thrown_on_max_retry_exceeded.Count < _max_stacked_exception_count)
+                _exception_thrown_on_max_retry_exceeded.Add(ex);
+            if (EnableTracing && EnableErrorTracing)
+                Tracer.GlobalTracer.TraceError(ex);
+
+            if (!_check_request_cancelled(ex) && (RetryTimes == -1 || _fail_times < RetryTimes))
+            {
+                // if request is not cancelled yet, retry request
+                try
+                {
+                    _http_async(_method, _url, _callback, _state, _header_param, null, _post_origin_stream);
+                }
+                catch (Exception)
+                {
+                    // retry failed, invoking failure callback
+                    _invoke_callback();
                 }
             }
-            throw new NotImplementedException();
+            else
+            {
+                // callback when retry failed or cancelled
+                _invoke_callback();
+            }
+        }
+
+        // 调用回调函数
+        private void _invoke_callback()
+        {
+            try
+            {
+                _callback?.Invoke(this, new HttpFinishedResponseEventArgs(this, _state));
+            }
+            catch (Exception ex)
+            {
+                // unexpected exception while invoking callback function
+                if (EnableTracing && EnableErrorTracing)
+                {
+                    Tracer.GlobalTracer.TraceError("Unexpected exception caught while invoking HttpSession callback");
+                    Tracer.GlobalTracer.TraceError(ex);
+                }
+            }
         }
     }
 
@@ -370,88 +764,4 @@ namespace GlobalUtil.http
         }
     }
 
-    internal sealed class HttpWebRequestHelper
-    {
-        public static void MergeParametersToWebRequestHeader(Parameters header, HttpWebRequest request)
-        {
-            if (header == null)
-                return;
-            var merge_attributes = new Dictionary<string, _prototype_reflect_assign>();
-            merge_attributes.Add(HttpSession.STR_ACCEPT, _str_reflect_assign);
-            merge_attributes.Add(HttpSession.STR_CONNECTION, _connection_assign);
-            merge_attributes.Add(HttpSession.STR_CONTENT_LENGTH, _parsable_reflect_assign<long>);
-            merge_attributes.Add(HttpSession.STR_CONTENT_TYPE, _str_reflect_assign);
-            merge_attributes.Add(HttpSession.STR_EXPECT, _expect_assign);
-            merge_attributes.Add(HttpSession.STR_DATE, _parsable_reflect_assign<DateTime>);
-            merge_attributes.Add(HttpSession.STR_HOST, _str_reflect_assign);
-            merge_attributes.Add(HttpSession.STR_IF_MODIFIED_SINCE, _parsable_reflect_assign<DateTime>);
-            merge_attributes.Add(HttpSession.STR_RANGE, _range_assign);
-            merge_attributes.Add(HttpSession.STR_REFERER, _str_reflect_assign);
-            merge_attributes.Add(HttpSession.STR_TRANSFER_ENCODING, _transfer_encoding_assign);
-            merge_attributes.Add(HttpSession.STR_USER_AGENT, _str_reflect_assign);
-            foreach (var param in header)
-            {
-                if (merge_attributes.ContainsKey(param.Key))
-                    merge_attributes[param.Key].Invoke(request, param.Key, param.Value);
-                else
-                    _default_assign(request, param.Key, param.Value);
-            }
-        }
-        private delegate void _prototype_reflect_assign(HttpWebRequest request, string key, string value);
-        private static void _default_assign(HttpWebRequest request, string key, string value)
-        {
-            request.Headers.Add(key, value);
-        }
-        private static void _str_reflect_assign(HttpWebRequest request, string key, string value)
-        {
-            request.GetType().GetProperty(key.Replace("-", "")).SetValue(request, value, null);
-        }
-        private static void _parsable_reflect_assign<T>(HttpWebRequest request, string key, string value)
-        {
-            T result = (T)Convert.ChangeType(value, typeof(T));
-            request.GetType().GetProperty(key.Replace("-", "")).SetValue(request, result, null);
-        }
-        private static void _connection_assign(HttpWebRequest request, string key, string value)
-        {
-            if (value.ToLower() == HttpSession.STR_CONNECTION_KEEP_ALIVE)
-                request.KeepAlive = true;
-            else if (value.ToLower() == HttpSession.STR_CONNECTION_CLOSE)
-                request.KeepAlive = false;
-            else
-                throw new ArgumentException("Invalid Connection status");
-        }
-        private static void _expect_assign(HttpWebRequest request, string key, string value)
-        {
-            Tracer.GlobalTracer.TraceWarning("Changing header field 'Expect' will affect all connections in the same ServicePoint.");
-            if (value.ToLower() == HttpSession.STR_100_CONTINUE)
-                request.ServicePoint.Expect100Continue = true;
-            else if (string.IsNullOrEmpty(value))
-                request.ServicePoint.Expect100Continue = false;
-            else
-                throw new ArgumentException("Invalid Expect value");
-        }
-        private static void _range_assign(HttpWebRequest request, string key, string value)
-        {
-            if (string.IsNullOrEmpty(value)) return;
-            if (value.ToLower().StartsWith("bytes="))
-                value = value.Substring(6);
-            var range = Range.Parse(value);
-            if (range.From == null && range.To == null) return;
-            if (range.To == null)
-                request.AddRange(range.From.Value);
-            else if (range.From == null)
-                request.AddRange(-range.To.Value);
-            else
-                request.AddRange(range.From.Value, range.To.Value);
-        }
-        private static void _transfer_encoding_assign(HttpWebRequest request, string key, string value)
-        {
-            if (value.ToLower() == HttpSession.STR_CHUNKED)
-                request.SendChunked = true;
-            else if (string.IsNullOrEmpty(value))
-                request.SendChunked = false;
-            else
-                throw new ArgumentException("Invalid Transfer-Encoding value");
-        }
-    }
 }

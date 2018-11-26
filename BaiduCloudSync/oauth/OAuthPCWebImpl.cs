@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using GlobalUtil;
+using GlobalUtil.http;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
@@ -71,9 +72,9 @@ namespace BaiduCloudSync.oauth
 
         public bool IsLogin()
         {
-            if (NetStream.DefaultCookieContainer.ContainsKey(_identifier))
+            if (HttpSession.DefaultCookieContainer.ContainsKey(_identifier))
             {
-                var cookies = NetStream.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
+                var cookies = HttpSession.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
                 foreach (System.Net.Cookie item in cookies)
                 {
                     if (item.Name.ToLower() == "stoken")
@@ -89,8 +90,8 @@ namespace BaiduCloudSync.oauth
         // method implementation of GET /v2/api/?getapi
         private string _v2_api__getapi(string gid)
         {
-            var ns = new NetStream();
-            ns.CookieKey = _identifier;
+            var ns = new HttpSession();
+            ns.CookieGroup = _identifier;
 
             try
             {
@@ -111,7 +112,7 @@ namespace BaiduCloudSync.oauth
                 var referer = new Parameters();
                 referer.Add("Referer", "https://pan.baidu.com/");
 
-                ns.HttpGet("https://passport.baidu.com/v2/api/?getapi&" + query_param.BuildQueryString(), headerParam: referer);
+                ns.HttpGet("https://passport.baidu.com/v2/api/?getapi&" + query_param.BuildQueryString(), header: referer);
                 var api_result = ns.ReadResponseString();
                 api_result = util.EscapeCallbackFunction(api_result);
                 var json_api_result = JsonConvert.DeserializeObject(api_result) as JObject;
@@ -146,8 +147,8 @@ namespace BaiduCloudSync.oauth
         }
         private _logincheck_result _v2_api__logincheck(string token, string username)
         {
-            var ns = new NetStream();
-            ns.CookieKey = _identifier;
+            var ns = new HttpSession();
+            ns.CookieGroup = _identifier;
 
             try
             {
@@ -169,7 +170,7 @@ namespace BaiduCloudSync.oauth
                 var referer = new Parameters();
                 referer.Add("Referer", "https://pan.baidu.com/");
 
-                ns.HttpGet("https://passport.baidu.com/v2/api/?logincheck&" + param.BuildQueryString(), headerParam: referer);
+                ns.HttpGet("https://passport.baidu.com/v2/api/?logincheck&" + param.BuildQueryString(), header: referer);
 
                 var api_result = ns.ReadResponseString();
                 api_result = util.EscapeCallbackFunction(api_result);
@@ -206,8 +207,8 @@ namespace BaiduCloudSync.oauth
         }
         private _getpublickey_result _v2_getpublickey(string token, string gid)
         {
-            var ns = new NetStream();
-            ns.CookieKey = _identifier;
+            var ns = new HttpSession();
+            ns.CookieGroup = _identifier;
             try
             {
                 Tracer.GlobalTracer.TraceInfo("Fetching: getpublickey");
@@ -226,7 +227,7 @@ namespace BaiduCloudSync.oauth
                 var referer = new Parameters();
                 referer.Add("Referer", "https://pan.baidu.com/");
 
-                ns.HttpGet("https://passport.baidu.com/v2/getpublickey", urlParam: param, headerParam: referer);
+                ns.HttpGet("https://passport.baidu.com/v2/getpublickey", query: param, header: referer);
 
                 var api_result = ns.ReadResponseString();
                 api_result = util.EscapeCallbackFunction(api_result);
@@ -265,8 +266,8 @@ namespace BaiduCloudSync.oauth
         }
         private _login_result _v2_api__login(string token, string codestring, string gid, string username, string password, string rsakey, string rsa_publickey, string verify_code)
         {
-            var ns = new NetStream();
-            ns.CookieKey = _identifier;
+            var ns = new HttpSession();
+            ns.CookieGroup = _identifier;
 
             try
             {
@@ -318,7 +319,7 @@ namespace BaiduCloudSync.oauth
                 header.Add("Origin", "https://pan.baidu.com");
                 header.Add("Referer", "https://pan.baidu.com/");
 
-                ns.HttpPost("https://passport.baidu.com/v2/api/?login", body, headerParam: header);
+                ns.HttpPost("https://passport.baidu.com/v2/api/?login", body, header: header);
 
                 var response = ns.ReadResponseString();
 
@@ -365,8 +366,8 @@ namespace BaiduCloudSync.oauth
         // method implementation of /cgi-bin/genimage
         private Image _cgi_bin_genimage(string codestring)
         {
-            var ns = new NetStream();
-            ns.CookieKey = _identifier;
+            var ns = new HttpSession();
+            ns.CookieGroup = _identifier;
             try
             {
                 Tracer.GlobalTracer.TraceInfo("Fetching: genimage");
@@ -399,8 +400,8 @@ namespace BaiduCloudSync.oauth
         }
         private _regetcodestr_result _v2__reggetcodestr(string token, string vcodetype)
         {
-            var ns = new NetStream();
-            ns.CookieKey = _identifier;
+            var ns = new HttpSession();
+            ns.CookieGroup = _identifier;
 
             try
             {
@@ -421,7 +422,7 @@ namespace BaiduCloudSync.oauth
                 var referer = new Parameters();
                 referer.Add("Referer", "https://pan.baidu.com/");
 
-                ns.HttpGet("https://passport.baidu.com/v2/?reggetcodestr&" + param.BuildQueryString(), headerParam: referer);
+                ns.HttpGet("https://passport.baidu.com/v2/?reggetcodestr&" + param.BuildQueryString(), header: referer);
 
                 var api_result = ns.ReadResponseString();
                 api_result = util.EscapeCallbackFunction(api_result);
@@ -447,8 +448,8 @@ namespace BaiduCloudSync.oauth
         //初始化token并返回token
         private string _get_token()
         {
-            var ns = new NetStream();
-            ns.CookieKey = _identifier;
+            var ns = new HttpSession();
+            ns.CookieGroup = _identifier;
             try
             {
                 if (_token == null)
@@ -507,7 +508,7 @@ namespace BaiduCloudSync.oauth
                 {
                     case "0":
                         // 登陆成功
-                        NetStream.SaveCookie(_config.CookieFileName);
+                        HttpSession.SaveCookie(_config.CookieFileName);
                         return true;
                     // https://my.oschina.net/mingyuejingque/blog/521176
                     case "-1":
@@ -586,7 +587,7 @@ namespace BaiduCloudSync.oauth
         {
             if (!IsLogin())
                 throw new NotLoggedInException();
-            var cookies = NetStream.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
+            var cookies = HttpSession.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
             foreach (System.Net.Cookie cookie in cookies)
                 if (cookie.Name.ToLower() == name.ToLower())
                     return cookie.Value;

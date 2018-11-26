@@ -2,6 +2,7 @@
 //
 // 放一些常用的函数
 //
+using GlobalUtil.http;
 using System;
 using System.Collections.Generic;
 using System.IO;

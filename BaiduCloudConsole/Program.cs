@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using BaiduCloudSync;
-using GlobalUtil;
+using GlobalUtil.http;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Drawing;
@@ -16,7 +16,7 @@ namespace BaiduCloudConsole
     {
         private static void Main(string[] args)
         {
-            NetStream.LoadCookie("data/cookie.dat");
+            HttpSession.LoadCookie("data/cookie.dat");
             BaiduCloudSync.oauth.IOAuth oauth = new BaiduCloudSync.oauth.OAuthPCWebImpl("default");
 
             string username = null, password = null, captcha = null;

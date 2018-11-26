@@ -1,6 +1,6 @@
 ﻿using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using GlobalUtil;
+using GlobalUtil.http;
 
 namespace BaiduCloudSync_Test.util.net_util
 {
