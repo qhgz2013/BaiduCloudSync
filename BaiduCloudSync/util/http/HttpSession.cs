@@ -79,6 +79,8 @@ namespace GlobalUtil.http
         public const string DEFAULT_COOKIE_GROUP = "default";
         //默认的TCP连接数
         public const int DEFAULT_TCP_CONNECTION = 1000;
+        //默认是否使用cookie进行HTTP请求
+        public const bool DEFAULT_USE_COOKIE = true;
         #endregion
 
 
@@ -168,13 +170,6 @@ namespace GlobalUtil.http
         public static bool EnableErrorTracing = true;
         //是否开启调试输出
         public static bool EnableInfoTracing = false;
-        //测试用的计算HTTP头部和本体字节长度
-        private long _request_header_length;
-        private long _request_protocol_length;
-        private long _request_body_length;
-        private long _response_header_length;
-        private long _response_protocol_length;
-        private long _response_body_length;
         //当前的失败统计次数
         private int _fail_times;
         private StackedHttpException _exception_thrown_on_max_retry_exceeded;
@@ -260,12 +255,6 @@ namespace GlobalUtil.http
         /// 当代理url为空时是否跳过系统IE代理
         /// </summary>
         public bool IgnoreSystemProxy { get; set; }
-        public long RequestProtocolLength { get { return _request_protocol_length; } }
-        public long RequestHeaderLength { get { return _request_header_length; } }
-        public long RequestBodyLength { get { return _request_body_length; } }
-        public long ResponseProtocolLength { get { return _response_protocol_length; } }
-        public long ResponseHeaderLength { get { return _response_header_length; } }
-        public long ResponseBodyLength { get { return _response_body_length; } }
         #endregion
 
         /// <summary>
@@ -295,17 +284,11 @@ namespace GlobalUtil.http
             ContentType = null;
 
             // reset all internal variables
-            _request_body_length = 0;
-            _request_header_length = 0;
-            _request_protocol_length = 0;
-            _response_body_length = 0;
-            _response_header_length = 0;
-            _response_protocol_length = 0;
             _url = null;
             _method = null;
             _callback = null;
             _state = null;
-            _fail_times = 0;
+            //_fail_times = 0;
             _header_param = null;
             _exception_thrown_on_max_retry_exceeded = new StackedHttpException("Max retry exceeded");
             if (_post_origin_stream != null)
@@ -376,91 +359,26 @@ namespace GlobalUtil.http
             if (header != null && !string.IsNullOrEmpty(value.ToString()))
                 header.Add(key, value);
         }
-
-        private void _update_request_length()
-        {
-            if (HTTP_Request != null)
-            {
-                // protocol
-                // <Method> SP <URI> SP "HTTP/" <ProtocolVersion> CR LF
-                _request_protocol_length = Encoding.UTF8.GetByteCount(HTTP_Request.Method) +
-                    Encoding.UTF8.GetByteCount(HTTP_Request.RequestUri.PathAndQuery) +
-                    Encoding.UTF8.GetByteCount(HTTP_Request.ProtocolVersion.ToString()) +
-                    9;
-                // headers
-                _request_header_length = _get_header_length(HTTP_Request);
-                // specifying HOST and CONNECTION header (not via headers container)
-                _request_header_length += Encoding.UTF8.GetByteCount((HTTP_Request.KeepAlive ? STR_CONNECTION_KEEP_ALIVE: STR_CONNECTION_CLOSE) + HTTP_Request.Host) + 22;
-                // body
-                _request_body_length = _post_origin_stream == null ? 0 : _post_origin_stream.Length;
-            }
-        }
-        private long _get_header_length(object request_or_response)
-        {
-            // headers
-            // CR LF splitting header and body
-            var length = 2;
-            var headers = _reflect_headers(request_or_response);
-            if (headers == null) return 0;
-            foreach (var key in headers.AllKeys)
-            {
-                // <HeaderName> ":" SP <HeaderValue> CR LF
-                foreach (var value in headers.GetValues(key))
-                {
-                    length += Encoding.UTF8.GetByteCount(key) +
-                        Encoding.UTF8.GetByteCount(value) + 4;
-                }
-            }
-            return length;
-        }
-        private void _update_response_length()
-        {
-            if (HTTP_Response != null)
-            {
-                // protocol
-                // "HTTP/" <ProtocolVersion> SP <StatusCode> SP <StatusDescription> CR LF
-                _response_protocol_length = Encoding.UTF8.GetByteCount(HTTP_Response.ProtocolVersion.ToString()) +
-                    Encoding.UTF8.GetByteCount(((int)HTTP_Response.StatusCode).ToString()) +
-                    Encoding.UTF8.GetByteCount(HTTP_Response.StatusDescription) +
-                    9;
-                // headers
-                _response_header_length = _get_header_length(HTTP_Response);
-                // body
-                _response_body_length = HTTP_Response.ContentLength;
-            }
-        }
-        private NameValueCollection _reflect_headers(object request_or_response)
-        {
-            Type base_type = null;
-            if (typeof(WebRequest).IsInstanceOfType(request_or_response))
-                base_type = typeof(WebRequest);
-            else if (typeof(WebResponse).IsInstanceOfType(request_or_response))
-                base_type = typeof(WebResponse);
-            else
-                return null;
-
-            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
-            var header_property = base_type.GetProperty("Headers").GetValue(request_or_response, null);
-            var inner_container = typeof(WebHeaderCollection).GetField("m_InnerCollection", flags).GetValue(header_property) as NameValueCollection;
-            return inner_container;
-        }
-        public HttpSession()
+        
+        public HttpSession(bool use_cookie = DEFAULT_USE_COOKIE, int retry_times = DEFAULT_RETRY_TIMES, int retry_delay = DEFAULT_RETRY_DELAY, int timeout = DEFAULT_TIMEOUT, int read_write_timeout = DEFAULT_READ_WRITE_TIMEOUT,
+            string proxy_url = DEFAULT_PROXY_URL, bool ignore_system_proxy = DEFAULT_IGNORE_SYSTEM_PROXY, string cookie_group = DEFAULT_COOKIE_GROUP, string user_agent = DEFAULT_USER_AGENT, string content_type = null)
         {
             // initialize using default values
-            RetryTimes = DEFAULT_RETRY_TIMES;
-            RetryDelay = DEFAULT_RETRY_DELAY;
-            TimeOut = DEFAULT_TIMEOUT;
-            ReadWriteTimeOut = DEFAULT_READ_WRITE_TIMEOUT;
-            if (!string.IsNullOrEmpty(DEFAULT_PROXY_URL))
-                ProxyUrl = DEFAULT_PROXY_URL;
-            IgnoreSystemProxy = DEFAULT_IGNORE_SYSTEM_PROXY;
-            CookieGroup = DEFAULT_COOKIE_GROUP;
+            UseCookie = use_cookie;
+            RetryTimes = retry_times;
+            RetryDelay = retry_delay;
+            TimeOut = timeout;
+            ReadWriteTimeOut = read_write_timeout;
+            if (!string.IsNullOrEmpty(proxy_url))
+                ProxyUrl = proxy_url;
+            IgnoreSystemProxy = ignore_system_proxy;
+            CookieGroup = cookie_group;
 
             Accept = DEFAULT_ACCEPT;
             AcceptEncoding = DEFAULT_ACCEPT_ENCODING;
             AcceptLanguage = DEFAULT_ACCEPT_LANGUAGE;
-            UserAgent = DEFAULT_USER_AGENT;
-            ContentType = null;
+            UserAgent = user_agent;
+            ContentType = content_type;
         }
 
         public void Close()
@@ -469,6 +387,7 @@ namespace GlobalUtil.http
         }
         public IAsyncResult HttpGetAsync(string url, EventHandler<HttpFinishedResponseEventArgs> callback, object callback_param = null, Parameters header = null, Parameters query = null, Range range = null)
         {
+            _fail_times = 0;
             return _http_async(DEFAULT_GET_METHOD, url, callback, callback_param, header, query, null);
         }
 
@@ -489,14 +408,89 @@ namespace GlobalUtil.http
 
         }
 
+        /// <summary>
+        /// 从ResponseStream中读取所有字节，并使用指定编码返回其字符串
+        /// </summary>
+        /// <param name="encoding">编码类型，如为null则使用DEFAULT_ENCODING编码</param>
+        /// <returns>若ResponseStream为null，则返回null，否则返回对应的string</returns>
+        /// <exception cref="IOException">在读取ResponseStream失败时引发的异常</exception>
+        /// <exception cref="ArgumentException">在获取Encoding失败时引发的异常</exception>
         public string ReadResponseString(Encoding encoding = null)
         {
-            throw new NotImplementedException();
+            try
+            {
+                byte[] binary_array = ReadResponseBinary();
+                if (binary_array == null) return null;
+                if (encoding == null)
+                    encoding = Encoding.GetEncoding(DEFAULT_ENCODING);
+                return encoding.GetString(binary_array);
+            }
+            catch (ArgumentException)
+            {
+                throw new ArgumentException("Could not find default encoding (" + DEFAULT_ENCODING + ") in the system runtime environment");
+            }
+
+
         }
 
+        /// <summary>
+        /// 从ResponseStream中读取所有字节，并返回其字节数组（在content过大时会消耗大量内存）
+        /// </summary>
+        /// <returns>若ResponseStream为null，则返回null，否则返回对应大小的byte[]数组</returns>
+        /// <exception cref="IOException">在读取ResponseStream失败时引发的异常</exception>
         public byte[] ReadResponseBinary()
         {
-            throw new NotImplementedException();
+            if (ResponseStream == null) return null;
+            if (HTTP_Response.ContentLength == 0) return new byte[0];
+            MemoryStream ms = null;
+            bool is_ms_resizable = HTTP_Response.ContentLength < 0;
+            if (is_ms_resizable)
+                // adaptive size
+                ms = new MemoryStream();
+            else
+                // fixed size
+                ms = new MemoryStream(new byte[HTTP_Response.ContentLength]);
+
+            try
+            {
+                int total_readed_bytes = 0;
+                int readed_bytes = 0;
+                byte[] buffer = new byte[4096];
+                bool warn_on_buffer_overflow = false;
+                do
+                {
+                    readed_bytes = ResponseStream.Read(buffer, 0, 4096);
+                    total_readed_bytes += readed_bytes;
+                    if (!is_ms_resizable && total_readed_bytes > ms.Length && !warn_on_buffer_overflow)
+                    {
+                        warn_on_buffer_overflow = true;
+                        // bytes overflow
+                        Tracer.GlobalTracer.TraceWarning("Buffer overflow detected while reading response stream, converting non-resizable memory stream to resizable memory stream (this opeation will consume a lot of memory and time)");
+                        var new_adaptive_ms = new MemoryStream(total_readed_bytes);
+                        // copying stream
+                        byte[] memory_buffer = new byte[1048576]; // using 1M memory block
+                        ms.Position = 0;
+                        int temp_read = 0;
+                        do
+                        {
+                            temp_read = ms.Read(memory_buffer, 0, 1048576);
+                            new_adaptive_ms.Write(memory_buffer, 0, temp_read);
+                        } while (temp_read > 0);
+                        // closing origin memory stream and replace new memory stream
+                        ms.Close();
+                        ms.Dispose();
+                        ms = new_adaptive_ms;
+                    }
+                    ms.Write(buffer, 0, readed_bytes);
+                } while (readed_bytes > 0);
+
+            }
+            catch (IOException) { throw; }
+            catch (Exception ex)
+            {
+                throw new IOException("Read response stream failed", ex);
+            }
+            return ms.ToArray();
         }
         private IAsyncResult _http_async(string method, string url, EventHandler<HttpFinishedResponseEventArgs> callback, object callback_param, Parameters header, Parameters query, Stream request_stream)
         {
@@ -591,6 +585,20 @@ namespace GlobalUtil.http
             throw _exception_thrown_on_max_retry_exceeded;
         }
 
+        /*
+         * Legend: ---> Async call   ===> Sync call
+         * 
+         *     with request stream                                                                                                  with response stream
+         * _http_async ---> _http_async_send_request_body_callback ===> _http_async_get_response_callback ---> _http_async_response_callback ===> _adapt_response_stream
+         *      |                                                               A
+         *      +===============================================================+
+         *                  without request stream
+         * 
+         * Exception raised in _http_async: throw
+         * Exception raised in others: retrying _http_async if retry count is not exceeded, otherwise, calling _handle_mid_stage_exception and calling callback function with failed status
+         */
+
+
         // BeginGetRequestStream后的回调函数
         private void _http_async_send_request_body_callback(IAsyncResult iar)
         {
@@ -619,8 +627,7 @@ namespace GlobalUtil.http
         }
         private IAsyncResult _http_async_get_response_callback()
         {
-            // updating length properties
-            _update_request_length();
+            // POST http request, PRE http response
 
             // async requesting
             return HTTP_Request.BeginGetResponse(_http_async_response_callback, null);
@@ -641,12 +648,13 @@ namespace GlobalUtil.http
                 {
                     if (ex2.Status != WebExceptionStatus.ProtocolError)
                         throw;
+                    HTTP_Response = (HttpWebResponse)ex2.Response;
                 }
 
                 // handling response cookie
                 if (UseCookie)
                 {
-                    var headers = _reflect_headers(HTTP_Response);
+                    var headers = HTTP_Response.Headers;
                     foreach (var header in headers.AllKeys)
                         if (header.ToLower() == STR_SETCOOKIE.ToLower())
                         {
@@ -668,10 +676,7 @@ namespace GlobalUtil.http
                             break;
                         }
                 }
-
-                // updating length
-                _update_response_length();
-
+                
                 // adapting response stream
                 ResponseStream = _adapt_response_stream(HTTP_Response);
                 _invoke_callback();
@@ -681,7 +686,7 @@ namespace GlobalUtil.http
                 _handle_mid_stage_exception(ex);
             }
         }
-
+        // check the exception is raised by cancelling the request
         private bool _check_request_cancelled(Exception ex)
         {
             return (typeof(WebRequest).IsInstanceOfType(ex) && ((WebException)ex).Status == WebExceptionStatus.RequestCanceled);
