@@ -72,8 +72,6 @@ namespace GlobalUtil.http
         private static void _range_assign(HttpWebRequest request, string key, string value)
         {
             if (string.IsNullOrEmpty(value)) return;
-            if (value.ToLower().StartsWith("bytes="))
-                value = value.Substring(6);
             var range = Range.Parse(value);
             if (range.From == null && range.To == null) return;
             if (range.To == null)

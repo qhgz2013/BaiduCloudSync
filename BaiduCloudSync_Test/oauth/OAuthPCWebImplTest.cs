@@ -53,7 +53,7 @@ namespace BaiduCloudSync_Test.oauth
 
             string username = null, password = null, captcha = null;
             bool keep_captcha = false;
-            while (!oauth.IsLogin())
+            while (!oauth.IsLogin)
             {
                 if (!keep_captcha)
                 {

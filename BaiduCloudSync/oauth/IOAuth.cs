@@ -32,22 +32,25 @@ namespace BaiduCloudSync.oauth
         /// 是否已登录
         /// </summary>
         /// <returns></returns>
-        bool IsLogin();
+        bool IsLogin { get; }
         /// <summary>
         /// 获取BAIDUID的cookie值
         /// </summary>
         /// <returns></returns>
-        string GetBaiduID();
+        /// <exception cref="NotLoggedInException">在未登陆时访问该值时引发的异常</exception>
+        string GetBaiduID { get; }
         /// <summary>
         /// 获取BDUSS的cookie值
         /// </summary>
         /// <returns></returns>
-        string GetBDUSS();
+        /// <exception cref="NotLoggedInException">在未登陆时访问该值时引发的异常</exception>
+        string GetBDUSS { get; }
         /// <summary>
         /// 获取STOKEN的cookie值
         /// </summary>
         /// <returns></returns>
-        string GetSToken();
+        /// <exception cref="NotLoggedInException">在未登陆时访问该值时引发的异常</exception>
+        string GetSToken { get; }
 
     }
 }

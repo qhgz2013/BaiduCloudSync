@@ -24,7 +24,7 @@ namespace GlobalUtil.http
         /// </summary>
         /// <param name="from">开始字节数，null为无限制，若该值小于0，则将该值视为结束字节数</param>
         /// <param name="to">结束字节数，null为无限制，该值必须不小于0</param>
-        public Range(long? from = null, long? to = null)
+        public Range(long? from = 0, long? to = null)
         {
             if (to.HasValue && to.Value < 0)
                 throw new ArgumentOutOfRangeException("to");
@@ -45,9 +45,9 @@ namespace GlobalUtil.http
         public override string ToString()
         {
             if (From.HasValue || To.HasValue)
-                return (From != null ? From.ToString() : "") + "-" + (To != null ? To.ToString() : "");
+                return "bytes=" + (From != null ? From.ToString() : "") + "-" + (To != null ? To.ToString() : "");
             else
-                return "";
+                return "bytes=0-";
         }
 
         public static Range Parse(string s)
@@ -67,6 +67,8 @@ namespace GlobalUtil.http
                 range = new Range();
                 return true;
             }
+            if (s.StartsWith("bytes="))
+                s = s.Substring("bytes=".Length);
 
             long from = -1, to = -1;
 

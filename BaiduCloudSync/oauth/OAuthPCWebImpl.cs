@@ -70,18 +70,21 @@ namespace BaiduCloudSync.oauth
             }
         }
 
-        public bool IsLogin()
+        public bool IsLogin
         {
-            if (HttpSession.DefaultCookieContainer.ContainsKey(_identifier))
+            get
             {
-                var cookies = HttpSession.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
-                foreach (System.Net.Cookie item in cookies)
+                if (HttpSession.DefaultCookieContainer.ContainsKey(_identifier))
                 {
-                    if (item.Name.ToLower() == "stoken")
-                        return true;
+                    var cookies = HttpSession.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
+                    foreach (System.Net.Cookie item in cookies)
+                    {
+                        if (item.Name.ToLower() == "stoken")
+                            return true;
+                    }
                 }
+                return false;
             }
-            return false;
         }
 
         // 下面这一堆函数都是跟服务器通讯的，又臭又长，还要来一堆异常处理
@@ -474,7 +477,12 @@ namespace BaiduCloudSync.oauth
         /// <param name="username">用户名/手机/邮箱</param>
         /// <param name="password">密码</param>
         /// <param name="captcha">验证码，不需要时为null，在调用Login捕获到CaptchaRequiredException或是InvalidCaptchaException时，都需要传入该参数</param>
-        /// <returns></returns>
+        /// <returns>登陆是否成功</returns>
+        /// <exception cref="InvalidCaptchaException">验证码错误时引发的异常</exception>
+        /// <exception cref="CaptchaRequiredException">需要验证码才能进行登陆时引发的异常</exception>
+        /// <exception cref="WrongPasswordException">密码错误时引发的异常</exception>
+        /// <exception cref="LoginFailedException">其他原因造成登陆失败时引发的异常</exception>
+        /// <exception cref="NotImplementedException">登陆的状态码对应的处理方式仍未实现时引发的异常</exception>
         public bool Login(string username, string password, object captcha = null)
         {
             try
@@ -513,11 +521,11 @@ namespace BaiduCloudSync.oauth
                     // https://my.oschina.net/mingyuejingque/blog/521176
                     case "-1":
                     case "100005":
-                        throw new LoginFailedException("系统错误,请您稍后再试");
+                        throw new LoginFailedException("系统错误,请您稍后再试", fail_code: int.Parse(login_result.errno));
                     case "1":
-                        throw new LoginFailedException("输入的账号格式不正确");
+                        throw new LoginFailedException("输入的账号格式不正确", fail_code: int.Parse(login_result.errno));
                     case "2":
-                        throw new LoginFailedException("输入的账号不存在");
+                        throw new LoginFailedException("输入的账号不存在", fail_code: int.Parse(login_result.errno));
                     case "3":
                     case "200010":
                         throw new InvalidCaptchaException("验证码不存在或已过期，请重新输入");
@@ -533,23 +541,25 @@ namespace BaiduCloudSync.oauth
                     case "7":
                         throw new WrongPasswordException("密码错误");
                     case "16":
-                        throw new LoginFailedException("您的帐号因安全问题已被限制登录");
+                        throw new LoginFailedException("您的帐号因安全问题已被限制登录", fail_code: int.Parse(login_result.errno));
                     case "17":
-                        throw new LoginFailedException("您的帐号已锁定");
+                        throw new LoginFailedException("您的帐号已锁定", fail_code: int.Parse(login_result.errno));
                     case "257":
                         throw new CaptchaRequiredException("请输入验证码");
                     case "100023":
-                        throw new LoginFailedException("开启Cookie之后才能登录");
+                        throw new LoginFailedException("开启Cookie之后才能登录", fail_code: int.Parse(login_result.errno));
                     case "110024":
-                        throw new LoginFailedException("此帐号暂未激活");
+                        throw new LoginFailedException("此帐号暂未激活", fail_code: int.Parse(login_result.errno));
                     case "120027":
-                        throw new LoginFailedException("百度正在进行系统升级，暂时不能提供服务，敬请谅解");
+                        throw new LoginFailedException("百度正在进行系统升级，暂时不能提供服务，敬请谅解", fail_code: int.Parse(login_result.errno));
                     case "401007":
-                        throw new LoginFailedException("您的手机号关联了其他帐号，请选择登录");
+                        throw new LoginFailedException("您的手机号关联了其他帐号，请选择登录", fail_code: int.Parse(login_result.errno));
                     case "500010":
-                        throw new LoginFailedException("登录过于频繁,请24小时后再试");
+                        throw new LoginFailedException("登录过于频繁,请24小时后再试", fail_code: int.Parse(login_result.errno));
                     default:
-                        throw new LoginFailedException("Login failed with response code " + login_result.errno);
+                        int code = -1;
+                        int.TryParse(login_result.errno, out code);
+                        throw new LoginFailedException("Login failed with response code " + login_result.errno, fail_code: code);
                 }
 
             }
@@ -563,35 +573,59 @@ namespace BaiduCloudSync.oauth
             }
         }
 
+        /// <summary>
+        /// 退出登陆
+        /// </summary>
+        /// <returns>是否成功退出登陆</returns>
         public bool Logout()
         {
-            throw new NotImplementedException();
+            try
+            {
+                // TODO: request logout to baidu
+                if (!string.IsNullOrEmpty(_identifier) && HttpSession.DefaultCookieContainer.ContainsKey(_identifier))
+                    HttpSession.DefaultCookieContainer[_identifier] = new System.Net.CookieContainer();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Tracer.GlobalTracer.TraceError(ex);
+                return false;
+            }
         }
 
-        public string GetBaiduID()
+        public string GetBaiduID
         {
-            return _get_cookie_val("baiduid");
+            get
+            {
+                return _get_cookie_val("baiduid");
+            }
         }
 
-        public string GetBDUSS()
+        public string GetBDUSS
         {
-            return _get_cookie_val("bduss");
+            get
+            {
+                return _get_cookie_val("bduss");
+            }
         }
 
-        public string GetSToken()
+        public string GetSToken
         {
-            return _get_cookie_val("stoken");
+            get
+            {
+                return _get_cookie_val("stoken");
+            }
         }
 
         private string _get_cookie_val(string name)
         {
-            if (!IsLogin())
+            if (!IsLogin)
                 throw new NotLoggedInException();
             var cookies = HttpSession.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
             foreach (System.Net.Cookie cookie in cookies)
                 if (cookie.Name.ToLower() == name.ToLower())
                     return cookie.Value;
-            throw new InvalidOperationException();
+            throw new NotLoggedInException("Cookie was not found in the cookie container, please retry logging in");
         }
     }
 }

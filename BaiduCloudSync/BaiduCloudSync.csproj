@@ -84,6 +84,9 @@
   <ItemGroup>
     <Compile Include="api\IPcsAPI.cs" />
     <Compile Include="api\IPcsMetadata.cs" />
+    <Compile Include="api\PcsPath.cs" />
+    <Compile Include="api\webimpl\PcsAPIWebImpl.cs" />
+    <Compile Include="api\webimpl\PcsMetadataWebImpl.cs" />
     <Compile Include="Config.cs" />
     <Compile Include="oauth\CaptchaRequiredException.cs" />
     <Compile Include="oauth\InvalidCaptchaException.cs" />

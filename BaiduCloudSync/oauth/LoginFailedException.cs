@@ -11,8 +11,14 @@ namespace BaiduCloudSync.oauth
     [Serializable]
     public class LoginFailedException : Exception
     {
-        public LoginFailedException() : base() { }
-        public LoginFailedException(string message) : base(message) { }
-        public LoginFailedException(string message, Exception innerException) : base(message, innerException) { }
+        public int FailCode { get; private set; }
+        public LoginFailedException(int fail_code = -1) : base() { FailCode = fail_code; }
+        public LoginFailedException(string message, int fail_code = -1) : base(message) { FailCode = fail_code; }
+        public LoginFailedException(string message, Exception innerException, int fail_code = -1) : base(message, innerException) { FailCode = fail_code; }
+
+        public override string ToString()
+        {
+            return "[" + FailCode + "] " + base.ToString();
+        }
     }
 }

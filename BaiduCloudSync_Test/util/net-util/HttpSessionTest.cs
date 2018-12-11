@@ -89,6 +89,7 @@ namespace BaiduCloudSync_Test.util.net_util
                 finally
                 {
                     finish.Set();
+                    socket.Close();
                 }
             }));
             thd.Start();
@@ -131,7 +132,7 @@ namespace BaiduCloudSync_Test.util.net_util
             var thd = new Thread(new ThreadStart(delegate
             {
                 var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6666));
+                socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6667));
                 socket.Listen(0);
 
                 ready.Set();
@@ -162,13 +163,14 @@ namespace BaiduCloudSync_Test.util.net_util
                 finally
                 {
                     finish.Set();
+                    socket.Close();
                 }
             }));
             thd.Start();
             ready.Wait();
 
             var test_obj = new GlobalUtil.http.HttpSession(retry_times: 0);
-            test_obj.HttpGet("http://127.0.0.1:6666/");
+            test_obj.HttpGet("http://127.0.0.1:6667/");
 
             Assert.IsNotNull(test_obj.HTTP_Response);
             Assert.IsFalse(fail);
@@ -179,15 +181,15 @@ namespace BaiduCloudSync_Test.util.net_util
         }
 
         [TestMethod]
+        [ExpectedException(typeof(GlobalUtil.http.StackedHttpException))]
         public void HttpGetLocalIOExceptionTest()
         {
             var ready = new ManualResetEventSlim();
             var finish = new ManualResetEventSlim();
-            bool fail = false;
             var thd = new Thread(new ThreadStart(delegate
             {
                 var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6666));
+                socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6668));
                 socket.Listen(0);
 
                 ready.Set();
@@ -206,23 +208,261 @@ namespace BaiduCloudSync_Test.util.net_util
                 }
                 catch (Exception)
                 {
-                    fail = true;
                 }
                 finally
                 {
                     finish.Set();
+                    socket.Close();
                 }
             }));
             thd.Start();
             ready.Wait();
 
             var test_obj = new GlobalUtil.http.HttpSession(retry_times: 3);
-            test_obj.HttpGet("http://127.0.0.1:6666/");
+            var p = new GlobalUtil.http.Parameters();
+            p.Add("foo", "bar");
+            test_obj.HttpGet("http://127.0.0.1:6668/", query: p);
+            Assert.Fail();
+        }
 
-            Assert.IsNull(test_obj.HTTP_Response);
+        [TestMethod]
+        public void HttpGetLocalRangeTest()
+        {
+            var ready = new ManualResetEventSlim();
+            var finish = new ManualResetEventSlim();
+            bool fail = false;
+            var thd = new Thread(new ThreadStart(delegate
+            {
+                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6669));
+                socket.Listen(0);
+
+                ready.Set();
+                try
+                {
+                    var buffer = new byte[4096];
+                    var established_socket = socket.Accept();
+                    var count = established_socket.Receive(buffer);
+                    if (count == 0) throw new ArgumentException();
+                    var response = "HTTP/1.1 200 OJBK\r\n";
+                    var header = "Connection: close\r\n" +
+                        "Date: " + _gen_date_string() + "\r\n" +
+                        "Content-Type: text/plain; charset=utf-8\r\n" +
+                        "Content-Length: 5\r\n" +
+                        "Server: TheFuckServer/1.0\r\n" +
+                        "Content-Range: bytes 5-9/10\r\n" + 
+                        "\r\n";
+                    var body = "mmmmm";
+                    var total_msg = response + header + body;
+                    var send_msg = System.Text.Encoding.UTF8.GetBytes(total_msg);
+                    established_socket.Send(send_msg);
+                    established_socket.Close();
+                }
+                catch (Exception)
+                {
+                    fail = true;
+                }
+                finally
+                {
+                    finish.Set();
+                    socket.Close();
+                }
+            }));
+            thd.Start();
+            ready.Wait();
+
+            var test_obj = new GlobalUtil.http.HttpSession(timeout: 5000);
+            test_obj.HttpGet("http://127.0.0.1:6669/", range: new GlobalUtil.http.Range(5));
+
+            Assert.IsNotNull(test_obj.HTTP_Response);
+            Assert.AreEqual("OJBK", test_obj.HTTP_Response.StatusDescription);
             Assert.IsFalse(fail);
+            Assert.AreEqual(HttpStatusCode.OK, test_obj.HTTP_Response.StatusCode);
+            Assert.AreEqual("mmmmm", test_obj.ReadResponseString());
             finish.Wait();
             test_obj.Close();
+        }
+
+        [TestMethod]
+        public void HttpGetLocalRangeTest2()
+        {
+
+            var ready = new ManualResetEventSlim();
+            var finish = new ManualResetEventSlim();
+            bool fail = false;
+            var thd = new Thread(new ThreadStart(delegate
+            {
+                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6669));
+                socket.Listen(0);
+
+                ready.Set();
+                try
+                {
+                    var buffer = new byte[4096];
+                    var established_socket = socket.Accept();
+                    var count = established_socket.Receive(buffer);
+                    if (count == 0) throw new ArgumentException();
+                    var response = "HTTP/1.1 200 OJBK\r\n";
+                    var header = "Connection: close\r\n" +
+                        "Date: " + _gen_date_string() + "\r\n" +
+                        "Content-Type: text/plain; charset=utf-8\r\n" +
+                        "Content-Length: 5\r\n" +
+                        "Server: TheFuckServer/1.0\r\n" +
+                        "Content-Range: bytes 0-4/10\r\n" +
+                        "\r\n";
+                    var body = "emmmm";
+                    var total_msg = response + header + body;
+                    var send_msg = System.Text.Encoding.UTF8.GetBytes(total_msg);
+                    established_socket.Send(send_msg);
+                    established_socket.Close();
+                }
+                catch (Exception)
+                {
+                    fail = true;
+                }
+                finally
+                {
+                    finish.Set();
+                    socket.Close();
+                }
+            }));
+            thd.Start();
+            ready.Wait();
+
+            var test_obj = new GlobalUtil.http.HttpSession(timeout: 5000);
+            test_obj.HttpGet("http://127.0.0.1:6669/", range: new GlobalUtil.http.Range(-5));
+
+            Assert.IsNotNull(test_obj.HTTP_Response);
+            Assert.AreEqual("OJBK", test_obj.HTTP_Response.StatusDescription);
+            Assert.IsFalse(fail);
+            Assert.AreEqual(HttpStatusCode.OK, test_obj.HTTP_Response.StatusCode);
+            Assert.AreEqual("emmmm", test_obj.ReadResponseString());
+            finish.Wait();
+            test_obj.Close();
+        }
+
+        [TestMethod]
+        public void HttpGetLocalRangeTest3()
+        {
+            var ready = new ManualResetEventSlim();
+            var finish = new ManualResetEventSlim();
+            bool fail = false;
+            var thd = new Thread(new ThreadStart(delegate
+            {
+                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6670));
+                socket.Listen(0);
+
+                ready.Set();
+                try
+                {
+                    var buffer = new byte[4096];
+                    var established_socket = socket.Accept();
+                    var count = established_socket.Receive(buffer);
+                    if (count == 0) throw new ArgumentException();
+                    var response = "HTTP/1.1 200 OJBK\r\n";
+                    var header = "Connection: close\r\n" +
+                        "Date: " + _gen_date_string() + "\r\n" +
+                        "Content-Type: text/plain; charset=utf-8\r\n" +
+                        "Content-Length: 7\r\n" +
+                        "Server: TheFuckServer/1.0\r\n" +
+                        "Content-Range: bytes 1-7/10\r\n" +
+                        "\r\n";
+                    var body = "emmmmmm";
+                    var total_msg = response + header + body;
+                    var send_msg = System.Text.Encoding.UTF8.GetBytes(total_msg);
+                    established_socket.Send(send_msg);
+                    established_socket.Close();
+                }
+                catch (Exception)
+                {
+                    fail = true;
+                }
+                finally
+                {
+                    finish.Set();
+                    socket.Close();
+                }
+            }));
+            thd.Start();
+            ready.Wait();
+
+            var test_obj = new GlobalUtil.http.HttpSession(timeout: 5000);
+            test_obj.HttpGet("http://127.0.0.1:6670/", range: new GlobalUtil.http.Range(1, 7));
+
+            Assert.IsNotNull(test_obj.HTTP_Response);
+            Assert.AreEqual("OJBK", test_obj.HTTP_Response.StatusDescription);
+            Assert.IsFalse(fail);
+            Assert.AreEqual(HttpStatusCode.OK, test_obj.HTTP_Response.StatusCode);
+            Assert.AreEqual("emmmmmm", test_obj.ReadResponseString());
+            finish.Wait();
+            test_obj.Close();
+        }
+
+
+        [TestMethod]
+        public void HttpPostLocalTest()
+        {
+            var ready = new ManualResetEventSlim();
+            var finish = new ManualResetEventSlim();
+            bool fail = false;
+            string str = null;
+            var thd = new Thread(new ThreadStart(delegate
+            {
+                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6671));
+                socket.Listen(0);
+
+                ready.Set();
+                try
+                {
+                    var buffer = new byte[4096];
+                    var established_socket = socket.Accept();
+                    var count = established_socket.Receive(buffer);
+                    if (count == 0) throw new ArgumentException();
+                    var response = "HTTP/1.1 200 OJBK\r\n";
+                    var header = "Connection: close\r\n" +
+                        "Date: " + _gen_date_string() + "\r\n" +
+                        "Content-Type: text/plain; charset=utf-8\r\n" +
+                        "Content-Length: 5\r\n" +
+                        "Server: TheFuckServer/1.0\r\n" +
+                        "\r\n";
+                    var body = "emmmm";
+                    var total_msg = response + header + body;
+                    var send_msg = System.Text.Encoding.UTF8.GetBytes(total_msg);
+                    count = established_socket.Receive(buffer);
+                    established_socket.Send(send_msg);
+                    str = System.Text.Encoding.UTF8.GetString(buffer, 0, count);
+                    established_socket.Close();
+                }
+                catch (Exception)
+                {
+                    fail = true;
+                }
+                finally
+                {
+                    finish.Set();
+                    socket.Close();
+                }
+            }));
+            thd.Start();
+            ready.Wait();
+
+            var test_obj = new GlobalUtil.http.HttpSession(timeout: 5000, content_type: "application/x-www-form-urlencoded");
+            var p = new GlobalUtil.http.Parameters();
+            p.Add("foo", "bar");
+            p.Add("a", "");
+            test_obj.HttpPost("http://127.0.0.1:6671/", p);
+
+            Assert.IsNotNull(test_obj.HTTP_Response);
+            Assert.AreEqual("OJBK", test_obj.HTTP_Response.StatusDescription);
+            Assert.IsFalse(fail);
+            Assert.AreEqual(HttpStatusCode.OK, test_obj.HTTP_Response.StatusCode);
+            Assert.AreEqual("emmmm", test_obj.ReadResponseString());
+            finish.Wait();
+            test_obj.Close();
+            Assert.AreEqual("foo=bar&a=", str);
         }
     }
 }

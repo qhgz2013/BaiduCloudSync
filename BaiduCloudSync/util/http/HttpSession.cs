@@ -169,7 +169,7 @@ namespace GlobalUtil.http
         //是否开启异常输出
         public static bool EnableErrorTracing = true;
         //是否开启调试输出
-        public static bool EnableInfoTracing = false;
+        public static bool EnableInfoTracing = true;
         //当前的失败统计次数
         private int _fail_times;
         private StackedHttpException _exception_thrown_on_max_retry_exceeded;
@@ -255,6 +255,11 @@ namespace GlobalUtil.http
         /// 当代理url为空时是否跳过系统IE代理
         /// </summary>
         public bool IgnoreSystemProxy { get; set; }
+
+        /// <summary>
+        /// 获取异步请求时捕获到的内部异常
+        /// </summary>
+        public Exception AsyncException { get { return _exception_thrown_on_max_retry_exceeded.Count > 0 ? _exception_thrown_on_max_retry_exceeded : null; } }
         #endregion
 
         /// <summary>
@@ -281,7 +286,6 @@ namespace GlobalUtil.http
                 AcceptLanguage = DEFAULT_ACCEPT_LANGUAGE;
             if (string.IsNullOrEmpty(UserAgent))
                 UserAgent = DEFAULT_USER_AGENT;
-            ContentType = null;
 
             // reset all internal variables
             _url = null;
@@ -293,12 +297,14 @@ namespace GlobalUtil.http
             _exception_thrown_on_max_retry_exceeded = new StackedHttpException("Max retry exceeded");
             if (_post_origin_stream != null)
             {
-                try
-                {
-                    _post_origin_stream.Close();
-                    _post_origin_stream.Dispose();
-                }
-                catch { }
+                //try
+                //{
+                //    _post_origin_stream.Close();
+                //    _post_origin_stream.Dispose();
+                //}
+                //catch { }
+
+                // not managing origin stream here
                 _post_origin_stream = null;
             }
             // closing request resources
@@ -359,7 +365,21 @@ namespace GlobalUtil.http
             if (header != null && !string.IsNullOrEmpty(value.ToString()))
                 header.Add(key, value);
         }
-        
+
+        private Parameters _merge_range(Parameters origin, Range range)
+        {
+            if (range == null)
+                return origin;
+            var ret = new Parameters();
+            ret.Add(STR_RANGE, range);
+            if (origin != null)
+                foreach (var item in origin)
+                {
+                    ret.Add(item.Key, item.Value);
+                }
+            return ret;
+        }
+
         public HttpSession(bool use_cookie = DEFAULT_USE_COOKIE, int retry_times = DEFAULT_RETRY_TIMES, int retry_delay = DEFAULT_RETRY_DELAY, int timeout = DEFAULT_TIMEOUT, int read_write_timeout = DEFAULT_READ_WRITE_TIMEOUT,
             string proxy_url = DEFAULT_PROXY_URL, bool ignore_system_proxy = DEFAULT_IGNORE_SYSTEM_PROXY, string cookie_group = DEFAULT_COOKIE_GROUP, string user_agent = DEFAULT_USER_AGENT, string content_type = null)
         {
@@ -381,16 +401,39 @@ namespace GlobalUtil.http
             ContentType = content_type;
         }
 
+        /// <summary>
+        /// 关闭HTTP会话，释放占用资源
+        /// </summary>
         public void Close()
         {
             _reset_session();
         }
+
+        /// <summary>
+        /// 异步HTTP GET请求
+        /// </summary>
+        /// <param name="url">请求url</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="callback_param">回调函数的附加参数</param>
+        /// <param name="header">HTTP请求头</param>
+        /// <param name="query">URL查询参数</param>
+        /// <param name="range">HTTP响应的内容范围（并非所有服务器都提供该功能）</param>
+        /// <returns>HTTP请求的异步结果</returns>
+        /// <exception cref="StackedHttpException">在未开始异步请求时引发的异常</exception>
         public IAsyncResult HttpGetAsync(string url, EventHandler<HttpFinishedResponseEventArgs> callback, object callback_param = null, Parameters header = null, Parameters query = null, Range range = null)
         {
             _fail_times = 0;
-            return _http_async(DEFAULT_GET_METHOD, url, callback, callback_param, header, query, null);
+            return _http_async(DEFAULT_GET_METHOD, url, callback, callback_param, _merge_range(header, range), query, null);
         }
 
+        /// <summary>
+        /// HTTP GET请求
+        /// </summary>
+        /// <param name="url">请求url</param>
+        /// <param name="header">HTTP请求头</param>
+        /// <param name="query">URL查询参数</param>
+        /// <param name="range">HTTP响应的内容范围（并非所有服务器都提供该功能）</param>
+        /// <exception cref="StackedHttpException">在请求发生错误时引发的异常</exception>
         public void HttpGet(string url, Parameters header = null, Parameters query = null, Range range = null)
         {
             var wait_handle = new ManualResetEventSlim();
@@ -400,14 +443,47 @@ namespace GlobalUtil.http
             }, wait_handle, header, query, range);
             iar.AsyncWaitHandle.WaitOne();
             wait_handle.Wait();
+            // exception check
+            if (AsyncException != null)
+                throw AsyncException;
         }
 
 
         public void HttpPost(string url, Parameters body, Parameters header = null, Parameters query = null, Range range = null)
         {
-
+            HttpPost(url, Encoding.GetEncoding(DEFAULT_ENCODING).GetBytes(body.BuildQueryString()), header, query, range);
         }
 
+        public void HttpPost(string url, byte[] body, Parameters header = null, Parameters query = null, Range range = null)
+        {
+            HttpPost(url, new MemoryStream(body), header, query, range);
+        }
+        public void HttpPost(string url, Stream post_stream, Parameters header = null, Parameters query = null, Range range = null)
+        {
+            var wait_handle = new ManualResetEventSlim();
+            var iar = HttpPostAsync(url, post_stream, (s, e) =>
+            {
+                wait_handle.Set();
+            }, wait_handle, header, query, range);
+            iar.AsyncWaitHandle.WaitOne();
+            wait_handle.Wait();
+            // exception check
+            if (AsyncException != null)
+                throw AsyncException;
+        }
+        public IAsyncResult HttpPostAsync(string url, Parameters body, EventHandler<HttpFinishedResponseEventArgs> callback, object callback_param = null, Parameters header = null, Parameters query = null, Range range = null)
+        {
+            return HttpPostAsync(url, Encoding.GetEncoding(DEFAULT_ENCODING).GetBytes(body.BuildQueryString()), callback, callback_param, header, query, range);
+        }
+        public IAsyncResult HttpPostAsync(string url, byte[] body, EventHandler<HttpFinishedResponseEventArgs> callback, object callback_param = null, Parameters header = null, Parameters query = null, Range range = null)
+        {
+            return HttpPostAsync(url, new MemoryStream(body), callback, callback_param, header, query, range);
+        }
+        public IAsyncResult HttpPostAsync(string url, Stream post_stream, EventHandler<HttpFinishedResponseEventArgs> callback, object callback_param = null, Parameters header = null, Parameters query = null, Range range = null)
+        {
+            _fail_times = 0;
+            return _http_async(DEFAULT_POST_METHOD, url, callback, callback_param, _merge_range(header, range), query, post_stream);
+        }
         /// <summary>
         /// 从ResponseStream中读取所有字节，并使用指定编码返回其字符串
         /// </summary>
@@ -453,34 +529,36 @@ namespace GlobalUtil.http
 
             try
             {
-                int total_readed_bytes = 0;
+                long total_readed_bytes = 0;
                 int readed_bytes = 0;
                 byte[] buffer = new byte[4096];
                 bool warn_on_buffer_overflow = false;
                 do
                 {
                     readed_bytes = ResponseStream.Read(buffer, 0, 4096);
-                    total_readed_bytes += readed_bytes;
-                    if (!is_ms_resizable && total_readed_bytes > ms.Length && !warn_on_buffer_overflow)
+                    if (!is_ms_resizable && !warn_on_buffer_overflow && total_readed_bytes + readed_bytes > ms.Length)
                     {
                         warn_on_buffer_overflow = true;
                         // bytes overflow
-                        Tracer.GlobalTracer.TraceWarning("Buffer overflow detected while reading response stream, converting non-resizable memory stream to resizable memory stream (this opeation will consume a lot of memory and time)");
-                        var new_adaptive_ms = new MemoryStream(total_readed_bytes);
+                        Tracer.GlobalTracer.TraceWarning("Buffer overflow detected while reading response stream, converting non-resizable memory stream to resizable memory stream (this operation will consume a lot of memory and time)");
+                        var new_adaptive_ms = new MemoryStream((int)Math.Min(total_readed_bytes + readed_bytes, int.MaxValue));
                         // copying stream
                         byte[] memory_buffer = new byte[1048576]; // using 1M memory block
+                        long original_ms_position = ms.Position;
                         ms.Position = 0;
                         int temp_read = 0;
                         do
                         {
                             temp_read = ms.Read(memory_buffer, 0, 1048576);
                             new_adaptive_ms.Write(memory_buffer, 0, temp_read);
-                        } while (temp_read > 0);
+                        } while (temp_read > 0 && ms.Position < original_ms_position);
                         // closing origin memory stream and replace new memory stream
                         ms.Close();
                         ms.Dispose();
                         ms = new_adaptive_ms;
+                        ms.Position = original_ms_position;
                     }
+                    total_readed_bytes += readed_bytes;
                     ms.Write(buffer, 0, readed_bytes);
                 } while (readed_bytes > 0);
 
@@ -492,11 +570,12 @@ namespace GlobalUtil.http
             }
             return ms.ToArray();
         }
+
+
+        #region privte callbacks
         private IAsyncResult _http_async(string method, string url, EventHandler<HttpFinishedResponseEventArgs> callback, object callback_param, Parameters header, Parameters query, Stream request_stream)
         {
-            // reset session
             _reset_session();
-
             // initializing variables
             _method = method;
             _url = url;
@@ -505,7 +584,10 @@ namespace GlobalUtil.http
             _callback = callback;
             _post_origin_stream = request_stream;
             if (_post_origin_stream != null)
+            {
                 _post_origin_stream = HttpWebRequestHelper.ConvertToSeekableStream(_post_origin_stream);
+                _post_origin_stream.Position = 0;
+            }
 
             // appending query parameters to url
             if (query != null)
@@ -615,6 +697,7 @@ namespace GlobalUtil.http
                     if (n_read > 0)
                         stream_out.Write(buffer, 0, n_read);
                 }
+                stream_out.Flush();
                 stream_out.Close();
 
                 // ask for response
@@ -676,7 +759,7 @@ namespace GlobalUtil.http
                             break;
                         }
                 }
-                
+
                 // adapting response stream
                 ResponseStream = _adapt_response_stream(HTTP_Response);
                 _invoke_callback();
@@ -753,6 +836,8 @@ namespace GlobalUtil.http
                 }
             }
         }
+
+        #endregion
     }
 
     /// <summary>

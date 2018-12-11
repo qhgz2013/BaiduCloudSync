@@ -56,6 +56,7 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
+    <Compile Include="api\PcsPathTest.cs" />
     <Compile Include="MultipleExceptionTypeCatcher.cs" />
     <Compile Include="oauth\OAuthPCWebImplTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
