@@ -37,5 +37,17 @@ namespace BaiduCloudSync_Test.api
             new PcsPath("/nooo:D");
             Assert.Fail();
         }
+
+        [TestMethod]
+        public void PcsPathExtensionTest()
+        {
+            Assert.AreEqual("abc", new PcsPath("/a/b/c.abc").Extension);
+            Assert.AreEqual("c", new PcsPath("/a/b/c.abc").NameWithoutExtension);
+            Assert.AreEqual(".gitignore", new PcsPath("/./.gitignore").NameWithoutExtension);
+            Assert.AreEqual("", new PcsPath("/.gitignore").Extension);
+            Assert.AreEqual("abc.", new PcsPath("/a/b/../abc.").NameWithoutExtension);
+            Assert.AreEqual("/a/abc.", new PcsPath("/a/b/../abc.").FullPath);
+
+        }
     }
 }

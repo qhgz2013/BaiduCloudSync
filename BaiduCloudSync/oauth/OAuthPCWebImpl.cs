@@ -7,10 +7,11 @@ using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
 using System.Drawing;
 using System.IO;
+using BaiduCloudSync.oauth.exception;
 
 namespace BaiduCloudSync.oauth
 {
-    public class OAuthPCWebImpl : IOAuth
+    public sealed class OAuthPCWebImpl : IOAuth
     {
         // 配置文件
         private Config _config;
@@ -515,8 +516,6 @@ namespace BaiduCloudSync.oauth
                 switch (login_result.errno)
                 {
                     case "0":
-                        // 登陆成功
-                        HttpSession.SaveCookie(_config.CookieFileName);
                         return true;
                     // https://my.oschina.net/mingyuejingque/blog/521176
                     case "-1":
@@ -593,38 +592,51 @@ namespace BaiduCloudSync.oauth
             }
         }
 
-        public string GetBaiduID
+        public string BaiduID
         {
             get
             {
-                return _get_cookie_val("baiduid");
+                return _get_cookie_val("baiduid").Value;
             }
         }
 
-        public string GetBDUSS
+        public string BDUSS
         {
             get
             {
-                return _get_cookie_val("bduss");
+                return _get_cookie_val("bduss").Value;
             }
         }
 
-        public string GetSToken
+        public string SToken
         {
             get
             {
-                return _get_cookie_val("stoken");
+                return _get_cookie_val("stoken").Value;
             }
         }
 
-        private string _get_cookie_val(string name)
+        public DateTime ExpirationTime
+        {
+            get
+            {
+                var exp_a = _get_cookie_val("baiduid").Expires.Ticks;
+                var exp_b = _get_cookie_val("bduss").Expires.Ticks;
+                var exp_c = _get_cookie_val("stoken").Expires.Ticks;
+
+                var min_exp = Math.Min(Math.Min(exp_a, exp_b), exp_c);
+                return new DateTime(min_exp);
+            }
+        }
+
+        private System.Net.Cookie _get_cookie_val(string name)
         {
             if (!IsLogin)
                 throw new NotLoggedInException();
             var cookies = HttpSession.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
             foreach (System.Net.Cookie cookie in cookies)
                 if (cookie.Name.ToLower() == name.ToLower())
-                    return cookie.Value;
+                    return cookie;
             throw new NotLoggedInException("Cookie was not found in the cookie container, please retry logging in");
         }
     }

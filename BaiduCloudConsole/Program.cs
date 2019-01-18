@@ -21,7 +21,7 @@ namespace BaiduCloudConsole
 
             string username = null, password = null, captcha = null;
             bool keep_captcha = false;
-            while (!oauth.IsLogin())
+            while (!oauth.IsLogin)
             {
                 if (!keep_captcha)
                 {
@@ -68,9 +68,9 @@ namespace BaiduCloudConsole
             }
 
             Console.WriteLine("login succeeded");
-            Console.WriteLine("Baiduid: " + oauth.GetBaiduID());
-            Console.WriteLine("Bduss: " + oauth.GetBDUSS());
-            Console.WriteLine("Stoken: " + oauth.GetSToken());
+            Console.WriteLine("Baiduid: " + oauth.BaiduID);
+            Console.WriteLine("Bduss: " + oauth.BDUSS);
+            Console.WriteLine("Stoken: " + oauth.SToken);
 
             Console.WriteLine("Press any key to exit");
             Console.ReadKey();

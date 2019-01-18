@@ -56,37 +56,58 @@ namespace BaiduCloudSync.api
 
             if (path_tree.Count == 0)
             {
-                _name = "";
-                _parent_dir = "";
+                _name_no_ext = "";
+                _ext = "";
+                _parent_dir = null;
             }
             else
             {
-                _name = path_tree.Last();
+                var name = path_tree.Last();
                 path_tree.RemoveAt(path_tree.Count - 1);
                 var sb = new StringBuilder().Append("/");
                 foreach (var dir_name in path_tree)
                     sb.Append(dir_name).Append("/");
                 sb.Remove(sb.Length - 1, 1); // removing last "/"
 
-                _parent_dir = sb.ToString();
+                _parent_dir = new PcsPath(sb.ToString());
+                var ext_split = name.LastIndexOf('.');
+                if (ext_split <= 0 || ext_split == name.Length - 1)
+                {
+                    // only first ".xxx" or "xxxx." is found, treated as NO EXTENSION
+                    _name_no_ext = name;
+                    _ext = "";
+                }
+                else
+                {
+                    _name_no_ext = name.Substring(0, ext_split);
+                    _ext = name.Substring(ext_split + 1);
+                }
             }
         }
 
-        private string _parent_dir;
-        private string _name;
+        private PcsPath _parent_dir;
+        private string _name_no_ext;
+        private string _ext;
         /// <summary>
         /// 文件夹名称
         /// </summary>
-        public string Name { get { return _name; } }
+        public string Name { get { return string.IsNullOrEmpty(_ext) ? _name_no_ext : (_name_no_ext + "." + _ext); } }
         /// <summary>
         /// 文件夹绝对路径
         /// </summary>
-        public string FullPath { get { return _parent_dir + "/" + _name; } }
+        public string FullPath { get { return _parent_dir + "/" + Name; } }
         /// <summary>
         /// 父级文件夹
         /// </summary>
-        public PcsPath Parent { get { return string.IsNullOrEmpty(_parent_dir) ? null : new PcsPath(_parent_dir); } }
-
+        public PcsPath Parent { get { return _parent_dir; } }
+        /// <summary>
+        /// 不包含扩展名的文件名
+        /// </summary>
+        public string NameWithoutExtension { get { return _name_no_ext; } }
+        /// <summary>
+        /// 文件扩展名
+        /// </summary>
+        public string Extension { get { return _ext; } }
         public override string ToString()
         {
             return FullPath;

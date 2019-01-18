@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace BaiduCloudSync.oauth
+namespace BaiduCloudSync.oauth.exception
 {
     /// <summary>
     /// 未登陆的情况下尝试获取登陆参数时抛出的异常

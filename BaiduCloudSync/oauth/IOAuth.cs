@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using BaiduCloudSync.oauth.exception;
 
 namespace BaiduCloudSync.oauth
 {
@@ -31,26 +32,27 @@ namespace BaiduCloudSync.oauth
         /// <summary>
         /// 是否已登录
         /// </summary>
-        /// <returns></returns>
         bool IsLogin { get; }
         /// <summary>
         /// 获取BAIDUID的cookie值
         /// </summary>
-        /// <returns></returns>
         /// <exception cref="NotLoggedInException">在未登陆时访问该值时引发的异常</exception>
-        string GetBaiduID { get; }
+        string BaiduID { get; }
         /// <summary>
         /// 获取BDUSS的cookie值
         /// </summary>
-        /// <returns></returns>
         /// <exception cref="NotLoggedInException">在未登陆时访问该值时引发的异常</exception>
-        string GetBDUSS { get; }
+        string BDUSS { get; }
         /// <summary>
         /// 获取STOKEN的cookie值
         /// </summary>
-        /// <returns></returns>
         /// <exception cref="NotLoggedInException">在未登陆时访问该值时引发的异常</exception>
-        string GetSToken { get; }
+        string SToken { get; }
 
+        /// <summary>
+        /// 获取cookie的过期时间
+        /// </summary>
+        /// <exception cref="NotLoggedInException">在未登陆时访问该值时引发的异常</exception>
+        DateTime ExpirationTime { get; }
     }
 }
