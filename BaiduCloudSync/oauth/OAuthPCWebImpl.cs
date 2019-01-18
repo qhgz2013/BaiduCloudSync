@@ -13,8 +13,6 @@ namespace BaiduCloudSync.oauth
 {
     public sealed class OAuthPCWebImpl : IOAuth
     {
-        // 配置文件
-        private Config _config;
         // 用于区分不同账号的cookie所需要的key
         private string _identifier;
         // 用于重复调用login需要的持久变量
@@ -32,13 +30,7 @@ namespace BaiduCloudSync.oauth
                 // 通过表单的随机生成算法生成当前cookie所属的key
                 identifier = util.GenerateFormDataBoundary();
             }
-            if (config == null)
-            {
-                // 使用全局配置
-                config = Config.GlobalConfig;
-            }
             _identifier = identifier;
-            _config = config;
             _gid = Guid.NewGuid().ToString().Substring(1);
         }
         /// <summary>
@@ -80,7 +72,7 @@ namespace BaiduCloudSync.oauth
                     var cookies = HttpSession.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
                     foreach (System.Net.Cookie item in cookies)
                     {
-                        if (item.Name.ToLower() == "stoken")
+                        if (item.Name.ToLower() == "stoken" && item.Expires > DateTime.Now)
                             return true;
                     }
                 }
@@ -534,7 +526,7 @@ namespace BaiduCloudSync.oauth
                     case "120019":
                     case "120021":
                     case "400031":
-                        throw new NotImplementedException("请在弹出的窗口操作,或重新登录");
+                        throw new LoginFailedException("请在弹出的窗口操作,或重新登录", fail_code: int.Parse(login_result.errno));
                     case "6":
                         throw new InvalidCaptchaException("您输入的验证码有误");
                     case "7":

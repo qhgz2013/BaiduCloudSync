@@ -87,6 +87,7 @@
     <Compile Include="api\PcsMetadata.cs" />
     <Compile Include="api\PcsOverwriteType.cs" />
     <Compile Include="api\PcsPath.cs" />
+    <Compile Include="api\webimpl\PCSApiUnexpectedResponseException.cs" />
     <Compile Include="api\webimpl\PcsAPIWebImpl.cs" />
     <Compile Include="Config.cs" />
     <Compile Include="db\mapper\DatabaseMapperFactory.cs" />

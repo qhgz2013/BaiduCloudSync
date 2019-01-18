@@ -65,7 +65,9 @@ namespace BaiduCloudSync.oauth
             if (all_null || all_non_null)
             {
                 _baidu_id = baidu_id;
-
+                _bduss = bduss;
+                _stoken = stoken;
+                _expiration_time = expiration_time;
             }
             else
                 throw new ArgumentException("Parameter baidu_id, bduss, stoken should be null or non-null at the same time");
@@ -74,7 +76,7 @@ namespace BaiduCloudSync.oauth
         {
             get
             {
-                return string.IsNullOrEmpty(_baidu_id);
+                return !string.IsNullOrEmpty(_baidu_id) && _expiration_time > DateTime.Now;
             }
         }
 
@@ -104,7 +106,7 @@ namespace BaiduCloudSync.oauth
             {
                 if (!IsLogin)
                     throw new NotLoggedInException();
-                return _bduss;
+                return _stoken;
             }
         }
 

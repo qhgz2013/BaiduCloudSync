@@ -66,11 +66,11 @@ namespace BaiduCloudSync_Test.oauth
                     oauth.Login(username, password, captcha);
                     break;
                 }
-                catch (BaiduCloudSync.oauth.WrongPasswordException)
+                catch (BaiduCloudSync.oauth.exception.WrongPasswordException)
                 {
                     Console.WriteLine("Password incorrect");
                 }
-                catch (BaiduCloudSync.oauth.InvalidCaptchaException)
+                catch (BaiduCloudSync.oauth.exception.InvalidCaptchaException)
                 {
                     Console.WriteLine("Captcha incorrect");
 
@@ -80,7 +80,7 @@ namespace BaiduCloudSync_Test.oauth
                     captcha = _wait_input_str("captcha");
                     keep_captcha = true;
                 }
-                catch (BaiduCloudSync.oauth.CaptchaRequiredException)
+                catch (BaiduCloudSync.oauth.exception.CaptchaRequiredException)
                 {
                     var img = (Image)oauth.GetCaptcha();
                     img.Save("a.bmp", System.Drawing.Imaging.ImageFormat.Bmp);
