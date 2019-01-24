@@ -11,7 +11,7 @@ namespace BaiduCloudSync_Test.util.net_util
         public void RangeTest1()
         {
             var range = new Range();
-            Assert.IsNull(range.From);
+            Assert.AreEqual(0, range.From);
             Assert.IsNull(range.To);
         }
 
@@ -71,7 +71,7 @@ namespace BaiduCloudSync_Test.util.net_util
         public void ParseRangeTest1()
         {
             var range = Range.Parse("");
-            Assert.IsNull(range.From);
+            Assert.AreEqual(0, range.From);
             Assert.IsNull(range.To);
         }
         [TestMethod]

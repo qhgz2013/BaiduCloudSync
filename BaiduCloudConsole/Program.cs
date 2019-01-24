@@ -9,6 +9,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Drawing;
 using System.Diagnostics;
+using BaiduCloudSync.oauth.exception;
 
 namespace BaiduCloudConsole
 {
@@ -36,11 +37,11 @@ namespace BaiduCloudConsole
                     oauth.Login(username, password, captcha);
                     break;
                 }
-                catch (BaiduCloudSync.oauth.WrongPasswordException)
+                catch (WrongPasswordException)
                 {
                     Console.WriteLine("Password incorrect");
                 }
-                catch (BaiduCloudSync.oauth.InvalidCaptchaException)
+                catch (InvalidCaptchaException)
                 {
                     Console.WriteLine("Captcha incorrect");
 
@@ -51,7 +52,7 @@ namespace BaiduCloudConsole
                     captcha = Console.ReadLine();
                     keep_captcha = true;
                 }
-                catch (BaiduCloudSync.oauth.CaptchaRequiredException)
+                catch (CaptchaRequiredException)
                 {
                     var img = (Image)oauth.GetCaptcha();
                     Console.WriteLine("captcha:");

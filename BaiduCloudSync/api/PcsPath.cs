@@ -67,7 +67,8 @@ namespace BaiduCloudSync.api
                 var sb = new StringBuilder().Append("/");
                 foreach (var dir_name in path_tree)
                     sb.Append(dir_name).Append("/");
-                sb.Remove(sb.Length - 1, 1); // removing last "/"
+                if (sb.Length > 1)
+                    sb.Remove(sb.Length - 1, 1); // removing last "/"
 
                 _parent_dir = new PcsPath(sb.ToString());
                 var ext_split = name.LastIndexOf('.');
@@ -95,7 +96,15 @@ namespace BaiduCloudSync.api
         /// <summary>
         /// 文件夹绝对路径
         /// </summary>
-        public string FullPath { get { return _parent_dir + "/" + Name; } }
+        public string FullPath
+        {
+            get
+            {
+                if (_parent_dir == null) return "/";
+                else if (_parent_dir.FullPath == "/") return _parent_dir + Name;
+                else return _parent_dir + "/" + Name;
+            }
+        }
         /// <summary>
         /// 父级文件夹
         /// </summary>

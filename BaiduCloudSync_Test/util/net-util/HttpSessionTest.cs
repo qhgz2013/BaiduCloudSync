@@ -464,5 +464,65 @@ namespace BaiduCloudSync_Test.util.net_util
             test_obj.Close();
             Assert.AreEqual("foo=bar&a=", str);
         }
+
+
+        [TestMethod]
+        public void HttpGetLocalCookieTest()
+        {
+            var ready = new ManualResetEventSlim();
+            var finish = new ManualResetEventSlim();
+            bool suc = false;
+            var thd = new Thread(new ThreadStart(delegate
+            {
+                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6668));
+                socket.Listen(0);
+
+                ready.Set();
+                try
+                {
+                    var buffer = new byte[4096];
+                    for (int i = 0; i < 6; i++)
+                    {
+                        var established_socket = socket.Accept();
+                        GlobalUtil.Tracer.GlobalTracer.TraceInfo("connection estabilished: " + established_socket.RemoteEndPoint);
+                        var count = established_socket.Receive(buffer);
+                        if (count == 0) throw new ArgumentException();
+                        var response = "HTTP/1.1 200 OJBK\r\n";
+                        var header = "Connection: close\r\n" +
+                            "Date: " + _gen_date_string() + "\r\n" +
+                            "Content-Type: text/plain; charset=utf-8\r\n" +
+                            "Content-Length: 10\r\n" +
+                            "Server: TheFuckServer/1.0\r\n" +
+                            "Set-Cookie: aa=cc; max-age=102400; path=/; domain=.zhouxuebin.club; version=1\r\n" +
+                            "\r\n";
+                        var body = "emmmmmmmmm";
+                        var total_msg = response + header + body;
+                        var send_msg = System.Text.Encoding.UTF8.GetBytes(total_msg);
+                        established_socket.Send(send_msg);
+                        established_socket.Close();
+                        var str = System.Text.Encoding.UTF8.GetString(buffer, 0, count);
+                        suc = str.Contains("Cookie: a=b");
+                    }
+                }
+                catch (Exception)
+                {
+                }
+                finally
+                {
+                    finish.Set();
+                    socket.Close();
+                }
+            }));
+            thd.Start();
+            ready.Wait();
+
+            var test_obj = new GlobalUtil.http.HttpSession(retry_times: 3);
+            var p = new GlobalUtil.http.Parameters();
+            p.Add("Cookie", "a=b");
+            test_obj.HttpGet("http://127.0.0.1:6668/", header: p);
+            Assert.IsTrue(suc);
+        }
+
     }
 }

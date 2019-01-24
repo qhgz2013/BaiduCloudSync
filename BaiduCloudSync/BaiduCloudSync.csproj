@@ -82,13 +82,19 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="api\callbackargs\PcsApiCallbackType.cs" />
+    <Compile Include="api\callbackargs\PcsApiMultiObjectMetaCallbackArgs.cs" />
     <Compile Include="api\IPcsAPI.cs" />
+    <Compile Include="api\IPcsAsyncAPI.cs" />
+    <Compile Include="api\PcsFileOrder.cs" />
     <Compile Include="api\PcsFileUploader.cs" />
     <Compile Include="api\PcsMetadata.cs" />
     <Compile Include="api\PcsOverwriteType.cs" />
     <Compile Include="api\PcsPath.cs" />
+    <Compile Include="api\callbackargs\PcsApiCallbackArgs.cs" />
     <Compile Include="api\webimpl\PCSApiUnexpectedResponseException.cs" />
-    <Compile Include="api\webimpl\PcsAPIWebImpl.cs" />
+    <Compile Include="api\webimpl\PcsAsyncAPIWebImpl.cs" />
+    <Compile Include="api\webimpl\PcsAsyncAPIWebImplHelper.cs" />
     <Compile Include="Config.cs" />
     <Compile Include="db\mapper\DatabaseMapperFactory.cs" />
     <Compile Include="db\mapper\IDatabaseMapper.cs" />

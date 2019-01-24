@@ -6,7 +6,7 @@ using System.Text;
 namespace BaiduCloudSync.api.webimpl
 {
     [Serializable]
-    class PCSApiUnexpectedResponseException : Exception
+    public sealed class PCSApiUnexpectedResponseException : Exception
     {
         public PCSApiUnexpectedResponseException() : base() { }
         public PCSApiUnexpectedResponseException(string message) : base(message) { }

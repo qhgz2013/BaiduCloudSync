@@ -67,9 +67,10 @@ namespace BaiduCloudSync.oauth
         {
             get
             {
-                if (HttpSession.DefaultCookieContainer.ContainsKey(_identifier))
+                var container = HttpSession.GetCookieContainer(_identifier);
+                if (container != null)
                 {
-                    var cookies = HttpSession.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
+                    var cookies = container.GetCookies(new Uri("https://passport.baidu.com/"));
                     foreach (System.Net.Cookie item in cookies)
                     {
                         if (item.Name.ToLower() == "stoken" && item.Expires > DateTime.Now)
@@ -573,8 +574,8 @@ namespace BaiduCloudSync.oauth
             try
             {
                 // TODO: request logout to baidu
-                if (!string.IsNullOrEmpty(_identifier) && HttpSession.DefaultCookieContainer.ContainsKey(_identifier))
-                    HttpSession.DefaultCookieContainer[_identifier] = new System.Net.CookieContainer();
+                if (!string.IsNullOrEmpty(_identifier) && HttpSession.GetCookieContainer(_identifier) != null)
+                    HttpSession.SetCookieContainer(_identifier, null);
                 return true;
             }
             catch (Exception ex)
@@ -625,7 +626,7 @@ namespace BaiduCloudSync.oauth
         {
             if (!IsLogin)
                 throw new NotLoggedInException();
-            var cookies = HttpSession.DefaultCookieContainer[_identifier].GetCookies(new Uri("https://passport.baidu.com/"));
+            var cookies = HttpSession.GetCookieContainer(_identifier).GetCookies(new Uri("https://passport.baidu.com/"));
             foreach (System.Net.Cookie cookie in cookies)
                 if (cookie.Name.ToLower() == name.ToLower())
                     return cookie;

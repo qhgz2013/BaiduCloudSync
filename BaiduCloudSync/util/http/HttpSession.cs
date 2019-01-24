@@ -86,7 +86,7 @@ namespace GlobalUtil.http
 
         #region Cookie Segment
         //默认保存cookie的容器
-        public static Dictionary<string, CookieContainer> DefaultCookieContainer;
+        private static Dictionary<string, CookieContainer> DefaultCookieContainer;
         private static object __global_lock;
         /// <summary>
         /// 从文件中读取cookie
@@ -147,6 +147,65 @@ namespace GlobalUtil.http
             {
                 Tracer.GlobalTracer.TraceError(ex);
                 throw;
+            }
+        }
+
+        // v1.1 removed global access for DefaultCookieContainer (for multi-thread access propose)
+
+        /// <summary>
+        /// 根据group name获取对应的cookie容器
+        /// </summary>
+        /// <param name="group_name">cookie的分组名，用于区分不同的cookie</param>
+        /// <returns>当group_name存在时返回对应的容器，否则返回null</returns>
+        /// <exception cref="ArgumentNullException">group_name为空时引发的异常</exception>
+        public static CookieContainer GetCookieContainer(string group_name)
+        {
+            if (string.IsNullOrEmpty(group_name))
+                throw new ArgumentNullException("group_name");
+            lock (__global_lock)
+            {
+                if (DefaultCookieContainer.ContainsKey(group_name))
+                    return DefaultCookieContainer[group_name];
+                return null;
+            }
+        }
+        /// <summary>
+        /// 设置或删除指定group name下的cookie容器
+        /// </summary>
+        /// <param name="group_name">cookie的分组名，用于区分不同的cookie</param>
+        /// <param name="container">要设置的新的cookie容器，若该参数置为null，则删除该分组的容器</param>
+        /// <exception cref="ArgumentNullException">group_name为空时引发的异常</exception>
+        /// <exception cref="KeyNotFoundException">当尝试删除一个不存在的cookie group时引发的异常</exception>
+        public static void SetCookieContainer(string group_name, CookieContainer container)
+        {
+            if (string.IsNullOrEmpty(group_name))
+                throw new ArgumentNullException("group_name");
+            lock (__global_lock)
+            {
+                if (container == null)
+                {
+                    if (DefaultCookieContainer.ContainsKey(group_name))
+                        DefaultCookieContainer.Remove(group_name);
+                    else throw new KeyNotFoundException(group_name + " is not registered yet");
+                }
+                else
+                {
+                    if (DefaultCookieContainer.ContainsKey(group_name))
+                        DefaultCookieContainer[group_name] = container;
+                    else
+                        DefaultCookieContainer.Add(group_name, container);
+                }
+            }
+        }
+        /// <summary>
+        /// 现存的所有cookie分组名称
+        /// </summary>
+        public static string[] ExistCookieGroupName
+        {
+            get
+            {
+                lock (__global_lock)
+                    return DefaultCookieContainer.Keys.ToArray();
             }
         }
         #endregion
@@ -629,7 +688,9 @@ namespace GlobalUtil.http
                             if (!DefaultCookieContainer.ContainsKey(CookieGroup))
                                 DefaultCookieContainer.Add(CookieGroup, new CookieContainer());
                             // set the specified CookieContainer to this session
-                            HTTP_Request.CookieContainer = DefaultCookieContainer[CookieGroup];
+                            var session_container = new CookieContainer();
+                            session_container.Add(DefaultCookieContainer[CookieGroup].GetCookies(new Uri(_url)));
+                            HTTP_Request.CookieContainer = session_container;
                         }
                     }
 

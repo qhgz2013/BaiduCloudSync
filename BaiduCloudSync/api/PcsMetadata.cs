@@ -10,69 +10,72 @@ namespace BaiduCloudSync.api
     /// </summary>
     public class PcsMetadata
     {
-        private PcsPath _path;
-        private string _md5;
-        private bool _isdir;
-        private DateTime _server_ctime, _server_mtime;
-        private DateTime _local_ctime, _local_mtime;
-        private long _size;
 
         #region properties
+        public long FSID { get; set; }
         /// <summary>
         /// 文件路径信息
         /// </summary>
-        public PcsPath PathInfo { get { return _path; } set { _path = value; } }
+        public PcsPath PathInfo { get; set; }
         /// <summary>
         /// 文件MD5
         /// </summary>
-        public string MD5 { get { return _md5; } set { _md5 = value; } }
+        public string MD5 { get; set; }
         /// <summary>
         /// 是否为文件夹
         /// </summary>
-        public bool IsDirectory { get { return _isdir; } set { _isdir = value; } }
+        public bool IsDirectory { get; set; }
         /// <summary>
         /// 服务器的文件/文件夹创建时间
         /// </summary>
-        public DateTime ServerCreationTime { get { return _server_ctime; } set { _server_ctime = value; } }
+        public DateTime ServerCreationTime { get; set; }
         /// <summary>
         /// 服务器的文件/文件夹修改时间
         /// </summary>
-        public DateTime ServerModificationTime { get { return _server_mtime; } set { _server_mtime = value; } }
+        public DateTime ServerModificationTime { get; set; }
         /// <summary>
         /// 本地的文件/文件夹创建时间
         /// </summary>
-        public DateTime LocalCreationTime { get { return _local_ctime; } set { _local_ctime = value; } }
+        public DateTime LocalCreationTime { get; set; }
         /// <summary>
         /// 本地的文件/文件夹修改时间
         /// </summary>
-        public DateTime LocalModificationTime { get { return _local_mtime; } set { _local_mtime = value; } }
+        public DateTime LocalModificationTime { get; set; }
         /// <summary>
         /// 文件大小
         /// </summary>
-        public long Size { get { return _size; } set { _size = value; } }
+        public long Size { get; set; }
         #endregion
-        
-        public PcsMetadata(string path = null, string md5 = null, bool is_dir = false, long size = 0, DateTime? server_ctime = null, DateTime? server_mtime = null, DateTime? local_ctime = null, DateTime? local_mtime = null)
+
+        public PcsMetadata(string path = null, long fs_id = 0, string md5 = null, bool is_dir = false, long size = 0, DateTime? server_ctime = null, DateTime? server_mtime = null, DateTime? local_ctime = null, DateTime? local_mtime = null)
         {
-            _path = new PcsPath(path);
-            _md5 = md5;
-            _isdir = is_dir;
-            _size = size;
-            _server_ctime = server_ctime.HasValue ? server_ctime.Value : DateTime.MinValue;
-            _server_mtime = server_mtime.HasValue ? server_mtime.Value : DateTime.MinValue;
-            _local_ctime = local_ctime.HasValue ? local_ctime.Value : DateTime.MinValue;
-            _local_mtime = local_mtime.HasValue ? local_mtime.Value : DateTime.MinValue;
+            PathInfo = path == null ? null : new PcsPath(path);
+            FSID = fs_id;
+            MD5 = md5;
+            IsDirectory = is_dir;
+            Size = size;
+            ServerCreationTime = server_ctime.HasValue ? server_ctime.Value : DateTime.MinValue;
+            ServerModificationTime = server_mtime.HasValue ? server_mtime.Value : DateTime.MinValue;
+            LocalCreationTime = local_ctime.HasValue ? local_ctime.Value : DateTime.MinValue;
+            LocalModificationTime = local_mtime.HasValue ? local_mtime.Value : DateTime.MinValue;
         }
-        public PcsMetadata(PcsPath path = null, string md5 = null, bool is_dir = false, long size = 0, DateTime? server_ctime = null, DateTime? server_mtime = null, DateTime? local_ctime = null, DateTime? local_mtime = null)
+        public PcsMetadata(PcsPath path, long fs_id = 0, string md5 = null, bool is_dir = false, long size = 0, DateTime? server_ctime = null, DateTime? server_mtime = null, DateTime? local_ctime = null, DateTime? local_mtime = null)
         {
-            _path = path;
-            _md5 = md5;
-            _isdir = is_dir;
-            _size = size;
-            _server_ctime = server_ctime.HasValue ? server_ctime.Value : DateTime.MinValue;
-            _server_mtime = server_mtime.HasValue ? server_mtime.Value : DateTime.MinValue;
-            _local_ctime = local_ctime.HasValue ? local_ctime.Value : DateTime.MinValue;
-            _local_mtime = local_mtime.HasValue ? local_mtime.Value : DateTime.MinValue;
+            PathInfo = path;
+            FSID = fs_id;
+            MD5 = md5;
+            IsDirectory = is_dir;
+            Size = size;
+            ServerCreationTime = server_ctime.HasValue ? server_ctime.Value : DateTime.MinValue;
+            ServerModificationTime = server_mtime.HasValue ? server_mtime.Value : DateTime.MinValue;
+            LocalCreationTime = local_ctime.HasValue ? local_ctime.Value : DateTime.MinValue;
+            LocalModificationTime = local_mtime.HasValue ? local_mtime.Value : DateTime.MinValue;
+        }
+
+        public override string ToString()
+        {
+            if (PathInfo == null) return base.ToString();
+            return PathInfo.FullPath;
         }
     }
 }
