@@ -41,7 +41,7 @@ namespace GlobalUtil
                 var rsa = new RSACryptoServiceProvider();
                 rsa.ImportCspBlob(rsaPublic);
                 byte[] sha1_value = rsa.Encrypt(new byte[20], false);
-                if (!string.IsNullOrEmpty(SHA1)) sha1_value = rsa.Encrypt(util.Hex(SHA1), false);
+                if (!string.IsNullOrEmpty(SHA1)) sha1_value = rsa.Encrypt(Util.Hex(SHA1), false);
                 var rnd = new Random();
                 var aesKey = new byte[32];
                 rnd.NextBytes(aesKey);
@@ -114,7 +114,7 @@ namespace GlobalUtil
 
                 var encrypted_stream = Crypto.AES_StreamEncrypt(fs_out, aesKey, CipherMode.CFB, aesIV);
                 var sha1_value = new byte[20];
-                if (!string.IsNullOrEmpty(SHA1)) sha1_value = util.Hex(SHA1);
+                if (!string.IsNullOrEmpty(SHA1)) sha1_value = Util.Hex(SHA1);
                 encrypted_stream.Write(sha1_value, 0, 20);
 
                 int nread = 0;
@@ -170,13 +170,13 @@ namespace GlobalUtil
                     fs_out.Close();
                     throw new InvalidDataException("格式错误：该文件不是采用动态加密的文件");
                 }
-                var sha1_value = util.ReadBytes(fs_in, rsa.KeySize / 8);
-                var aes_key_value = util.ReadBytes(fs_in, rsa.KeySize / 8);
-                var aes_iv_value = util.ReadBytes(fs_in, rsa.KeySize / 8);
+                var sha1_value = Util.ReadBytes(fs_in, rsa.KeySize / 8);
+                var aes_key_value = Util.ReadBytes(fs_in, rsa.KeySize / 8);
+                var aes_iv_value = Util.ReadBytes(fs_in, rsa.KeySize / 8);
                 var SHA1 = rsa.Decrypt(sha1_value, false);
                 var aesKey = rsa.Decrypt(aes_key_value, false);
                 var aesIV = rsa.Decrypt(aes_iv_value, false);
-                var preserved = util.ReadBytes(fs_in, 2); //preserved for latter usage
+                var preserved = Util.ReadBytes(fs_in, 2); //preserved for latter usage
                 proceeded_length += sha1_value.Length + aes_key_value.Length + aes_iv_value.Length + 2 + 1;
 
                 var decrypted_stream = Crypto.AES_StreamDecrypt(fs_in, aesKey, CipherMode.CFB, aesIV);
@@ -197,7 +197,7 @@ namespace GlobalUtil
                 fs_out.Close();
                 decrypted_stream.Close();
                 var sha1_empty = new byte[20];
-                if (util.Hex(cur_sha1) != util.Hex(SHA1) && util.Hex(SHA1) != util.Hex(sha1_empty))
+                if (Util.Hex(cur_sha1) != Util.Hex(SHA1) && Util.Hex(SHA1) != Util.Hex(sha1_empty))
                 {
                     throw new InvalidDataException("SHA1检验不匹配：解密失败");
                 }
@@ -241,14 +241,14 @@ namespace GlobalUtil
                     fs_out.Close();
                     throw new InvalidDataException("格式错误：该文件不是采用静态加密的文件");
                 }
-                var preserved = util.ReadBytes(fs_in, 2); //preserved for latter usage
+                var preserved = Util.ReadBytes(fs_in, 2); //preserved for latter usage
 
                 var decrypted_stream = Crypto.AES_StreamDecrypt(fs_in, aesKey, CipherMode.CFB, aesIV);
                 int nread = 0;
                 const int buffer_size = 4096;
                 var buffer = new byte[buffer_size];
                 var sha1 = new SHA1CryptoServiceProvider();
-                byte[] SHA1 = util.ReadBytes(decrypted_stream, 20);
+                byte[] SHA1 = Util.ReadBytes(decrypted_stream, 20);
                 do
                 {
                     nread = decrypted_stream.Read(buffer, 0, buffer_size);
@@ -262,7 +262,7 @@ namespace GlobalUtil
                 fs_out.Close();
                 decrypted_stream.Close();
                 var sha1_empty = new byte[20];
-                if (util.Hex(cur_sha1) != util.Hex(SHA1) && util.Hex(SHA1) != util.Hex(sha1_empty))
+                if (Util.Hex(cur_sha1) != Util.Hex(SHA1) && Util.Hex(SHA1) != Util.Hex(sha1_empty))
                 {
                     throw new InvalidDataException("SHA1检验不匹配：解密失败");
                 }

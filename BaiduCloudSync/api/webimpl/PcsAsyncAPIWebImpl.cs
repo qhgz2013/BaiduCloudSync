@@ -23,7 +23,8 @@ namespace BaiduCloudSync.api.webimpl
         private string _pcs_auth_sign;
         private long _pcs_auth_timestamp;
         private string _pcs_auth_bdstoken;
-
+        private Random _random = new Random();
+        private readonly object _lock = new object();
         public PcsAsyncAPIWebImpl(IOAuth oAuth)
         {
             if (oAuth == null) throw new ArgumentNullException("oAuth");
@@ -44,104 +45,108 @@ namespace BaiduCloudSync.api.webimpl
         }
         private void _initialize_pcs_auth_data()
         {
-            if (!string.IsNullOrEmpty(_pcs_auth_sign) &&
-                (util.FromUnixTimestamp(_pcs_auth_timestamp) + TimeSpan.FromSeconds(_PCS_AUTH_DATA_EXPIRATION_SECS) > DateTime.Now))
-                return;
-            var sess = _instance_session();
-            try
+            lock (_lock)
             {
-                Tracer.GlobalTracer.TraceInfo("Begin PCS auth data initialization");
-
-                sess.HttpGet("https://pan.baidu.com/");
-                var html = sess.ReadResponseString();
-
-                string bdstoken = null, sign1 = null, sign3 = null;
-                long timestamp = 0;
-
-                var _lambda_dump_failure = new ParameterizedThreadStart((msg) =>
+                if (!string.IsNullOrEmpty(_pcs_auth_sign) &&
+                    (Util.FromUnixTimestamp(_pcs_auth_timestamp) + TimeSpan.FromSeconds(_PCS_AUTH_DATA_EXPIRATION_SECS) > DateTime.Now))
+                    return;
+                var sess = _instance_session();
+                try
                 {
-                    Tracer.GlobalTracer.TraceError("Could not initialize PCS Auth data: REGEX not match, the original HTML code is dumped below");
-                    Tracer.GlobalTracer.TraceError(msg.ToString());
-                    throw new PCSApiUnexpectedResponseException();
-                });
+                    Tracer.GlobalTracer.TraceInfo("Begin PCS auth data initialization");
 
-                var match = Regex.Match(html, "\"bdstoken\":\"(\\w+)\"");
-                if (match.Success)
-                    bdstoken = match.Result("$1");
-                else
-                    _lambda_dump_failure(html);
+                    sess.HttpGet("https://pan.baidu.com/");
+                    var html = sess.ReadResponseString();
 
-                match = Regex.Match(html, "\"sign1\":\"(\\w+)\"");
-                if (match.Success)
-                    sign1 = match.Result("$1");
-                else
-                    _lambda_dump_failure(html);
+                    string bdstoken = null, sign1 = null, sign3 = null;
+                    long timestamp = 0;
 
-                match = Regex.Match(html, "\"sign3\":\"(\\w+)\"");
-                if (match.Success)
-                    sign3 = match.Result("$1");
-                else
-                    _lambda_dump_failure(html);
+                    var _lambda_dump_failure = new ParameterizedThreadStart((msg) =>
+                    {
+                        Tracer.GlobalTracer.TraceError("Could not initialize PCS Auth data: REGEX not match, the original HTML code is dumped below");
+                        Tracer.GlobalTracer.TraceError(msg.ToString());
+                        throw new PCSApiUnexpectedResponseException();
+                    });
 
-                match = Regex.Match(html, "\"timestamp\":(\\d+)");
-                if (match.Success)
-                    timestamp = long.Parse(match.Result("$1"));
-                else
-                    _lambda_dump_failure(html);
+                    var match = Regex.Match(html, "\"bdstoken\":\"(\\w+)\"");
+                    if (match.Success)
+                        bdstoken = match.Result("$1");
+                    else
+                        _lambda_dump_failure(html);
 
-                // compute sign
-                var j = Encoding.UTF8.GetBytes(sign3);
-                var r = Encoding.UTF8.GetBytes(sign1);
-                byte[] a = new byte[256], p = new byte[256];
-                var o = new byte[r.Length];
-                int v = j.Length;
-                for (int q = 0; q < 256; q++)
-                {
-                    a[q] = j[q % v];
-                    p[q] = (byte)q;
+                    match = Regex.Match(html, "\"sign1\":\"(\\w+)\"");
+                    if (match.Success)
+                        sign1 = match.Result("$1");
+                    else
+                        _lambda_dump_failure(html);
+
+                    match = Regex.Match(html, "\"sign3\":\"(\\w+)\"");
+                    if (match.Success)
+                        sign3 = match.Result("$1");
+                    else
+                        _lambda_dump_failure(html);
+
+                    match = Regex.Match(html, "\"timestamp\":(\\d+)");
+                    if (match.Success)
+                        timestamp = long.Parse(match.Result("$1"));
+                    else
+                        _lambda_dump_failure(html);
+
+                    // compute sign
+                    var j = Encoding.UTF8.GetBytes(sign3);
+                    var r = Encoding.UTF8.GetBytes(sign1);
+                    byte[] a = new byte[256], p = new byte[256];
+                    var o = new byte[r.Length];
+                    int v = j.Length;
+                    for (int q = 0; q < 256; q++)
+                    {
+                        a[q] = j[q % v];
+                        p[q] = (byte)q;
+                    }
+                    int u = 0;
+                    for (int q = 0; q < 256; q++)
+                    {
+                        u = (u + p[q] + a[q]) % 256;
+                        byte t = p[q];
+                        p[q] = p[u];
+                        p[u] = t;
+                    }
+                    int i = 0; u = 0;
+                    for (int q = 0; q < r.Length; q++)
+                    {
+                        i = (i + 1) % 256;
+                        u = (u + p[i]) % 256;
+                        byte t = p[i];
+                        p[i] = p[u];
+                        p[u] = t;
+                        byte k = p[(p[i] + p[u]) % 256];
+                        o[q] = (byte)(r[q] ^ k);
+                    }
+
+                    _pcs_auth_sign = Convert.ToBase64String(o);
+                    _pcs_auth_bdstoken = bdstoken;
+                    _pcs_auth_timestamp = timestamp;
                 }
-                int u = 0;
-                for (int q = 0; q < 256; q++)
+                catch (PCSApiUnexpectedResponseException)
                 {
-                    u = (u + p[q] + a[q]) % 256;
-                    byte t = p[q];
-                    p[q] = p[u];
-                    p[u] = t;
+                    throw;
                 }
-                int i = 0; u = 0;
-                for (int q = 0; q < r.Length; q++)
+                catch (Exception ex)
                 {
-                    i = (i + 1) % 256;
-                    u = (u + p[i]) % 256;
-                    byte t = p[i];
-                    p[i] = p[u];
-                    p[u] = t;
-                    byte k = p[(p[i] + p[u]) % 256];
-                    o[q] = (byte)(r[q] ^ k);
+                    Tracer.GlobalTracer.TraceError(ex);
+                    throw new PCSApiUnexpectedResponseException("Unexpected error while initializing pcs auth data", ex);
                 }
-
-                _pcs_auth_sign = Convert.ToBase64String(o);
-                _pcs_auth_bdstoken = bdstoken;
-                _pcs_auth_timestamp = timestamp;
-            }
-            catch (PCSApiUnexpectedResponseException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                Tracer.GlobalTracer.TraceError(ex);
-                throw new PCSApiUnexpectedResponseException("Unexpected error while initializing pcs auth data", ex);
-            }
-            finally
-            {
-                Tracer.GlobalTracer.TraceInfo("Exit PCS auth data initialization");
-                sess.Close();
+                finally
+                {
+                    Tracer.GlobalTracer.TraceInfo("Exit PCS auth data initialization");
+                    sess.Close();
+                }
             }
         }
 
         public void ListDir(string path, EventHandler<PcsApiMultiObjectMetaCallbackArgs> callback, PcsFileOrder order = PcsFileOrder.Name, bool desc = false, int page = 1, int count = 1000, object state = null)
         {
+            // test passed, https api version 20190127
             try
             {
                 path = new PcsPath(path).FullPath;
@@ -160,17 +165,21 @@ namespace BaiduCloudSync.api.webimpl
 
                 var param = new Parameters
                 {
-                    { "dir", path },
-                    { "bdstoken", _pcs_auth_bdstoken },
-                    { "logid", PcsAsyncAPIWebImplHelper.LogID },
                     { "order", order.ToString().ToLower() },
                     { "desc", desc ? 1 : 0 },
-                    { "app_id", APPID },
+                    { "showempty", 0 },
+                    { "web", 1 },
+                    { "page", page },
+                    { "num", count },
+                    { "dir", path },
+                    { "t", _random.NextDouble() },
                     { "channel", "chunlei" },
                     { "web", 1 },
+                    { "app_id", APPID },
+                    { "bdstoken", _pcs_auth_bdstoken },
+                    { "logid", PcsAsyncAPIWebImplHelper.LogID },
                     { "clienttype", 0 },
-                    { "page", page },
-                    { "num", count }
+                    { "startLogTime", (long)(DateTime.Now.ToUnixTimestamp() * 1000) }
                 };
 
                 sess.HttpGetAsync("https://pan.baidu.com/api/list", query: param, callback: (sender, e) =>
@@ -200,6 +209,7 @@ namespace BaiduCloudSync.api.webimpl
                     {
                         Tracer.GlobalTracer.TraceError("Unexpected API Exception");
                         Tracer.GlobalTracer.TraceError(ex);
+                        failed_reason = ex.Message;
                     }
                     finally
                     {
@@ -208,6 +218,280 @@ namespace BaiduCloudSync.api.webimpl
                             callback?.Invoke(this, new PcsApiMultiObjectMetaCallbackArgs(failed_reason, state));
                         else
                             callback?.Invoke(this, new PcsApiMultiObjectMetaCallbackArgs(data, state));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("operation failed, see the below exception for more details", ex);
+            }
+        }
+
+        public void GetQuota(EventHandler<PcsApiQuotaCallbackArgs> callback, object state = null)
+        {
+            // test passed, https api version 20190127
+            try
+            {
+                _initialize_pcs_auth_data();
+                var sess = _instance_session();
+
+                var param = new Parameters
+                {
+                    { "checkexpire", 1 },
+                    { "checkfree", 1 },
+                    { "channel", "chunlei" },
+                    { "web", 1 },
+                    { "app_id", APPID },
+                    { "bdstoken", _pcs_auth_bdstoken },
+                    { "logid", PcsAsyncAPIWebImplHelper.LogID },
+                    { "clienttype", 0 }
+                };
+
+                sess.HttpGetAsync("https://pan.baidu.com/api/quota", query: param, callback: (sender, e) =>
+                {
+                    string failed_reason = null;
+                    long? used = null, total = null;
+                    try
+                    {
+                        var response_string = e.Session.ReadResponseString();
+                        if (e.Session.HTTP_Response.StatusCode != HttpStatusCode.OK)
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed, HTTP status code: {(int)e.Session.HTTP_Response.StatusCode}, response string: {response_string}");
+                        var json = JsonConvert.DeserializeObject(response_string) as JObject;
+
+                        failed_reason = PcsAsyncAPIWebImplHelper.CheckJson(json);
+                        if (!string.IsNullOrEmpty(failed_reason))
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed: {failed_reason}");
+
+                        used = json.Value<long>("used");
+                        total = json.Value<long>("total");
+                    }
+                    catch (Exception ex)
+                    {
+                        Tracer.GlobalTracer.TraceError("Unexpected API Exception");
+                        Tracer.GlobalTracer.TraceError(ex);
+                        failed_reason = ex.Message;
+                    }
+                    finally
+                    {
+                        e.Session.Close();
+                        if (total == null)
+                            callback?.Invoke(this, new PcsApiQuotaCallbackArgs(failed_reason, state));
+                        else
+                            callback?.Invoke(this, new PcsApiQuotaCallbackArgs(used.Value, total.Value, state));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("operation failed, see the below exception for more details", ex);
+            }
+        }
+
+        public void CreateDirectory(string path, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null)
+        {
+            // test passed, api version 20190127
+            try
+            {
+                path = new PcsPath(path).FullPath;
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException("Invalid Parameter: path", ex);
+            }
+
+            try
+            {
+                _initialize_pcs_auth_data();
+                var sess = _instance_session();
+                sess.ContentType = "application/x-www-form-urlencoded";
+
+                var param = new Parameters
+                {
+                    { "a", "commit" },
+                    { "channel", "chunlei" },
+                    { "web", 1 },
+                    { "app_id", APPID },
+                    { "bdstoken", _pcs_auth_bdstoken },
+                    { "logid", PcsAsyncAPIWebImplHelper.LogID },
+                    { "clienttype", 0 }
+                };
+                var body = new Parameters
+                {
+                    { "path", path },
+                    { "isdir", 1 },
+                    { "blocklist", "[]" }
+                };
+                sess.HttpPostAsync("https://pan.baidu.com/api/create", query: param, body: body, callback: (sender, e) =>
+                {
+                    string failed_reason = null;
+                    bool suc = false;
+                    try
+                    {
+                        var response_string = e.Session.ReadResponseString();
+                        if (e.Session.HTTP_Response.StatusCode != HttpStatusCode.OK)
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed, HTTP status code: {(int)e.Session.HTTP_Response.StatusCode}, response string: {response_string}");
+                        var json = JsonConvert.DeserializeObject(response_string) as JObject;
+
+                        failed_reason = PcsAsyncAPIWebImplHelper.CheckJson(json);
+                        if (!string.IsNullOrEmpty(failed_reason))
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed: {failed_reason}");
+
+                        suc = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        Tracer.GlobalTracer.TraceError("Unexpected API Exception");
+                        Tracer.GlobalTracer.TraceError(ex);
+                        failed_reason = ex.Message;
+                    }
+                    finally
+                    {
+                        e.Session.Close();
+                        if (!suc)
+                            callback?.Invoke(this, new PcsApiOperationCallbackArgs(failed_reason, state));
+                        else
+                            callback?.Invoke(this, new PcsApiOperationCallbackArgs(state));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("operation failed, see the below exception for more details", ex);
+            }
+        }
+
+        public void Delete(IEnumerable<string> paths, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null)
+        {
+            // test passed, api version 20190127
+            var path_list = paths.ToList();
+            try
+            {
+                for (int i = 0; i < path_list.Count; i++)
+                {
+                    path_list[i] = new PcsPath(path_list[i]).FullPath;
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException("Invalid Parameter: paths", ex);
+            }
+
+            try
+            {
+                _initialize_pcs_auth_data();
+                var sess = _instance_session();
+                sess.ContentType = "application/x-www-form-urlencoded";
+
+                var param = new Parameters
+                {
+                    { "opera", "delete" },
+                    { "async", 2 },
+                    { "onnest", "fail" },
+                    { "channel", "chunlei" },
+                    { "web", 1 },
+                    { "app_id", APPID },
+                    { "bdstoken", _pcs_auth_bdstoken },
+                    { "logid", PcsAsyncAPIWebImplHelper.LogID },
+                    { "clienttype", 0 }
+                };
+
+                var path_json = JsonConvert.SerializeObject(path_list);
+                var body = new Parameters
+                {
+                    { "filelist", path_json }
+                };
+                sess.HttpPostAsync("https://pan.baidu.com/api/filemanager", query: param, body: body, callback: (sender, e) =>
+                {
+                    string failed_reason = null;
+                    string taskid = null;
+                    bool suc = false;
+                    try
+                    {
+                        var response_string = e.Session.ReadResponseString();
+                        if (e.Session.HTTP_Response.StatusCode != HttpStatusCode.OK)
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed, HTTP status code: {(int)e.Session.HTTP_Response.StatusCode}, response string: {response_string}");
+                        var json = JsonConvert.DeserializeObject(response_string) as JObject;
+
+                        failed_reason = PcsAsyncAPIWebImplHelper.CheckJson(json);
+                        if (!string.IsNullOrEmpty(failed_reason))
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed: {failed_reason}");
+
+                        // extracting task id from json
+                        bool extract_taskid_suc = false;
+                        extract_taskid_suc = json.TryGetValue("taskid", out var taskid_token);
+                        if (extract_taskid_suc)
+                        {
+                            taskid = taskid_token.Value<string>();
+                            if (string.IsNullOrEmpty(taskid)) extract_taskid_suc = false;
+                        }
+
+                        if (!extract_taskid_suc)
+                        {
+                            // could not get async data, set it to success
+                            Tracer.GlobalTracer.TraceWarning("API call for Delete: Could not get async task id, ignore async wait and assume the operation is succeeded");
+                            suc = true;
+                            return;
+                        }
+
+                        // wait success
+                        var query_param = new Parameters
+                        {
+                            { "taskid", taskid },
+                            { "channel", "chunlei" },
+                            { "web", 1 },
+                            { "app_id", APPID },
+                            { "bdstoken", _pcs_auth_bdstoken },
+                            { "logid", PcsAsyncAPIWebImplHelper.LogID },
+                            { "clienttype", 0 }
+                        };
+
+                        DateTime begin = DateTime.Now;
+                        TimeSpan exceed_time = TimeSpan.FromMinutes(1);
+                        bool warn_on_exceed = false;
+
+                        while (true)
+                        {
+                            sess.HttpPost("https://pan.baidu.com/share/taskquery", body: body, query: query_param);
+                            var str = sess.ReadResponseString();
+                            var task_json = JsonConvert.DeserializeObject(str) as JObject;
+                            PcsAsyncAPIWebImplHelper.CheckJson(task_json);
+                            var status = task_json.Value<string>("status");
+
+                            switch (status)
+                            {
+                                case "success":
+                                    suc = true;
+                                    return;
+
+                                case "pending":
+                                    if (!warn_on_exceed && DateTime.Now - begin > exceed_time)
+                                    {
+                                        warn_on_exceed = true;
+                                        Tracer.GlobalTracer.TraceWarning($"API call for Delete: Async wait has blocked for more than ${exceed_time.TotalMinutes} minutes");
+                                    }
+                                    Thread.Sleep(500);
+                                    break;
+
+                                default:
+                                    failed_reason = $"Unexpected task status: {status}, set to failure";
+                                    Tracer.GlobalTracer.TraceWarning(failed_reason);
+                                    return;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Tracer.GlobalTracer.TraceError("Unexpected API Exception");
+                        Tracer.GlobalTracer.TraceError(ex);
+                        failed_reason = ex.Message;
+                    }
+                    finally
+                    {
+                        e.Session.Close();
+                        if (!suc)
+                            callback?.Invoke(this, new PcsApiOperationCallbackArgs(failed_reason, state));
+                        else
+                            callback?.Invoke(this, new PcsApiOperationCallbackArgs(state));
                     }
                 });
             }

@@ -99,7 +99,7 @@ namespace BaiduCloudSync
 
             var parent_dir_info = new FileInfo(path_name).Directory;
             if (!parent_dir_info.Exists)
-                util.CreateDirectory(parent_dir_info.FullName);
+                Util.CreateDirectory(parent_dir_info.FullName);
             File.WriteAllText(path_name, JsonConvert.SerializeObject(json));
         }
     }

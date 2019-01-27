@@ -10,7 +10,7 @@ using System.Text;
 
 namespace GlobalUtil
 {
-    public partial class util
+    public partial class Util
     {
         /// <summary>
         /// 从指定的数据流中读取制指定的字节数，并返回该字节数组

@@ -135,7 +135,7 @@ namespace GlobalUtil
                 {
                     try
                     {
-                        var array = util.Hex(file_data);
+                        var array = Util.Hex(file_data);
                         _aesKey = new byte[32];
                         _aesIv = new byte[16];
                         Array.Copy(array, 0, _aesKey, 0, 32);
@@ -169,7 +169,7 @@ namespace GlobalUtil
                 var aes_data = new byte[48];
                 Array.Copy(_aesKey, 0, aes_data, 0, 32);
                 Array.Copy(_aesIv, 0, aes_data, 32, 16);
-                File.WriteAllText(path, util.Hex(aes_data));
+                File.WriteAllText(path, Util.Hex(aes_data));
             }
         }
 

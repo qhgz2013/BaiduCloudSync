@@ -28,7 +28,7 @@ namespace BaiduCloudSync.oauth
             if (identifier == null)
             {
                 // 通过表单的随机生成算法生成当前cookie所属的key
-                identifier = util.GenerateFormDataBoundary();
+                identifier = Util.GenerateFormDataBoundary();
             }
             _identifier = identifier;
             _gid = Guid.NewGuid().ToString().Substring(1);
@@ -98,7 +98,7 @@ namespace BaiduCloudSync.oauth
                 query_param.Add("tpl", "netdisk");
                 query_param.Add("subpro", "netdisk_web");
                 query_param.Add("apiver", "v3");
-                query_param.Add("tt", (long)(util.ToUnixTimestamp(DateTime.Now) * 1000));
+                query_param.Add("tt", (long)(Util.ToUnixTimestamp(DateTime.Now) * 1000));
                 query_param.Add("class", "login");
                 query_param.Add("gid", gid);
                 query_param.Add("loginversion", "v4");
@@ -111,7 +111,7 @@ namespace BaiduCloudSync.oauth
 
                 ns.HttpGet("https://passport.baidu.com/v2/api/?getapi&" + query_param.BuildQueryString(), header: referer);
                 var api_result = ns.ReadResponseString();
-                api_result = util.EscapeCallbackFunction(api_result);
+                api_result = Util.EscapeCallbackFunction(api_result);
                 var json_api_result = JsonConvert.DeserializeObject(api_result) as JObject;
                 var errno = json_api_result["errInfo"].Value<string>("no");
                 if (errno != "0") throw new LoginFailedException("failed to get token: " + json_api_result.ToString());
@@ -156,7 +156,7 @@ namespace BaiduCloudSync.oauth
                 param.Add("tpl", "netdisk");
                 param.Add("subpro", "netdisk_web");
                 param.Add("apiver", "v3");
-                param.Add("tt", (long)(util.ToUnixTimestamp(DateTime.Now) * 1000));
+                param.Add("tt", (long)(Util.ToUnixTimestamp(DateTime.Now) * 1000));
                 param.Add("sub_source", "leadsetpwd");
                 param.Add("username", username);
                 param.Add("loginversion", "v4");
@@ -170,7 +170,7 @@ namespace BaiduCloudSync.oauth
                 ns.HttpGet("https://passport.baidu.com/v2/api/?logincheck&" + param.BuildQueryString(), header: referer);
 
                 var api_result = ns.ReadResponseString();
-                api_result = util.EscapeCallbackFunction(api_result);
+                api_result = Util.EscapeCallbackFunction(api_result);
 
                 var json_api_result = JsonConvert.DeserializeObject(api_result) as JObject;
                 var errno = json_api_result["errInfo"].Value<string>("no");
@@ -215,7 +215,7 @@ namespace BaiduCloudSync.oauth
                 param.Add("tpl", "netdisk");
                 param.Add("subpro", "netdisk_web");
                 param.Add("apiver", "v3");
-                param.Add("tt", (long)(util.ToUnixTimestamp(DateTime.Now) * 1000));
+                param.Add("tt", (long)(Util.ToUnixTimestamp(DateTime.Now) * 1000));
                 param.Add("gid", gid);
                 param.Add("loginversion", "v4");
                 param.Add("traceid", "");
@@ -227,7 +227,7 @@ namespace BaiduCloudSync.oauth
                 ns.HttpGet("https://passport.baidu.com/v2/getpublickey", query: param, header: referer);
 
                 var api_result = ns.ReadResponseString();
-                api_result = util.EscapeCallbackFunction(api_result);
+                api_result = Util.EscapeCallbackFunction(api_result);
 
                 var json_api_result = JsonConvert.DeserializeObject(api_result) as JObject;
 
@@ -283,7 +283,7 @@ namespace BaiduCloudSync.oauth
                 body.Add("tpl", "netdisk");
                 body.Add("subpro", "netdisk_web");
                 body.Add("apiver", "v3");
-                body.Add("tt", (long)(util.ToUnixTimestamp(DateTime.Now) * 1000));
+                body.Add("tt", (long)(Util.ToUnixTimestamp(DateTime.Now) * 1000));
                 body.Add("codestring", codestring == null ? "" : codestring);
                 body.Add("safeflg", "0");
                 body.Add("u", "https://pan.baidu.com/disk/home");
@@ -409,7 +409,7 @@ namespace BaiduCloudSync.oauth
                 param.Add("tpl", "netdisk");
                 param.Add("subpro", "netdisk_web");
                 param.Add("apiver", "v3");
-                param.Add("tt", (long)(util.ToUnixTimestamp(DateTime.Now) * 1000));
+                param.Add("tt", (long)(Util.ToUnixTimestamp(DateTime.Now) * 1000));
                 param.Add("fr", "login");
                 param.Add("loginversion", "v4");
                 param.Add("vcodetype", vcodetype);
@@ -422,7 +422,7 @@ namespace BaiduCloudSync.oauth
                 ns.HttpGet("https://passport.baidu.com/v2/?reggetcodestr&" + param.BuildQueryString(), header: referer);
 
                 var api_result = ns.ReadResponseString();
-                api_result = util.EscapeCallbackFunction(api_result);
+                api_result = Util.EscapeCallbackFunction(api_result);
 
                 var json_api_result = JsonConvert.DeserializeObject(api_result) as JObject;
 

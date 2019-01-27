@@ -17,7 +17,7 @@ namespace BaiduCloudSync.api.webimpl
         {
             get
             {
-                double log_ts = util.ToUnixTimestamp(DateTime.Now) * 10000;
+                double log_ts = Util.ToUnixTimestamp(DateTime.Now) * 10000;
                 // avoiding dumplication
                 log_ts += _random.NextDouble();
                 return Convert.ToBase64String(Encoding.UTF8.GetBytes(log_ts.ToString()));
@@ -47,11 +47,11 @@ namespace BaiduCloudSync.api.webimpl
             {
                 FSID = json.Value<long>("fs_id"),
                 IsDirectory = json.Value<int>("isdir") != 0,
-                LocalCreationTime = util.FromUnixTimestamp(json.Value<long>("local_ctime")),
-                LocalModificationTime = util.FromUnixTimestamp(json.Value<long>("local_mtime")),
+                LocalCreationTime = Util.FromUnixTimestamp(json.Value<long>("local_ctime")),
+                LocalModificationTime = Util.FromUnixTimestamp(json.Value<long>("local_mtime")),
                 PathInfo = new PcsPath(json.Value<string>("path")),
-                ServerCreationTime = util.FromUnixTimestamp(json.Value<long>("server_ctime")),
-                ServerModificationTime = util.FromUnixTimestamp(json.Value<long>("server_mtime")),
+                ServerCreationTime = Util.FromUnixTimestamp(json.Value<long>("server_ctime")),
+                ServerModificationTime = Util.FromUnixTimestamp(json.Value<long>("server_mtime")),
                 Size = json.Value<long>("size"),
                 MD5 = json.Value<string>("md5")
             };

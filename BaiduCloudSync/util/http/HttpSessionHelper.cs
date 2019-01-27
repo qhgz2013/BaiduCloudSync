@@ -131,7 +131,7 @@ namespace GlobalUtil.http
                     total += readed;
                     if (!has_warned && total >= warn_threshold)
                     {
-                        Tracer.GlobalTracer.TraceWarning("Total bytes read from non-seekable stream has exceeded the warning threshold (" + util.FormatBytes(warn_threshold) + "), which may cause high usage of memory");
+                        Tracer.GlobalTracer.TraceWarning("Total bytes read from non-seekable stream has exceeded the warning threshold (" + Util.FormatBytes(warn_threshold) + "), which may cause high usage of memory");
                         has_warned = true;
                     }
                     wrapped_memory_stream.Write(buffer, 0, readed);

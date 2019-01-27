@@ -10,6 +10,7 @@ using System.Threading;
 
 namespace GlobalUtil.http
 {
+    // todo: implement this class using another third-party .net modules, to avoid some strange bug while using System.Net.*
     public class HttpSession
     {
         #region Constants
@@ -135,7 +136,7 @@ namespace GlobalUtil.http
                     catch (DirectoryNotFoundException)
                     {
                         var parent = new FileInfo(file).Directory;
-                        util.CreateDirectory(parent.FullName);
+                        Util.CreateDirectory(parent.FullName);
                         stream = File.Create(file);
                     }
                     var formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
@@ -409,6 +410,9 @@ namespace GlobalUtil.http
             _append_default_header_internal(ret, STR_ACCEPT_ENCODING, AcceptEncoding);
             _append_default_header_internal(ret, STR_ACCEPT_LANGUAGE, AcceptLanguage);
             _append_default_header_internal(ret, STR_USER_AGENT, UserAgent);
+            // add the default content-type to POST requests
+            if (_post_origin_stream != null)
+                _append_default_header_internal(ret, STR_CONTENT_TYPE, ContentType);
             _merge_parameters(ret, custom_headers);
             return ret;
         }

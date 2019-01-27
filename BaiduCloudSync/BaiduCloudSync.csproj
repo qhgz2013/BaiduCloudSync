@@ -84,6 +84,8 @@
   <ItemGroup>
     <Compile Include="api\callbackargs\PcsApiCallbackType.cs" />
     <Compile Include="api\callbackargs\PcsApiMultiObjectMetaCallbackArgs.cs" />
+    <Compile Include="api\callbackargs\PcsApiOperationCallbackArgs.cs" />
+    <Compile Include="api\callbackargs\PcsApiQuotaCallbackArgs.cs" />
     <Compile Include="api\IPcsAPI.cs" />
     <Compile Include="api\IPcsAsyncAPI.cs" />
     <Compile Include="api\PcsFileOrder.cs" />
@@ -123,7 +125,7 @@
     <Compile Include="util\http\Parameters.cs" />
     <Compile Include="util\http\Range.cs" />
     <Compile Include="util\secure\crypto-rsa-der.cs" />
-    <Compile Include="util\queue-stream.cs" />
+    <Compile Include="util\QueueStream.cs" />
     <Compile Include="util\secure\common-file-encrypt.cs" />
     <Compile Include="util\secure\crc32.cs" />
     <Compile Include="util\secure\crypto-aes.cs" />
@@ -133,9 +135,10 @@
     <Compile Include="util\secure\md5.cs" />
     <Compile Include="util\secure\sha1.cs" />
     <Compile Include="util\task-dispatcher.cs" />
-    <Compile Include="util\tracer.cs" />
+    <Compile Include="util\Tracer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="util\util.cs" />
+    <Compile Include="util\Util.cs" />
+    <Compile Include="util\UtilExtension.cs" />
     <Compile Include="util\Win32API.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>

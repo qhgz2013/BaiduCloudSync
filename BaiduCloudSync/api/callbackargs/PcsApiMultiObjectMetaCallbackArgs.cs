@@ -16,5 +16,10 @@ namespace BaiduCloudSync.api.callbackargs
         {
             PcsMetadatas = pcsMetadatas.ToArray();
         }
+
+        public override string ToString()
+        {
+            return "Count = " + (PcsMetadatas == null ? "0" : PcsMetadatas.Length.ToString());
+        }
     }
 }
