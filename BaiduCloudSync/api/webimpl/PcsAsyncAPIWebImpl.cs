@@ -16,7 +16,6 @@ namespace BaiduCloudSync.api.webimpl
 {
     public class PcsAsyncAPIWebImpl : IPcsAsyncAPI
     {
-        private IOAuth _auth_data;
         private const int _PCS_AUTH_DATA_EXPIRATION_SECS = 60000; // expiration for 10 minutes
         private readonly string _cookie_guid = Guid.NewGuid().ToString(); // fixed GUID for cookie
         private const int APPID = 250528;
@@ -25,11 +24,12 @@ namespace BaiduCloudSync.api.webimpl
         private string _pcs_auth_bdstoken;
         private Random _random = new Random();
         private readonly object _lock = new object();
+        public IOAuth Auth { get; set; }
         public PcsAsyncAPIWebImpl(IOAuth oAuth)
         {
             if (oAuth == null) throw new ArgumentNullException("oAuth");
             if (!oAuth.IsLogin) throw new ArgumentException("OAuth error: not logged in before instancing PCS API");
-            _auth_data = oAuth;
+            Auth = oAuth;
             _initialize_pcs_auth_data();
         }
 
@@ -37,9 +37,9 @@ namespace BaiduCloudSync.api.webimpl
         private HttpSession _instance_session()
         {
             var container = new CookieContainer();
-            container.Add(new Cookie("BAIDUID", _auth_data.BaiduID, "/", ".baidu.com"));
-            container.Add(new Cookie("BDUSS", _auth_data.BDUSS, "/", ".baidu.com"));
-            container.Add(new Cookie("STOKEN", _auth_data.SToken, "/", ".baidu.com"));
+            container.Add(new Cookie("BAIDUID", Auth.BaiduID, "/", ".baidu.com"));
+            container.Add(new Cookie("BDUSS", Auth.BDUSS, "/", ".baidu.com"));
+            container.Add(new Cookie("STOKEN", Auth.SToken, "/", ".baidu.com"));
             HttpSession.SetCookieContainer(_cookie_guid, container);
             return new HttpSession(cookie_group: _cookie_guid, timeout: 60000);
         }
@@ -192,7 +192,7 @@ namespace BaiduCloudSync.api.webimpl
                         if (e.Session.HTTP_Response.StatusCode != HttpStatusCode.OK)
                             throw new PCSApiUnexpectedResponseException($"API call from HTTP failed, HTTP status code: {(int)e.Session.HTTP_Response.StatusCode}, response string: {response_string}");
                         var json = JsonConvert.DeserializeObject(response_string) as JObject;
-                        
+
                         failed_reason = PcsAsyncAPIWebImplHelper.CheckJson(json);
                         if (!string.IsNullOrEmpty(failed_reason))
                             throw new PCSApiUnexpectedResponseException($"API call from HTTP failed: {failed_reason}");
@@ -360,22 +360,73 @@ namespace BaiduCloudSync.api.webimpl
             }
         }
 
-        public void Delete(IEnumerable<string> paths, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null)
+        // wait for async task to be done (by sending heartbeat request)
+        private bool _wait_async_complete(string task_id, Parameters filelist, out string failure_reason)
         {
-            // test passed, api version 20190127
-            var path_list = paths.ToList();
-            try
+            failure_reason = null;
+            if (string.IsNullOrEmpty(task_id) || filelist == null)
             {
-                for (int i = 0; i < path_list.Count; i++)
-                {
-                    path_list[i] = new PcsPath(path_list[i]).FullPath;
-                }
-            }
-            catch (ArgumentException ex)
-            {
-                throw new ArgumentException("Invalid Parameter: paths", ex);
+                failure_reason = "Invalid arguments for calling wait_async_complete";
+                return false;
             }
 
+            var query_param = new Parameters
+            {
+                { "taskid", task_id },
+                { "channel", "chunlei" },
+                { "web", 1 },
+                { "app_id", APPID },
+                { "bdstoken", _pcs_auth_bdstoken },
+                { "logid", PcsAsyncAPIWebImplHelper.LogID },
+                { "clienttype", 0 }
+            };
+
+            DateTime begin = DateTime.Now;
+            TimeSpan exceed_time = TimeSpan.FromMinutes(1);
+            bool warn_on_exceed = false;
+
+            var sess = _instance_session();
+            sess.ContentType = "application/x-www-form-urlencoded";
+            while (true)
+            {
+                sess.HttpPost("https://pan.baidu.com/share/taskquery", body: filelist, query: query_param);
+                var str = sess.ReadResponseString();
+                var task_json = JsonConvert.DeserializeObject(str) as JObject;
+                PcsAsyncAPIWebImplHelper.CheckJson(task_json);
+                var status = task_json.Value<string>("status");
+
+                switch (status)
+                {
+                    case "success":
+                        return true;
+
+                    case "failed":
+                        if (task_json.TryGetValue("task_errno", out var task_errno_token))
+                            failure_reason = $"API call: Async wait failed with errno no: {task_errno_token.Value<string>()}";
+                        else
+                            failure_reason = "API call: Async wait failed";
+                        return false;
+
+                    case "pending":
+                    case "running":
+                        if (!warn_on_exceed && DateTime.Now - begin > exceed_time)
+                        {
+                            warn_on_exceed = true;
+                            Tracer.GlobalTracer.TraceWarning($"API call: Async wait has blocked for more than ${exceed_time.TotalMinutes} minutes");
+                        }
+                        Thread.Sleep(1000);
+                        break;
+
+                    default:
+                        failure_reason = $"Unexpected task status: {status}, set to failure";
+                        Tracer.GlobalTracer.TraceWarning(failure_reason);
+                        return false;
+                }
+            }
+        }
+
+        private void _file_manager_ops(string op_name, Parameters body, EventHandler<PcsApiOperationCallbackArgs> callback, object state)
+        {
             try
             {
                 _initialize_pcs_auth_data();
@@ -384,7 +435,7 @@ namespace BaiduCloudSync.api.webimpl
 
                 var param = new Parameters
                 {
-                    { "opera", "delete" },
+                    { "opera", op_name },
                     { "async", 2 },
                     { "onnest", "fail" },
                     { "channel", "chunlei" },
@@ -395,11 +446,6 @@ namespace BaiduCloudSync.api.webimpl
                     { "clienttype", 0 }
                 };
 
-                var path_json = JsonConvert.SerializeObject(path_list);
-                var body = new Parameters
-                {
-                    { "filelist", path_json }
-                };
                 sess.HttpPostAsync("https://pan.baidu.com/api/filemanager", query: param, body: body, callback: (sender, e) =>
                 {
                     string failed_reason = null;
@@ -434,49 +480,9 @@ namespace BaiduCloudSync.api.webimpl
                         }
 
                         // wait success
-                        var query_param = new Parameters
+                        if (!(suc = _wait_async_complete(taskid, body, out var tmp_failed_reason)))
                         {
-                            { "taskid", taskid },
-                            { "channel", "chunlei" },
-                            { "web", 1 },
-                            { "app_id", APPID },
-                            { "bdstoken", _pcs_auth_bdstoken },
-                            { "logid", PcsAsyncAPIWebImplHelper.LogID },
-                            { "clienttype", 0 }
-                        };
-
-                        DateTime begin = DateTime.Now;
-                        TimeSpan exceed_time = TimeSpan.FromMinutes(1);
-                        bool warn_on_exceed = false;
-
-                        while (true)
-                        {
-                            sess.HttpPost("https://pan.baidu.com/share/taskquery", body: body, query: query_param);
-                            var str = sess.ReadResponseString();
-                            var task_json = JsonConvert.DeserializeObject(str) as JObject;
-                            PcsAsyncAPIWebImplHelper.CheckJson(task_json);
-                            var status = task_json.Value<string>("status");
-
-                            switch (status)
-                            {
-                                case "success":
-                                    suc = true;
-                                    return;
-
-                                case "pending":
-                                    if (!warn_on_exceed && DateTime.Now - begin > exceed_time)
-                                    {
-                                        warn_on_exceed = true;
-                                        Tracer.GlobalTracer.TraceWarning($"API call for Delete: Async wait has blocked for more than ${exceed_time.TotalMinutes} minutes");
-                                    }
-                                    Thread.Sleep(500);
-                                    break;
-
-                                default:
-                                    failed_reason = $"Unexpected task status: {status}, set to failure";
-                                    Tracer.GlobalTracer.TraceWarning(failed_reason);
-                                    return;
-                            }
+                            failed_reason = tmp_failed_reason;
                         }
                     }
                     catch (Exception ex)
@@ -499,6 +505,164 @@ namespace BaiduCloudSync.api.webimpl
             {
                 throw new InvalidOperationException("operation failed, see the below exception for more details", ex);
             }
+        }
+
+        // variable access for file manager api:
+        public void Delete(IEnumerable<string> paths, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null)
+        {
+            // test passed, api version 20190127
+            var path_list = paths.ToList();
+            if (path_list.Count == 0)
+                callback?.Invoke(this, new PcsApiOperationCallbackArgs(state));
+            try
+            {
+                for (int i = 0; i < path_list.Count; i++)
+                {
+                    path_list[i] = new PcsPath(path_list[i]).FullPath;
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException("Invalid Parameter: paths", ex);
+            }
+            var path_json = JsonConvert.SerializeObject(path_list);
+            var body = new Parameters
+            {
+                { "filelist", path_json }
+            };
+
+            _file_manager_ops("delete", body, callback, state);
+        }
+
+        public void Move(IEnumerable<string> source, IEnumerable<string> destination, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null)
+        {
+            // test passed, api version 20190130
+            var src = source.ToList();
+            var dst = destination.ToList();
+            var new_name = new List<string>(dst.Count);
+            if (src.Count != dst.Count)
+                throw new ArgumentException($"Length of source ({src.Count}) is mot match the length of destination ({dst.Count})");
+
+            try
+            {
+                for (int i = 0; i < src.Count; i++)
+                    src[i] = new PcsPath(src[i]).FullPath;
+                for (int i = 0; i < dst.Count; i++)
+                {
+                    // split destination to parent_directory + file_name (required in POST field)
+                    var path = new PcsPath(dst[i]);
+                    dst[i] = path.Parent.FullPath;
+                    new_name.Add(path.Name);
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException("Invalid Parameter: path", ex);
+            }
+
+            if (src.Count == 0)
+                callback?.Invoke(this, new PcsApiOperationCallbackArgs(state));
+
+            var path_json = new JArray();
+            for (int i = 0; i < src.Count; i++)
+            {
+                path_json.Add(new JObject {
+                    { "path", src[i] },
+                    { "dest", dst[i] },
+                    { "newname", new_name[i] }
+                });
+            }
+            var body = new Parameters
+            {
+                { "filelist", JsonConvert.SerializeObject(path_json) }
+            };
+
+            _file_manager_ops("move", body, callback, state);
+        }
+
+        public void Copy(IEnumerable<string> source, IEnumerable<string> destination, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null)
+        {
+            // test passed, api version 20190130
+            var src = source.ToList();
+            var dst = destination.ToList();
+            var new_name = new List<string>(dst.Count);
+            if (src.Count != dst.Count)
+                throw new ArgumentException($"Length of source ({src.Count}) is mot match the length of destination ({dst.Count})");
+
+            try
+            {
+                for (int i = 0; i < src.Count; i++)
+                    src[i] = new PcsPath(src[i]).FullPath;
+                for (int i = 0; i < dst.Count; i++)
+                {
+                    // split destination to parent_directory + file_name (required in POST field)
+                    var path = new PcsPath(dst[i]);
+                    dst[i] = path.Parent.FullPath;
+                    new_name.Add(path.Name);
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException("Invalid Parameter: path", ex);
+            }
+
+            if (src.Count == 0)
+                callback?.Invoke(this, new PcsApiOperationCallbackArgs(state));
+
+            var path_json = new JArray();
+            for (int i = 0; i < src.Count; i++)
+            {
+                path_json.Add(new JObject {
+                    { "path", src[i] },
+                    { "dest", dst[i] },
+                    { "newname", new_name[i] }
+                });
+            }
+            var body = new Parameters
+            {
+                { "filelist", JsonConvert.SerializeObject(path_json) }
+            };
+
+            _file_manager_ops("copy", body, callback, state);
+        }
+
+        public void Rename(IEnumerable<string> source, IEnumerable<string> new_name, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null)
+        {
+            // test passed, api version 20190130
+            var src = source.ToList();
+            var name = new_name.ToList();
+            if (src.Count != name.Count)
+                throw new ArgumentException($"Length of source ({src.Count}) is mot match the length of new_name ({name.Count})");
+
+            try
+            {
+                for (int i = 0; i < src.Count; i++)
+                    src[i] = new PcsPath(src[i]).FullPath;
+                for (int i = 0; i < name.Count; i++)
+                    new PcsPath($"/{name}"); // just testing the name is valid or not
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException("Invalid Parameter: path", ex);
+            }
+
+            if (src.Count == 0)
+                callback?.Invoke(this, new PcsApiOperationCallbackArgs(state));
+
+            var path_json = new JArray();
+            for (int i = 0; i < src.Count; i++)
+            {
+                path_json.Add(new JObject {
+                    { "path", src[i] },
+                    { "newname", name[i] }
+                });
+            }
+            var body = new Parameters
+            {
+                { "filelist", JsonConvert.SerializeObject(path_json) }
+            };
+
+            _file_manager_ops("rename", body, callback, state);
         }
     }
 }

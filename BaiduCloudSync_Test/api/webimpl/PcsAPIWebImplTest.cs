@@ -164,5 +164,146 @@ namespace BaiduCloudSync_Test.api.webimpl
             Assert.AreEqual(BaiduCloudSync.api.callbackargs.PcsApiCallbackType.OperationResult, result1.EventType);
 
         }
+
+        [TestMethod]
+        public void PcsAPIMoveTest()
+        {
+            // make sure the CreateDirectoryTest has passed before running this test
+            // this test no longer validate the CreateDirectory op
+            var oauth = GetOAuth();
+            var test_obj = new BaiduCloudSync.api.webimpl.PcsAsyncAPIWebImpl(oauth);
+            var wait = new ManualResetEventSlim();
+
+            var rnd_id = Guid.NewGuid().ToString();
+            var sub_dir_1 = Guid.NewGuid().ToString();
+            var sub_dir_2 = Guid.NewGuid().ToString();
+
+            test_obj.CreateDirectory($"/{rnd_id}", (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+            test_obj.CreateDirectory($"/{rnd_id}/{sub_dir_1}", (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+            test_obj.CreateDirectory($"/{rnd_id}/{sub_dir_2}", (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+
+            // perform move op
+            test_obj.Move(new string[] { $"/{rnd_id}/{sub_dir_1}" },
+                new string[] { $"/{rnd_id}/{sub_dir_2}/{sub_dir_1}" }, (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+
+            // check validation
+            bool suc = false;
+            int count = -1;
+            test_obj.ListDir($"/{rnd_id}/{sub_dir_2}/{sub_dir_1}", (s, e) => {
+                suc = e.Success;
+                count = e.PcsMetadatas.Length;
+                wait.Set();
+            });
+
+            wait.Wait(); wait.Reset();
+            Assert.IsTrue(suc);
+            Assert.AreEqual(0, count);
+
+            // cleaning data
+            test_obj.Delete(new string[] { $"/{rnd_id}" }, (s, e) => { wait.Set(); });
+            wait.Wait();
+        }
+
+        [TestMethod]
+        public void PcsAPICopyTest()
+        {
+            // make sure the CreateDirectoryTest has passed before running this test
+            // this test no longer validate the CreateDirectory op
+            var oauth = GetOAuth();
+            var test_obj = new BaiduCloudSync.api.webimpl.PcsAsyncAPIWebImpl(oauth);
+            var wait = new ManualResetEventSlim();
+
+            var rnd_id = Guid.NewGuid().ToString();
+            var sub_dir_1 = Guid.NewGuid().ToString();
+            var sub_dir_2 = Guid.NewGuid().ToString();
+
+            test_obj.CreateDirectory($"/{rnd_id}", (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+            test_obj.CreateDirectory($"/{rnd_id}/{sub_dir_1}", (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+            test_obj.CreateDirectory($"/{rnd_id}/{sub_dir_2}", (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+
+            // perform copy op
+            test_obj.Copy(new string[] { $"/{rnd_id}/{sub_dir_1}" },
+                new string[] { $"/{rnd_id}/{sub_dir_2}/{sub_dir_1}" }, (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+
+            // check validation
+            bool suc = false;
+            int count = -1;
+            test_obj.ListDir($"/{rnd_id}/{sub_dir_2}/{sub_dir_1}", (s, e) => {
+                suc = e.Success;
+                count = e.PcsMetadatas.Length;
+                wait.Set();
+            });
+            wait.Wait(); wait.Reset();
+            Assert.IsTrue(suc);
+            Assert.AreEqual(0, count);
+
+            test_obj.ListDir($"/{rnd_id}/{sub_dir_1}", (s, e) => {
+                suc = e.Success;
+                count = e.PcsMetadatas.Length;
+                wait.Set();
+            });
+            wait.Wait(); wait.Reset();
+            Assert.IsTrue(suc);
+            Assert.AreEqual(0, count);
+
+            // cleaning data
+            test_obj.Delete(new string[] { $"/{rnd_id}" }, (s, e) => { wait.Set(); });
+            wait.Wait();
+        }
+
+        [TestMethod]
+        public void PcsAPIRenameTest()
+        {
+            // make sure the CreateDirectoryTest has passed before running this test
+            // this test no longer validate the CreateDirectory op
+            var oauth = GetOAuth();
+            var test_obj = new BaiduCloudSync.api.webimpl.PcsAsyncAPIWebImpl(oauth);
+            var wait = new ManualResetEventSlim();
+
+            var rnd_id = Guid.NewGuid().ToString();
+            var sub_dir_1 = Guid.NewGuid().ToString();
+            var sub_dir_2 = Guid.NewGuid().ToString();
+
+            test_obj.CreateDirectory($"/{rnd_id}", (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+            test_obj.CreateDirectory($"/{rnd_id}/{sub_dir_1}", (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+
+            // perform rename op
+            test_obj.Rename(new string[] { $"/{rnd_id}/{sub_dir_1}" },
+                new string[] { sub_dir_2 }, (s, e) => { wait.Set(); });
+            wait.Wait(); wait.Reset();
+
+            // check validation
+            bool suc = false;
+            int count = -1;
+            test_obj.ListDir($"/{rnd_id}/{sub_dir_2}", (s, e) => {
+                suc = e.Success;
+                count = e.PcsMetadatas.Length;
+                wait.Set();
+            });
+            wait.Wait(); wait.Reset();
+            Assert.IsTrue(suc);
+            Assert.AreEqual(0, count);
+
+            test_obj.ListDir($"/{rnd_id}/{sub_dir_1}", (s, e) => {
+                suc = e.Success;
+                wait.Set();
+            });
+            wait.Wait(); wait.Reset();
+            Assert.IsFalse(suc);
+
+            // cleaning data
+            test_obj.Delete(new string[] { $"/{rnd_id}" }, (s, e) => { wait.Set(); });
+            wait.Wait();
+        }
     }
 }

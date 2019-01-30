@@ -42,5 +42,40 @@ namespace BaiduCloudSync.api
         /// <param name="callback">回调函数</param>
         /// <param name="state">回调函数的附加参数</param>
         void Delete(IEnumerable<string> paths, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null);
+
+        /// <summary>
+        /// 移动文件或文件夹
+        /// </summary>
+        /// <param name="source">原文件/文件夹路径</param>
+        /// <param name="destination">目标文件/文件夹路径（包含文件/文件夹名）</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="state">回调函数的附加参数</param>
+        /// <example>
+        /// 将/aa/bb.txt文件移动到/c文件夹下，且文件名不变：
+        /// Move(new string[] { "/aa/bb.txt" }, new string[] { "/c/bb.txt" }, null, null)
+        /// </example>
+        void Move(IEnumerable<string> source, IEnumerable<string> destination, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null);
+
+        /// <summary>
+        /// 移动文件或文件夹
+        /// </summary>
+        /// <param name="source">原文件/文件夹路径</param>
+        /// <param name="destination">目标文件/文件夹路径（包含文件/文件夹名）</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="state">回调函数的附加参数</param>
+        void Copy(IEnumerable<string> source, IEnumerable<string> destination, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null);
+
+        /// <summary>
+        /// 重命名文件/文件夹
+        /// </summary>
+        /// <param name="source">原文件/文件夹路径</param>
+        /// <param name="new_name">新的文件/文件夹名</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="state">回调函数的附加参数</param>
+        /// <remarks>
+        /// 等价于同目录下的Move操作
+        /// </remarks>
+        void Rename(IEnumerable<string> source, IEnumerable<string> new_name, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null);
+
     }
 }

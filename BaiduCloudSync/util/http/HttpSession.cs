@@ -411,7 +411,7 @@ namespace GlobalUtil.http
             _append_default_header_internal(ret, STR_ACCEPT_LANGUAGE, AcceptLanguage);
             _append_default_header_internal(ret, STR_USER_AGENT, UserAgent);
             // add the default content-type to POST requests
-            if (_post_origin_stream != null)
+            if (_post_origin_stream != null && ContentType != null)
                 _append_default_header_internal(ret, STR_CONTENT_TYPE, ContentType);
             _merge_parameters(ret, custom_headers);
             return ret;
@@ -596,6 +596,8 @@ namespace GlobalUtil.http
                 int readed_bytes = 0;
                 byte[] buffer = new byte[4096];
                 bool warn_on_buffer_overflow = false;
+                // warn the buffer overflow if buffer size is larger than 100MB
+                const long MIN_BYTES_TO_WARN_ON_BUFFER_OVERFLOW = 104857600;
                 do
                 {
                     readed_bytes = ResponseStream.Read(buffer, 0, 4096);
@@ -603,7 +605,8 @@ namespace GlobalUtil.http
                     {
                         warn_on_buffer_overflow = true;
                         // bytes overflow
-                        Tracer.GlobalTracer.TraceWarning("Buffer overflow detected while reading response stream, converting non-resizable memory stream to resizable memory stream (this operation will consume a lot of memory and time)");
+                        if (total_readed_bytes >= MIN_BYTES_TO_WARN_ON_BUFFER_OVERFLOW)
+                            Tracer.GlobalTracer.TraceWarning("Buffer overflow detected while reading response stream, converting non-resizable memory stream to resizable memory stream (this operation will consume a lot of memory and time)");
                         var new_adaptive_ms = new MemoryStream((int)Math.Min(total_readed_bytes + readed_bytes, int.MaxValue));
                         // copying stream
                         byte[] memory_buffer = new byte[1048576]; // using 1M memory block
