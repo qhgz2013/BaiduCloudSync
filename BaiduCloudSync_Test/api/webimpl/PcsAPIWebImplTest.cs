@@ -305,5 +305,111 @@ namespace BaiduCloudSync_Test.api.webimpl
             test_obj.Delete(new string[] { $"/{rnd_id}" }, (s, e) => { wait.Set(); });
             wait.Wait();
         }
+
+
+        [TestMethod]
+        public void PcsAPIRapidUploadTest()
+        {
+            var oauth = GetOAuth();
+            var test_obj = new BaiduCloudSync.api.webimpl.PcsAsyncAPIWebImpl(oauth);
+            var wait = new ManualResetEventSlim();
+
+            // sample rapid upload data
+            long content_length = 34348557;
+            string content_md5 = "b48e7f72563509f15f9768d85298fd0c";
+            string slice_md5 = "48fb5cde36d102db289412b3ff68760d";
+
+            string rnd_id = Guid.NewGuid().ToString();
+            BaiduCloudSync.api.PcsMetadata metadata = null;
+            bool suc = false;
+            test_obj.RapidUpload($"/{rnd_id}", content_length, content_md5, slice_md5, (s, e) =>
+            {
+                metadata = e.Metadata;
+                suc = e.Success;
+                wait.Set();
+            });
+
+            wait.Wait(); wait.Reset();
+
+            // cleaning test
+            test_obj.Delete(new string[] { $"/{rnd_id}" }, (s, e) => { wait.Set(); });
+            wait.Wait();
+
+            Assert.IsTrue(suc);
+            Assert.AreEqual(content_md5, metadata.MD5.ToLower());
+            Assert.AreEqual(content_length, metadata.Size);
+        }
+
+        [TestMethod]
+        public void PcsAPIUploadTest()
+        {
+            var oauth = GetOAuth();
+            var test_obj = new BaiduCloudSync.api.webimpl.PcsAsyncAPIWebImpl(oauth);
+            var wait = new ManualResetEventSlim();
+
+            var buffer = new byte[4198400]; // 4MB + 4kB
+            var rnd_fill = new Random();
+            rnd_fill.NextBytes(buffer);
+
+            var rnd_id = Guid.NewGuid().ToString();
+            var segment_md5 = new string[]
+            {
+                GlobalUtil.Util.Hex(GlobalUtil.hash.MD5.ComputeHash(buffer, 0, 4194304)),
+                GlobalUtil.Util.Hex(GlobalUtil.hash.MD5.ComputeHash(buffer, 4194304, 4096))
+            };
+
+            // test here
+            bool suc = false;
+            string upload_id = null;
+            test_obj.PreCreate($"/{rnd_id}", 2, (s, e) =>
+            {
+                suc = e.Success;
+                upload_id = e.UploadID;
+                wait.Set();
+            });
+            wait.Wait(); wait.Reset();
+            Assert.IsTrue(suc);
+            Assert.IsFalse(string.IsNullOrEmpty(upload_id));
+
+            var tmp = new byte[4194304];
+            Array.Copy(buffer, tmp, tmp.Length);
+            test_obj.SuperFile($"/{rnd_id}", upload_id, 0, tmp, (s, e) =>
+            {
+                suc = e.Success && e.SegmentMD5 == segment_md5[0];
+                wait.Set();
+            });
+            wait.Wait(); wait.Reset();
+            Assert.IsTrue(suc);
+
+            tmp = new byte[4096];
+            Array.Copy(buffer, 4194304, tmp, 0, 4096);
+            test_obj.SuperFile($"/{rnd_id}", upload_id, 1, tmp, (s, e) =>
+            {
+                suc = e.Success && e.SegmentMD5 == segment_md5[1];
+                wait.Set();
+            });
+            wait.Wait(); wait.Reset();
+            Assert.IsTrue(suc);
+
+            long size_got = 0;
+            string md5_got = null;
+            test_obj.Create($"/{rnd_id}", segment_md5, buffer.Length, upload_id, (s, e) =>
+            {
+                suc = e.Success;
+                size_got = e.Metadata.Size;
+                md5_got = e.Metadata.MD5;
+                wait.Set();
+            });
+            wait.Wait(); wait.Reset();
+            Assert.IsTrue(suc);
+            Assert.AreEqual(buffer.Length, size_got);
+
+            GlobalUtil.Tracer.GlobalTracer.TraceInfo($"MD5 Expected: {GlobalUtil.Util.Hex(GlobalUtil.hash.MD5.ComputeHash(buffer, 0, buffer.Length))}");
+            GlobalUtil.Tracer.GlobalTracer.TraceInfo($"MD5 Got: {md5_got}");
+
+            // cleaning data
+            test_obj.Delete(new string[] { $"/{rnd_id}" }, (s, e) => { wait.Set(); });
+            wait.Wait();
+        }
     }
 }

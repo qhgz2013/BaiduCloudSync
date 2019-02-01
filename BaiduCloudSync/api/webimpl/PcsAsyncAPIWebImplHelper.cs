@@ -1,4 +1,5 @@
 ﻿using GlobalUtil;
+using GlobalUtil.http;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -55,6 +56,20 @@ namespace BaiduCloudSync.api.webimpl
                 Size = json.Value<long>("size"),
                 MD5 = json.Value<string>("md5")
             };
+        }
+
+
+        public static Parameters XHR_Parameter
+        {
+            get
+            {
+                return new Parameters
+                {
+                    { "X-Requested-With", "XMLHttpRequest" },
+                    { "Origin", "https://pan.baidu.com" },
+                    { "Referer", "https://pan.baidu.com/disk/home" }
+                };
+            }
         }
     }
 }

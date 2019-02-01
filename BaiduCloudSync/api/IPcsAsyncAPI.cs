@@ -77,5 +77,70 @@ namespace BaiduCloudSync.api
         /// </remarks>
         void Rename(IEnumerable<string> source, IEnumerable<string> new_name, EventHandler<PcsApiOperationCallbackArgs> callback, object state = null);
 
+        /// <summary>
+        /// 预创建文件，并获得上传ID
+        /// </summary>
+        /// <param name="path">文件路径</param>
+        /// <param name="segment_count">分段的数量</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="modify_time">文件的修改时间，如未指定，则为当前时间，体现在元数据中的LocalModificationTime字段</param>
+        /// <param name="state">回调函数的附加参数</param>
+        /// <remarks>
+        /// 文件以固定的4MB大小分段，具体分段的算法可采用BaiduCloudSync.segment.FixedSizeSegmentAlgorithm
+        /// API的调用顺序为: PreCreate -> foreach (分段 in 文件) do: SuperFile -> Create
+        /// </remarks>
+        void PreCreate(string path, int segment_count, EventHandler<PcsApiPreCreateCallbackArgs> callback, DateTime? modify_time = null, object state = null);
+
+        /// <summary>
+        /// 上传文件分段
+        /// </summary>
+        /// <param name="path">文件路径</param>
+        /// <param name="upload_id">预创建时得到的上传ID</param>
+        /// <param name="part_seq">文件分段序号，从0开始计数</param>
+        /// <param name="payload">文件分段数据</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="host">上传的服务器域名，默认为c.pcs.baidu.com，更多的服务器域名可以通过LocateUpload获得</param>
+        /// <param name="state">回调函数的附加参数</param>
+        /// <remarks>
+        /// 文件以固定的4MB大小分段，具体分段的算法可采用BaiduCloudSync.segment.FixedSizeSegmentAlgorithm
+        /// API的调用顺序为: PreCreate -> foreach (分段 in 文件) do: SuperFile -> Create
+        /// </remarks>
+        void SuperFile(string path, string upload_id, int part_seq, byte[] payload, EventHandler<PcsApiSegmentUploadCallbackArgs> callback, string host = "c.pcs.baidu.com", object state = null);
+
+        /// <summary>
+        /// 创建上传文件
+        /// </summary>
+        /// <param name="path">文件路径</param>
+        /// <param name="segment_md5">每个分段MD5</param>
+        /// <param name="size">文件总大小</param>
+        /// <param name="upload_id">预创建时得到的上传ID</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="modify_time">文件修改时间，如未指定，则为当前时间，体现在元数据中的LocalModificationTime字段</param>
+        /// <param name="state">回调函数的附加参数</param>
+        /// <remarks>
+        /// 文件以固定的4MB大小分段，具体分段的算法可采用BaiduCloudSync.segment.FixedSizeSegmentAlgorithm
+        /// API的调用顺序为: PreCreate -> foreach (分段 in 文件) do: SuperFile -> Create
+        /// </remarks>
+        void Create(string path, IEnumerable<string> segment_md5, long size, string upload_id, EventHandler<PcsApiObjectMetaCallbackArgs> callback, DateTime? modify_time = null, object state = null);
+
+        /// <summary>
+        /// 文件秒传
+        /// </summary>
+        /// <param name="path">文件路径</param>
+        /// <param name="content_size">文件大小</param>
+        /// <param name="content_md5">文件MD5</param>
+        /// <param name="slice_md5">前256kB分段的MD5</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="modify_time">文件修改时间，如未指定，则为当前时间，体现在元数据中的LocalModificationTime字段</param>
+        /// <param name="state">回调函数的附加参数</param>
+        void RapidUpload(string path, long content_size, string content_md5, string slice_md5, EventHandler<PcsApiObjectMetaCallbackArgs> callback, DateTime? modify_time = null, object state = null);
+
+        /// <summary>
+        /// 获取用于上传的PCS服务器域名
+        /// </summary>
+        /// <param name="callback">回调函数</param>
+        /// <param name="state">回调函数的附加参数</param>
+        // todo: change parent type PcsApiCallbackArgs
+        void LocateUpload(EventHandler<PcsApiCallbackArgs> callback, object state = null);
     }
 }

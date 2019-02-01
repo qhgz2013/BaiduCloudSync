@@ -29,6 +29,14 @@ namespace BaiduCloudSync.api.callbackargs
         /// <summary>
         /// 多个文件元数据
         /// </summary>
-        MultiObjectMetadata
+        MultiObjectMetadata,
+        /// <summary>
+        /// 文件预创建结果
+        /// </summary>
+        PreCreateResult,
+        /// <summary>
+        /// 文件分段上传结果
+        /// </summary>
+        SegmentUploadResult
     }
 }

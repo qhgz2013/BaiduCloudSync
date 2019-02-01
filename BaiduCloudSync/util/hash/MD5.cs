@@ -5,12 +5,12 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace GlobalUtil
+namespace GlobalUtil.hash
 {
     //a simple class to calculate MD5 with pause and continue supports
     //一个简单的用于计算MD5的类，支持暂停和继续计算功能
     [Serializable]
-    public class MD5
+    public class MD5 : ISerializableHashAlgorithm
     {
         #region vars
         //variable controls

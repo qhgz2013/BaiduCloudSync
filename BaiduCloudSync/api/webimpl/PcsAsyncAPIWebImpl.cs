@@ -6,6 +6,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -321,7 +322,7 @@ namespace BaiduCloudSync.api.webimpl
                     { "isdir", 1 },
                     { "blocklist", "[]" }
                 };
-                sess.HttpPostAsync("https://pan.baidu.com/api/create", query: param, body: body, callback: (sender, e) =>
+                sess.HttpPostAsync("https://pan.baidu.com/api/create", query: param, body: body, header: PcsAsyncAPIWebImplHelper.XHR_Parameter, callback: (sender, e) =>
                 {
                     string failed_reason = null;
                     bool suc = false;
@@ -446,7 +447,7 @@ namespace BaiduCloudSync.api.webimpl
                     { "clienttype", 0 }
                 };
 
-                sess.HttpPostAsync("https://pan.baidu.com/api/filemanager", query: param, body: body, callback: (sender, e) =>
+                sess.HttpPostAsync("https://pan.baidu.com/api/filemanager", query: param, body: body, header: PcsAsyncAPIWebImplHelper.XHR_Parameter, callback: (sender, e) =>
                 {
                     string failed_reason = null;
                     string taskid = null;
@@ -663,6 +664,363 @@ namespace BaiduCloudSync.api.webimpl
             };
 
             _file_manager_ops("rename", body, callback, state);
+        }
+
+        public void PreCreate(string path, int segment_count, EventHandler<PcsApiPreCreateCallbackArgs> callback, DateTime? modify_time = null, object state = null)
+        {
+            // test passed, api version 20190131
+            PcsPath pcs_path = null;
+            try
+            {
+                pcs_path = new PcsPath(path);
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException("Invalid Parameter: path", ex);
+            }
+            if (segment_count == 0)
+                throw new ArgumentException("Segment count should be larger than 1");
+            List<string> segments = new List<string>(segment_count);
+            var rnd = new Random();
+            var rnd_block = new byte[16];
+            for (int i = 0; i < segment_count; i++)
+            {
+                rnd.NextBytes(rnd_block);
+                segments.Add(Util.Hex(rnd_block));
+            }
+            if (modify_time == null)
+                modify_time = DateTime.Now;
+
+            try
+            {
+                _initialize_pcs_auth_data();
+                var sess = _instance_session();
+                sess.ContentType = "application/x-www-form-urlencoded";
+
+                var param = new Parameters
+                {
+                    { "channel", "chunlei" },
+                    { "web", 1 },
+                    { "app_id", APPID },
+                    { "bdstoken", _pcs_auth_bdstoken },
+                    { "logid", PcsAsyncAPIWebImplHelper.LogID },
+                    { "clienttype", 0 },
+                    { "startLogTime", (long)(DateTime.Now.ToUnixTimestamp() * 1000) }
+                };
+                var body = new Parameters
+                {
+                    { "path", pcs_path.FullPath },
+                    { "autoinit", 1 },
+                    { "target_path", pcs_path.Parent.FullPath },
+                    { "block_list", JsonConvert.SerializeObject(segments) },
+                    { "local_mtime", (long)modify_time.Value.ToUnixTimestamp() }
+                };
+                sess.HttpPostAsync("https://pan.baidu.com/api/precreate", query: param, body: body, callback: (sender, e) =>
+                {
+                    string failed_reason = null;
+                    string upload_id = null;
+                    try
+                    {
+                        var response_string = e.Session.ReadResponseString();
+                        if (e.Session.HTTP_Response.StatusCode != HttpStatusCode.OK)
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed, HTTP status code: {(int)e.Session.HTTP_Response.StatusCode}, response string: {response_string}");
+                        var json = JsonConvert.DeserializeObject(response_string) as JObject;
+
+                        failed_reason = PcsAsyncAPIWebImplHelper.CheckJson(json);
+                        if (!string.IsNullOrEmpty(failed_reason))
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed: {failed_reason}");
+
+                        upload_id = json.Value<string>("uploadid");
+                    }
+                    catch (Exception ex)
+                    {
+                        Tracer.GlobalTracer.TraceError("Unexpected API Exception");
+                        Tracer.GlobalTracer.TraceError(ex);
+                        failed_reason = ex.Message;
+                    }
+                    finally
+                    {
+                        e.Session.Close();
+                        callback?.Invoke(this, new PcsApiPreCreateCallbackArgs(failed_reason, upload_id, state));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("operation failed, see the below exception for more details", ex);
+            };
+        }
+
+        public void SuperFile(string path, string upload_id, int part_seq, byte[] payload, EventHandler<PcsApiSegmentUploadCallbackArgs> callback, string host = "c.pcs.baidu.com", object state = null)
+        {
+            // test passed, api version 20190131
+            PcsPath pcs_path = null;
+            try
+            {
+                pcs_path = new PcsPath(path);
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException("Invalid Parameter: path", ex);
+            }
+            if (string.IsNullOrEmpty(upload_id))
+                throw new ArgumentNullException("upload_id");
+            if (part_seq < 0)
+                throw new ArgumentOutOfRangeException("part_seq");
+            if (payload == null)
+                throw new ArgumentNullException("payload");
+            if (string.IsNullOrEmpty(host))
+                throw new ArgumentNullException("host");
+
+            try
+            {
+                _initialize_pcs_auth_data();
+                var sess = _instance_session();
+                var boundary = Util.GenerateFormDataBoundary();
+                sess.ContentType = $"multipart/form-data; boundary={boundary}";
+
+                var param = new Parameters
+                {
+                    { "method", "upload" },
+                    { "app_id", APPID },
+                    { "channel", "chunlei" },
+                    { "clienttype", 0 },
+                    { "web", 1 },
+                    { "BDUSS", Auth.BDUSS },
+                    { "logid", PcsAsyncAPIWebImplHelper.LogID },
+                    { "path", pcs_path.FullPath },
+                    { "uploadid", upload_id },
+                    { "uploadsign", 0 },
+                    { "partseq", part_seq }
+                };
+                var form_data_payload = new MemoryStream();
+                var form_data_payload_header = new Parameters
+                {
+                    { "Content-Disposition", "form-data; name=\"file\"; filename=\"blob\"" },
+                    { "Content-Type", "application/octet-stream" }
+                };
+                var form_data_header = Encoding.UTF8.GetBytes(Util.GenerateFormDataObject(boundary, form_data_payload_header));
+                var form_data_footer = Encoding.UTF8.GetBytes(Util.GenerateFormDataEnding(boundary));
+                form_data_payload.Write(form_data_header, 0, form_data_header.Length);
+                form_data_payload.Write(payload, 0, payload.Length);
+                form_data_payload.Write(form_data_footer, 0, form_data_footer.Length);
+
+                var md5_expected = Util.Hex(GlobalUtil.hash.MD5.ComputeHash(payload, 0, payload.Length)).ToLower();
+                var header = PcsAsyncAPIWebImplHelper.XHR_Parameter;
+                header.Remove("X-Requested-With");
+
+                sess.HttpPostAsync($"https://{host}/rest/2.0/pcs/superfile2", query: param, post_stream: form_data_payload, header: header, callback: (sender, e) =>
+                {
+                    string failed_reason = null;
+                    string md5 = null;
+                    try
+                    {
+                        var response_string = e.Session.ReadResponseString();
+                        if (e.Session.HTTP_Response.StatusCode != HttpStatusCode.OK)
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed, HTTP status code: {(int)e.Session.HTTP_Response.StatusCode}, response string: {response_string}");
+                        var json = JsonConvert.DeserializeObject(response_string) as JObject;
+
+                        failed_reason = PcsAsyncAPIWebImplHelper.CheckJson(json);
+                        if (!string.IsNullOrEmpty(failed_reason))
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed: {failed_reason}");
+
+                        var tmp_md5 = json.Value<string>("md5");
+                        if (tmp_md5.ToLower() != md5_expected)
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed: expected segment md5 {md5_expected}, but got {tmp_md5}");
+                        md5 = tmp_md5;
+                    }
+                    catch (Exception ex)
+                    {
+                        Tracer.GlobalTracer.TraceError("Unexpected API Exception");
+                        Tracer.GlobalTracer.TraceError(ex);
+                        failed_reason = ex.Message;
+                    }
+                    finally
+                    {
+                        e.Session.Close();
+                        callback?.Invoke(this, new PcsApiSegmentUploadCallbackArgs(md5, failed_reason, state));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("operation failed, see the below exception for more details", ex);
+            };
+        }
+
+        public void Create(string path, IEnumerable<string> segment_md5, long size, string upload_id, EventHandler<PcsApiObjectMetaCallbackArgs> callback, DateTime? modify_time = null, object state = null)
+        {
+            // test passed, api version 20190131
+            PcsPath pcs_path = null;
+            try
+            {
+                pcs_path = new PcsPath(path);
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException("Invalid Parameter: path", ex);
+            }
+            var segments = segment_md5.ToList();
+            if (size < 0)
+                throw new ArgumentOutOfRangeException("size");
+            if (string.IsNullOrEmpty(upload_id))
+                throw new ArgumentNullException("upload_id");
+            if (modify_time == null)
+                modify_time = DateTime.Now;
+
+            try
+            {
+                _initialize_pcs_auth_data();
+                var sess = _instance_session();
+                sess.ContentType = "application/x-www-form-urlencoded";
+
+                var param = new Parameters
+                {
+                    { "isdir", 0 },
+                    { "rtype", 1 },
+                    { "channel", "chunlei" },
+                    { "web", 1 },
+                    { "app_id", APPID },
+                    { "bdstoken", _pcs_auth_bdstoken },
+                    { "logid", PcsAsyncAPIWebImplHelper.LogID },
+                    { "clienttype", 0 }
+                };
+                var body = new Parameters
+                {
+                    { "path", pcs_path.FullPath },
+                    { "size", size },
+                    { "uploadid", upload_id },
+                    { "target_path", pcs_path.Parent.FullPath },
+                    { "block_list", JsonConvert.SerializeObject(segments) },
+                    { "local_mtime", (long)modify_time.Value.ToUnixTimestamp() }
+                };
+                sess.HttpPostAsync("https://pan.baidu.com/api/create", query: param, body: body, header: PcsAsyncAPIWebImplHelper.XHR_Parameter, callback: (sender, e) =>
+                {
+                    string failed_reason = null;
+                    PcsMetadata metadata = null;
+                    try
+                    {
+                        var response_string = e.Session.ReadResponseString();
+                        if (e.Session.HTTP_Response.StatusCode != HttpStatusCode.OK)
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed, HTTP status code: {(int)e.Session.HTTP_Response.StatusCode}, response string: {response_string}");
+                        var json = JsonConvert.DeserializeObject(response_string) as JObject;
+
+                        failed_reason = PcsAsyncAPIWebImplHelper.CheckJson(json);
+                        if (!string.IsNullOrEmpty(failed_reason))
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed: {failed_reason}");
+
+                        metadata = PcsAsyncAPIWebImplHelper.ReadMetadataFromJson(json);
+                    }
+                    catch (Exception ex)
+                    {
+                        Tracer.GlobalTracer.TraceError("Unexpected API Exception");
+                        Tracer.GlobalTracer.TraceError(ex);
+                        failed_reason = ex.Message;
+                    }
+                    finally
+                    {
+                        e.Session.Close();
+                        if (metadata == null)
+                            callback?.Invoke(this, new PcsApiObjectMetaCallbackArgs(failed_reason, state));
+                        else
+                            callback?.Invoke(this, new PcsApiObjectMetaCallbackArgs(metadata, state));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("operation failed, see the below exception for more details", ex);
+            }
+        }
+
+        public void RapidUpload(string path, long content_size, string content_md5, string slice_md5, EventHandler<PcsApiObjectMetaCallbackArgs> callback, DateTime? modify_time = null, object state = null)
+        {
+            // test passed, api version 20190131
+            PcsPath pcs_path = null;
+            try
+            {
+                pcs_path = new PcsPath(path);
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException("Invalid Parameter: path", ex);
+            }
+            if (content_size < 0)
+                throw new ArgumentOutOfRangeException("content_size");
+            if (string.IsNullOrEmpty(content_md5))
+                throw new ArgumentNullException("content_md5");
+            if (string.IsNullOrEmpty(slice_md5))
+                throw new ArgumentNullException("slice_md5");
+            if (modify_time == null)
+                modify_time = DateTime.Now;
+
+            try
+            {
+                _initialize_pcs_auth_data();
+                var sess = _instance_session();
+                sess.ContentType = "application/x-www-form-urlencoded";
+
+                var param = new Parameters
+                {
+                    { "rtype", 1 },
+                    { "channel", "chunlei" },
+                    { "web", 1 },
+                    { "app_id", APPID },
+                    { "bdstoken", _pcs_auth_bdstoken },
+                    { "logid", PcsAsyncAPIWebImplHelper.LogID },
+                    { "clienttype", 0 }
+                };
+                var body = new Parameters
+                {
+                    { "path", pcs_path.FullPath },
+                    { "content-length", content_size },
+                    { "content-md5", content_md5 },
+                    { "slice-md5", slice_md5 },
+                    { "target_path", pcs_path.Parent.FullPath },
+                    { "local_mtime", (long)modify_time.Value.ToUnixTimestamp() }
+                };
+                sess.HttpPostAsync("https://pan.baidu.com/api/rapidupload", query: param, body: body, callback: (sender, e) =>
+                {
+                    string failed_reason = null;
+                    PcsMetadata metadata = null;
+                    try
+                    {
+                        var response_string = e.Session.ReadResponseString();
+                        if (e.Session.HTTP_Response.StatusCode != HttpStatusCode.OK)
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed, HTTP status code: {(int)e.Session.HTTP_Response.StatusCode}, response string: {response_string}");
+                        var json = JsonConvert.DeserializeObject(response_string) as JObject;
+
+                        failed_reason = PcsAsyncAPIWebImplHelper.CheckJson(json);
+                        if (!string.IsNullOrEmpty(failed_reason))
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed: {failed_reason}");
+
+                        metadata = PcsAsyncAPIWebImplHelper.ReadMetadataFromJson(json.Value<JObject>("info"));
+                    }
+                    catch (Exception ex)
+                    {
+                        Tracer.GlobalTracer.TraceError("Unexpected API Exception");
+                        Tracer.GlobalTracer.TraceError(ex);
+                        failed_reason = ex.Message;
+                    }
+                    finally
+                    {
+                        e.Session.Close();
+                        if (metadata == null)
+                            callback?.Invoke(this, new PcsApiObjectMetaCallbackArgs(failed_reason, state));
+                        else
+                            callback?.Invoke(this, new PcsApiObjectMetaCallbackArgs(metadata, state));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("operation failed, see the below exception for more details", ex);
+            }
+        }
+
+        public void LocateUpload(EventHandler<PcsApiCallbackArgs> callback, object state = null)
+        {
+            throw new NotImplementedException();
         }
     }
 }

@@ -84,8 +84,11 @@
   <ItemGroup>
     <Compile Include="api\callbackargs\PcsApiCallbackType.cs" />
     <Compile Include="api\callbackargs\PcsApiMultiObjectMetaCallbackArgs.cs" />
+    <Compile Include="api\callbackargs\PcsApiObjectMetaCallbackArgs.cs" />
     <Compile Include="api\callbackargs\PcsApiOperationCallbackArgs.cs" />
+    <Compile Include="api\callbackargs\PcsApiPreCreateCallbackArgs.cs" />
     <Compile Include="api\callbackargs\PcsApiQuotaCallbackArgs.cs" />
+    <Compile Include="api\callbackargs\PcsApiSegmentUploadCallbackArgs.cs" />
     <Compile Include="api\IPcsAPI.cs" />
     <Compile Include="api\IPcsAsyncAPI.cs" />
     <Compile Include="api\PcsFileOrder.cs" />
@@ -116,6 +119,7 @@
     <Compile Include="task\SequenceTask.cs" />
     <Compile Include="task\Task.cs" />
     <Compile Include="task\TaskState.cs" />
+    <Compile Include="util\hash\ISerializableHashAlgorithm.cs" />
     <Compile Include="util\http\HttpSessionHelper.cs" />
     <Compile Include="util\http\StackedHttpException.cs" />
     <Compile Include="util\icon-extractor.cs" />
@@ -132,7 +136,7 @@
     <Compile Include="util\secure\crypto-rsa.cs" />
     <Compile Include="util\secure\crypto-util.cs" />
     <Compile Include="util\secure\key-manager.cs" />
-    <Compile Include="util\secure\md5.cs" />
+    <Compile Include="util\hash\MD5.cs" />
     <Compile Include="util\secure\sha1.cs" />
     <Compile Include="util\task-dispatcher.cs" />
     <Compile Include="util\Tracer.cs" />
