@@ -411,5 +411,33 @@ namespace BaiduCloudSync_Test.api.webimpl
             test_obj.Delete(new string[] { $"/{rnd_id}" }, (s, e) => { wait.Set(); });
             wait.Wait();
         }
+
+        [TestMethod]
+        public void PcsAPIDownloadTest()
+        {
+            var oauth = GetOAuth();
+            var test_obj = new BaiduCloudSync.api.webimpl.PcsAsyncAPIWebImpl(oauth);
+            var wait = new ManualResetEventSlim();
+
+            long fs_id = 525979259977115;
+            bool suc = false;
+            string[] dlink = null;
+            test_obj.Download(fs_id, (s, e) =>
+            {
+                suc = e.Success;
+                dlink = e.URL;
+                wait.Set();
+            }, true);
+            wait.Wait();
+            Assert.IsTrue(suc);
+            Assert.IsNotNull(dlink);
+            Assert.IsTrue(dlink.Length > 0);
+            foreach (var link in dlink)
+            {
+                var sess = new GlobalUtil.http.HttpSession { UseCookie = false };
+                sess.HttpGet(link);
+                Assert.AreEqual(System.Net.HttpStatusCode.OK, sess.HTTP_Response.StatusCode);
+            }
+        }
     }
 }

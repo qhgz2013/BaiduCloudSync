@@ -105,7 +105,7 @@ namespace BaiduCloudSync.api
         /// 文件以固定的4MB大小分段，具体分段的算法可采用BaiduCloudSync.segment.FixedSizeSegmentAlgorithm
         /// API的调用顺序为: PreCreate -> foreach (分段 in 文件) do: SuperFile -> Create
         /// </remarks>
-        void SuperFile(string path, string upload_id, int part_seq, byte[] payload, EventHandler<PcsApiSegmentUploadCallbackArgs> callback, string host = "c.pcs.baidu.com", object state = null);
+        void SuperFile(string path, string upload_id, int part_seq, byte[] payload, EventHandler<PcsApiSegmentUploadCallbackArgs> callback, string host, object state = null);
 
         /// <summary>
         /// 创建上传文件
@@ -140,7 +140,18 @@ namespace BaiduCloudSync.api
         /// </summary>
         /// <param name="callback">回调函数</param>
         /// <param name="state">回调函数的附加参数</param>
-        // todo: change parent type PcsApiCallbackArgs
-        void LocateUpload(EventHandler<PcsApiCallbackArgs> callback, object state = null);
+        void LocateUpload(EventHandler<PcsApiURLCallbackArgs> callback, object state = null);
+
+        void ListHost(EventHandler<PcsApiURLCallbackArgs> callback, object state = null);
+
+        /// <summary>
+        /// 获取下载的url地址
+        /// </summary>
+        /// <param name="fs_id">文件ID</param>
+        /// <param name="callback">回调函数</param>
+        /// <param name="pre_jump">是否进行HTTP 30X预跳转</param>
+        /// <param name="state">回调函数的附加参数</param>
+        void Download(long fs_id, EventHandler<PcsApiURLCallbackArgs> callback, bool pre_jump = false, object state = null);
+
     }
 }

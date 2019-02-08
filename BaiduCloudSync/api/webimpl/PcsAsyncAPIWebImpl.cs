@@ -17,15 +17,24 @@ namespace BaiduCloudSync.api.webimpl
 {
     public class PcsAsyncAPIWebImpl : IPcsAsyncAPI
     {
+        // urls
+        private const string DEFAULT_UPLOAD_HOST = "c.pcs.baidu.com";
+        private const string DEFAULT_DOWNLOAD_HOST = "d.pcs.baidu.com";
+        private readonly string[] DEFAULT_DOWNLOAD_BACKUP_HOST = new string[] { "d0.pcs.baidu.com", "d1.pcs.baidu.com", "d2.pcs.baidu.com", "d3.pcs.baidu.com", "d4.pcs.baidu.com", "d5.pcs.baidu.com", "d6.pcs.baidu.com", "d7.pcs.baidu.com", "d8.pcs.baidu.com", "d9.pcs.baidu.com" };
+        // constants
         private const int _PCS_AUTH_DATA_EXPIRATION_SECS = 60000; // expiration for 10 minutes
         private readonly string _cookie_guid = Guid.NewGuid().ToString(); // fixed GUID for cookie
         private const int APPID = 250528;
+        // auth variables
         private string _pcs_auth_sign;
         private long _pcs_auth_timestamp;
         private string _pcs_auth_bdstoken;
+
         private Random _random = new Random();
         private readonly object _lock = new object();
+        private bool _cookie_set = false; //是否已经初始化cookie，其实这个加不加线程锁问题不大，顶多在多线程访问时会设置多几遍而已
         public IOAuth Auth { get; set; }
+        public string CookieGUID => _cookie_guid;
         public PcsAsyncAPIWebImpl(IOAuth oAuth)
         {
             if (oAuth == null) throw new ArgumentNullException("oAuth");
@@ -37,11 +46,15 @@ namespace BaiduCloudSync.api.webimpl
         // 实例化一个HttpSession对象，使用OAuth自带的cookie值
         private HttpSession _instance_session()
         {
-            var container = new CookieContainer();
-            container.Add(new Cookie("BAIDUID", Auth.BaiduID, "/", ".baidu.com"));
-            container.Add(new Cookie("BDUSS", Auth.BDUSS, "/", ".baidu.com"));
-            container.Add(new Cookie("STOKEN", Auth.SToken, "/", ".baidu.com"));
-            HttpSession.SetCookieContainer(_cookie_guid, container);
+            if (!_cookie_set)
+            {
+                var container = new CookieContainer();
+                container.Add(new Cookie("BAIDUID", Auth.BaiduID, "/", ".baidu.com"));
+                container.Add(new Cookie("BDUSS", Auth.BDUSS, "/", ".baidu.com"));
+                container.Add(new Cookie("STOKEN", Auth.SToken, "/", ".baidu.com"));
+                HttpSession.SetCookieContainer(_cookie_guid, container);
+                _cookie_set = true;
+            }
             return new HttpSession(cookie_group: _cookie_guid, timeout: 60000);
         }
         private void _initialize_pcs_auth_data()
@@ -751,7 +764,7 @@ namespace BaiduCloudSync.api.webimpl
             };
         }
 
-        public void SuperFile(string path, string upload_id, int part_seq, byte[] payload, EventHandler<PcsApiSegmentUploadCallbackArgs> callback, string host = "c.pcs.baidu.com", object state = null)
+        public void SuperFile(string path, string upload_id, int part_seq, byte[] payload, EventHandler<PcsApiSegmentUploadCallbackArgs> callback, string host = DEFAULT_UPLOAD_HOST, object state = null)
         {
             // test passed, api version 20190131
             PcsPath pcs_path = null;
@@ -1021,6 +1034,83 @@ namespace BaiduCloudSync.api.webimpl
         public void LocateUpload(EventHandler<PcsApiCallbackArgs> callback, object state = null)
         {
             throw new NotImplementedException();
+        }
+
+        public void LocateUpload(EventHandler<PcsApiURLCallbackArgs> callback, object state = null)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void ListHost(EventHandler<PcsApiURLCallbackArgs> callback, object state = null)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Download(long fs_id, EventHandler<PcsApiURLCallbackArgs> callback, bool pre_jump = false, object state = null)
+        {
+            try
+            {
+                _initialize_pcs_auth_data();
+                var sess = _instance_session();
+                sess.ContentType = "application/x-www-form-urlencoded";
+
+                var param = new Parameters
+                {
+                    { "sign", _pcs_auth_sign },
+                    { "timestamp", _pcs_auth_timestamp },
+                    { "fidlist", $"[{fs_id}]" },
+                    { "type", "dlink" },
+                    { "vip", 1 }, // test here
+                    { "channel", "chunlei" },
+                    { "web", 1 },
+                    { "app_id", APPID },
+                    { "bdstoken", _pcs_auth_bdstoken },
+                    { "logid", PcsAsyncAPIWebImplHelper.LogID },
+                    { "clienttype", 0 },
+                    { "startLogTime", (long)(DateTime.Now.ToUnixTimestamp() * 1000) }
+                };
+                sess.HttpGetAsync("https://pan.baidu.com/api/download", query: param, callback: (sender, e) =>
+                {
+                    string failed_reason = null;
+                    string dlink = null;
+                    try
+                    {
+                        var response_string = e.Session.ReadResponseString();
+                        if (e.Session.HTTP_Response.StatusCode != HttpStatusCode.OK)
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed, HTTP status code: {(int)e.Session.HTTP_Response.StatusCode}, response string: {response_string}");
+                        var json = JsonConvert.DeserializeObject(response_string) as JObject;
+
+                        failed_reason = PcsAsyncAPIWebImplHelper.CheckJson(json);
+                        if (!string.IsNullOrEmpty(failed_reason))
+                            throw new PCSApiUnexpectedResponseException($"API call from HTTP failed: {failed_reason}");
+
+                        dlink = json.Value<JArray>("dlink")[0].Value<string>("dlink");
+                        if (pre_jump)
+                        {
+                            sess.HttpGet(dlink);
+                            dlink = sess.HTTP_Response.ResponseUri.ToString();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Tracer.GlobalTracer.TraceError("Unexpected API Exception");
+                        Tracer.GlobalTracer.TraceError(ex);
+                        failed_reason = ex.Message;
+                    }
+                    finally
+                    {
+                        e.Session.Close();
+                        if (string.IsNullOrEmpty(dlink))
+                            callback?.Invoke(this, new PcsApiURLCallbackArgs(failed_reason, state));
+                        else
+                            callback?.Invoke(this, new PcsApiURLCallbackArgs(new string[] { dlink }, state));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("operation failed, see the below exception for more details", ex);
+            }
         }
     }
 }

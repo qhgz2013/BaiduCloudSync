@@ -89,6 +89,7 @@
     <Compile Include="api\callbackargs\PcsApiPreCreateCallbackArgs.cs" />
     <Compile Include="api\callbackargs\PcsApiQuotaCallbackArgs.cs" />
     <Compile Include="api\callbackargs\PcsApiSegmentUploadCallbackArgs.cs" />
+    <Compile Include="api\callbackargs\PcsApiURLCallbackArgs.cs" />
     <Compile Include="api\IPcsAPI.cs" />
     <Compile Include="api\IPcsAsyncAPI.cs" />
     <Compile Include="api\PcsFileOrder.cs" />

@@ -37,6 +37,10 @@ namespace BaiduCloudSync.api.callbackargs
         /// <summary>
         /// 文件分段上传结果
         /// </summary>
-        SegmentUploadResult
+        SegmentUploadResult,
+        /// <summary>
+        /// 一个或多个URL地址
+        /// </summary>
+        URL
     }
 }
