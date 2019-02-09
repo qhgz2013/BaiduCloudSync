@@ -116,10 +116,22 @@
     <Compile Include="segment\FixedSizeSegmentAlgorithm.cs" />
     <Compile Include="segment\ISegmentAlgorithm.cs" />
     <Compile Include="task\InvalidTaskStateException.cs" />
-    <Compile Include="task\ITask.cs" />
-    <Compile Include="task\SequenceTask.cs" />
+    <Compile Include="task\ITaskExecutor.cs" />
+    <Compile Include="task\ITaskOperator.cs" />
+    <Compile Include="task\model\CancelledStateAdapter.cs" />
+    <Compile Include="task\model\CancelRequestedStateAdapter.cs" />
+    <Compile Include="task\model\FailedStateAdapter.cs" />
+    <Compile Include="task\model\FinishedStateAdapter.cs" />
+    <Compile Include="task\model\PausedStateAdapter.cs" />
+    <Compile Include="task\model\PauseRequestedStateAdapter.cs" />
+    <Compile Include="task\model\ReadyStateAdapter.cs" />
+    <Compile Include="task\model\RetryRequestedStateAdapter.cs" />
+    <Compile Include="task\model\StartedStateAdapter.cs" />
+    <Compile Include="task\model\StartRequestedStateAdapter.cs" />
+    <Compile Include="task\model\StateAdapter.cs" />
     <Compile Include="task\Task.cs" />
     <Compile Include="task\TaskState.cs" />
+    <Compile Include="task\TaskStateChangedEventArgs.cs" />
     <Compile Include="util\hash\ISerializableHashAlgorithm.cs" />
     <Compile Include="util\http\HttpSessionHelper.cs" />
     <Compile Include="util\http\StackedHttpException.cs" />
@@ -171,6 +183,7 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="task\model\model_fsm_v1.0.txt" />
     <Content Include="加密说明.txt" />
   </ItemGroup>
   <ItemGroup />

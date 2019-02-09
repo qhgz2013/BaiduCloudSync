@@ -45,6 +45,10 @@ namespace BaiduCloudSync.task
         /// <summary>
         /// 任务因未知异常而失败
         /// </summary>
-        Failed
+        Failed,
+        /// <summary>
+        /// 任务因取消或失败后请求重试，等待调度算法分配工作线程以重试任务
+        /// </summary>
+        RetryRequested
     }
 }

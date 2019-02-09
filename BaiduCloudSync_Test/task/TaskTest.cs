@@ -2,6 +2,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using BaiduCloudSync.task;
 using System.Threading;
+using GlobalUtil;
 
 namespace BaiduCloudSync_Test.task
 {
@@ -11,58 +12,102 @@ namespace BaiduCloudSync_Test.task
         [TestMethod]
         public void TaskStateTest1()
         {
-            var obj = new TaskImpl(1000);
-            Assert.AreEqual(TaskState.Ready, obj.State);
-            obj.Start();
-            obj.Start();
-            obj.WaitStart();
-            Assert.AreEqual(1, obj.StartTriggeredTimes);
-            Assert.AreEqual(TaskState.Started, obj.State);
+            // testing start -> pause -> start -> finished operation sequence
+            var obj = new TaskImpl1();
+            var task = new Task(obj);
+            task.StateChanged += (sender, e) =>
+            {
+                Tracer.GlobalTracer.TraceInfo($"{e.PreviousState} -> {e.CurrentState}");
+            };
+            Assert.AreEqual(TaskState.Ready, task.State);
+            task.Start();
+            Assert.IsTrue(task.State == TaskState.Started || task.State == TaskState.StartRequested);
+            task.Wait(1000);
+            Assert.AreEqual(TaskState.Started, task.State);
+            task.Pause();
+            task.Wait(-1);
+            Assert.AreEqual(TaskState.Paused, task.State);
+            Assert.IsTrue(obj.PauseFlag);
+            Assert.AreEqual(1, obj.TriggerPause);
 
-            Thread.Sleep(1500);
-            Assert.AreEqual(TaskState.Finished, obj.State);
+            task.Start();
+            task.Wait(-1);
+            Assert.AreEqual(TaskState.Finished, task.State);
 
-            obj.Pause();
-            Assert.AreEqual(0, obj.PauseTriggeredTimes);
-
-            obj.Cancel();
-            Assert.AreEqual(0, obj.CancelTriggeredTimes);
-
-            obj.Start();
-            Assert.AreEqual(1, obj.StartTriggeredTimes);
-            Assert.AreEqual(TaskState.Finished, obj.State);
+            Assert.AreEqual(0, obj.TriggerCancel);
+            Assert.AreEqual(1, obj.TriggerPause);
+            Assert.AreEqual(2, obj.TriggerStarted);
         }
 
         [TestMethod]
         public void TaskStateTest2()
         {
-            var obj = new TaskImpl(20000);
-            obj.Start();
-            obj.Pause();
-            obj.WaitPause();
-            Assert.AreEqual(TaskState.Paused, obj.State);
-            obj.Start();
-            obj.Cancel();
-            obj.WaitCancel();
-            Assert.AreEqual(TaskState.Cancelled, obj.State);
+            // testing start -> pause -> start -> cancel operation sequence
+            var obj = new TaskImpl1();
+            var task = new Task(obj);
+            task.StateChanged += (sender, e) =>
+            {
+                Tracer.GlobalTracer.TraceInfo($"{e.PreviousState} -> {e.CurrentState}");
+            };
+            Assert.AreEqual(TaskState.Ready, task.State);
+            task.Start();
+            Assert.IsTrue(task.State == TaskState.Started || task.State == TaskState.StartRequested);
+            task.Wait(1000);
+            Assert.AreEqual(TaskState.Started, task.State);
+            task.Pause();
+            task.Wait(-1);
+            Assert.AreEqual(TaskState.Paused, task.State);
+            Assert.IsTrue(obj.PauseFlag);
+            Assert.AreEqual(1, obj.TriggerPause);
 
-            Assert.AreEqual(2, obj.StartTriggeredTimes);
-            Assert.AreEqual(1, obj.PauseTriggeredTimes);
-            Assert.AreEqual(1, obj.CancelTriggeredTimes);
+            task.Start();
+            Tracer.GlobalTracer.TraceInfo("yes");
+            task.Wait(3000);
+            task.Cancel();
+            task.Wait(-1);
+            Assert.AreEqual(TaskState.Cancelled, task.State);
+            Assert.IsTrue(obj.CancelFlag);
+            Assert.AreEqual(1, obj.TriggerCancel);
+
+            Assert.AreEqual(1, obj.TriggerCancel);
+            Assert.AreEqual(1, obj.TriggerPause);
+            Assert.AreEqual(2, obj.TriggerStarted);
         }
 
         [TestMethod]
         public void TaskStateTest3()
         {
-            var obj = new TaskImpl(1000, throw_on_start: true);
-            obj.Start();
-            obj.WaitStart();
-            Thread.Sleep(1500);
-            Assert.AreEqual(TaskState.Failed, obj.State);
-            obj.Start();
-            obj.Pause();
-            obj.Cancel();
-            Assert.AreEqual(TaskState.Failed, obj.State);
+            // testing start -> failed -> retry -> failed operation sequence
+            var obj = new TaskImpl2 { ThrowOnStart = true };
+            var task = new Task(obj);
+
+            var do_test = new ParameterizedThreadStart((_x) =>
+            {
+                Task x = (Task)_x;
+                x.StateChanged += (sender, e) =>
+                {
+                    Tracer.GlobalTracer.TraceInfo($"{e.PreviousState} -> {e.CurrentState}");
+                };
+
+                x.Start();
+                x.Wait(-1);
+                Assert.AreEqual(TaskState.Failed, x.State);
+
+                x.Retry();
+                x.Wait(-1);
+                Assert.AreEqual(TaskState.Ready, x.State);
+
+                x.Start();
+                x.Wait(-1);
+                Assert.AreEqual(TaskState.Failed, x.State);
+            });
+            do_test(task);
+
+            obj = new TaskImpl2 { ThrowOnRun = true };
+            task = new Task(obj);
+            do_test(task);
         }
+
+        //todo: add more test
     }
 }

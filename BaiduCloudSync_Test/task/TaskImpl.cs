@@ -4,62 +4,103 @@ using System.Linq;
 using System.Text;
 using BaiduCloudSync.task;
 using System.Threading;
+using GlobalUtil;
 
 namespace BaiduCloudSync_Test.task
 {
-    class TaskImpl : Task
+    class TaskImpl1 : ITaskExecutor
     {
-        private int _sleep_time;
-        private bool _throw_on_cancel, _throw_on_pause, _throw_on_start;
-        private ManualResetEventSlim _start_event = new ManualResetEventSlim();
-        private ManualResetEventSlim _pause_event = new ManualResetEventSlim();
-        private ManualResetEventSlim _cancel_event = new ManualResetEventSlim();
-        public TaskImpl(int sleep_time, bool throw_on_cancel = false, bool throw_on_pause = false, bool throw_on_start = false)
+        public event EventHandler EmitResponse;
+#pragma warning disable CS0067
+        public event EventHandler EmitFailure;
+#pragma warning restore
+        public int TriggerCancel = 0, TriggerPause = 0, TriggerStarted = 0;
+        public bool PauseFlag = false, CancelFlag = false;
+        private readonly ManualResetEventSlim _interrupt_event = new ManualResetEventSlim();
+        public void OnCancelRequested()
         {
-            _sleep_time = sleep_time;
-            _throw_on_cancel = throw_on_cancel;
-            _throw_on_pause = throw_on_pause;
-            _throw_on_start = throw_on_start;
-        }
-        protected override void _cancel_internal(TaskState previous_state)
-        {
-            CancelTriggeredTimes++;
-            _cancel_event.Set();
-            if (_throw_on_cancel)
-                throw new Exception("This is a test exception on cancel");
+            Tracer.GlobalTracer.TraceInfo("hello?");
+            TriggerCancel++;
+            CancelFlag = true;
+            _interrupt_event.Set();
+            EmitResponse(this, new EventArgs());
         }
 
-        protected override void _pause_internal(TaskState previous_state)
+        public void OnPauseRequested()
         {
-            PauseTriggeredTimes++;
-            _pause_event.Set();
-            if (_throw_on_pause)
-                throw new Exception("This is a test exception on pause");
+            Tracer.GlobalTracer.TraceInfo("hello?");
+            TriggerPause++;
+            PauseFlag = true;
+            _interrupt_event.Set();
+            EmitResponse(this, new EventArgs());
         }
 
-        protected override void _start_internal(TaskState previous_state)
+        public void OnRetryRequested()
         {
-            StartTriggeredTimes++;
-            if (_throw_on_start)
-                throw new Exception("This is a test exception on start");
-            ThreadPool.QueueUserWorkItem(delegate
-            {
-                _start_event.Set();
-                Thread.Sleep(_sleep_time);
-                try
-                {
-                    _set_state_finished();
-                }
-                catch (InvalidTaskStateException) { }
-            });
         }
 
-        public int PauseTriggeredTimes { get; private set; }
-        public int CancelTriggeredTimes { get; private set; }
-        public int StartTriggeredTimes { get; private set; }
+        public void OnStartRequested()
+        {
+            Tracer.GlobalTracer.TraceInfo("hello?");
+            TriggerStarted++;
+            _interrupt_event.Reset();
+            PauseFlag = false;
+            CancelFlag = false;
+            EmitResponse(this, new EventArgs());
+        }
 
-        public void WaitStart() { _start_event.Wait(1000); }
-        public void WaitPause() { _pause_event.Wait(1000); }
-        public void WaitCancel() { _cancel_event.Wait(1000); }
+        public void Run()
+        {
+            Tracer.GlobalTracer.TraceInfo("hello?");
+            if (!_interrupt_event.Wait(10000))
+                EmitResponse(this, new EventArgs());
+        }
+    }
+    class TaskImpl2 : ITaskExecutor
+    {
+        public event EventHandler EmitResponse;
+#pragma warning disable CS0067
+        public event EventHandler EmitFailure;
+#pragma warning restore
+        private readonly ManualResetEventSlim _interrupt_event = new ManualResetEventSlim();
+        public bool ThrowOnCancel = false, ThrowOnPause = false, ThrowOnStart = false, ThrowOnRun = false, ThrowOnRetry = false;
+        public void OnCancelRequested()
+        {
+            if (ThrowOnCancel)
+                throw new Exception();
+            _interrupt_event.Set();
+            EmitResponse(this, new EventArgs());
+        }
+
+        public void OnPauseRequested()
+        {
+            if (ThrowOnPause)
+                throw new Exception();
+            _interrupt_event.Set();
+            EmitResponse(this, new EventArgs());
+        }
+
+        public void OnRetryRequested()
+        {
+            if (ThrowOnRetry)
+                throw new Exception();
+            EmitResponse(this, new EventArgs());
+        }
+
+        public void OnStartRequested()
+        {
+            if (ThrowOnStart)
+                throw new Exception();
+            _interrupt_event.Reset();
+            EmitResponse(this, new EventArgs());
+        }
+
+        public void Run()
+        {
+            if (ThrowOnRun)
+                throw new Exception();
+            if (!_interrupt_event.Wait(10000))
+                EmitResponse(this, new EventArgs());
+        }
     }
 }

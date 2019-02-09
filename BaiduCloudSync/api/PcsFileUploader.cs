@@ -7,7 +7,7 @@ using System.Text;
 
 namespace BaiduCloudSync.api
 {
-    public sealed class PcsFileUploader: Task
+    public sealed class PcsFileUploader
     {
         private IPcsAPI _pcsAPI;
         private ISegmentAlgorithm _segmentAlgorithm;
@@ -15,21 +15,6 @@ namespace BaiduCloudSync.api
         public PcsFileUploader(IPcsAPI pcsAPI, ISegmentAlgorithm segmentAlgorithm)
         {
 
-        }
-
-        protected override void _cancel_internal(TaskState previous_state)
-        {
-            throw new NotImplementedException();
-        }
-
-        protected override void _pause_internal(TaskState previous_state)
-        {
-            throw new NotImplementedException();
-        }
-
-        protected override void _start_internal(TaskState previous_state)
-        {
-            throw new NotImplementedException();
         }
     }
 }
