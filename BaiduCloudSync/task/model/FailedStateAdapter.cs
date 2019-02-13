@@ -26,7 +26,7 @@ namespace BaiduCloudSync.task.model
 
         public override void Retry()
         {
-            Parent.StateAdapter = new RetryRequestedStateAdapter(Parent);
+            StateAdapterHelper.SetTaskState(TaskState.RetryRequested, Parent);
         }
 
         public override void Start()

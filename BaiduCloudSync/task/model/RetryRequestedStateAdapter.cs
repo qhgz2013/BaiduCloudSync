@@ -19,7 +19,7 @@ namespace BaiduCloudSync.task.model
             {
                 if (Parent.State == TaskState.RetryRequested)
                 {
-                    Parent.StateAdapter = new ReadyStateAdapter(Parent);
+                    StateAdapterHelper.SetTaskState(TaskState.Ready, Parent);
                     Parent.TaskExecutor.EmitResponse -= _response;
                     _thread_exited_event.Set();
                 }
@@ -41,8 +41,9 @@ namespace BaiduCloudSync.task.model
                 {
                     Tracer.GlobalTracer.TraceError("Unexpected exception while executing task");
                     Tracer.GlobalTracer.TraceError(ex);
+                    Parent.TaskExecutor.EmitResponse -= _response;
                     _thread_exited_event.Set();
-                    Parent.StateAdapter = new FailedStateAdapter(Parent);
+                    StateAdapterHelper.SetTaskState(TaskState.Failed, Parent);
                 }
                 finally
                 {
@@ -59,13 +60,13 @@ namespace BaiduCloudSync.task.model
         public override void Cancel()
         {
             Wait(-1);
-            Parent.StateAdapter = new CancelRequestedStateAdapter(Parent);
+            StateAdapterHelper.SetTaskState(TaskState.CancelRequested, Parent);
         }
 
         public override void Pause()
         {
             Wait(-1);
-            Parent.StateAdapter = new PauseRequestedStateAdapter(Parent);
+            StateAdapterHelper.SetTaskState(TaskState.PauseRequested, Parent);
         }
 
         public override void Retry()
@@ -75,7 +76,7 @@ namespace BaiduCloudSync.task.model
         public override void Start()
         {
             Wait(-1);
-            Parent.StateAdapter = new StartRequestedStateAdapter(Parent);
+            StateAdapterHelper.SetTaskState(TaskState.StartRequested, Parent);
         }
         /// <summary>
         /// 等待重试事件被确认（EmitResponse），或触发了异常事件（EmitFailure），亦或是执行重试逻辑时产生了意外的异常

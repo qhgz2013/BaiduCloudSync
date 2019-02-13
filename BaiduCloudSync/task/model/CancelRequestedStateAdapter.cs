@@ -19,7 +19,7 @@ namespace BaiduCloudSync.task.model
             {
                 if (Parent.State == TaskState.CancelRequested)
                 {
-                    Parent.StateAdapter = new CancelledStateAdapter(Parent, _thread_exited_event);
+                    StateAdapterHelper.SetTaskState(TaskState.Cancelled, Parent, _thread_exited_event);
                     Parent.TaskExecutor.EmitResponse -= _response;
                     _thread_exited_event.Set();
                 }
@@ -41,8 +41,9 @@ namespace BaiduCloudSync.task.model
                 {
                     Tracer.GlobalTracer.TraceError("Unexpected exception while cancelling task");
                     Tracer.GlobalTracer.TraceError(ex);
+                    Parent.TaskExecutor.EmitResponse -= _response;
                     _thread_exited_event.Set();
-                    Parent.StateAdapter = new FailedStateAdapter(Parent);
+                    StateAdapterHelper.SetTaskState(TaskState.Failed, Parent);
                 }
                 finally
                 {
@@ -68,7 +69,7 @@ namespace BaiduCloudSync.task.model
         public override void Retry()
         {
             Wait(-1);
-            Parent.StateAdapter = new RetryRequestedStateAdapter(Parent);
+            StateAdapterHelper.SetTaskState(TaskState.RetryRequested, Parent);
         }
 
         public override void Start()

@@ -45,10 +45,11 @@ namespace BaiduCloudSync_Test.task
             // testing start -> pause -> start -> cancel operation sequence
             var obj = new TaskImpl1();
             var task = new Task(obj);
-            task.StateChanged += (sender, e) =>
+            var lambda_state_event = new EventHandler<TaskStateChangedEventArgs>((sender, e) =>
             {
                 Tracer.GlobalTracer.TraceInfo($"{e.PreviousState} -> {e.CurrentState}");
-            };
+            });
+            task.StateChanged += lambda_state_event;
             Assert.AreEqual(TaskState.Ready, task.State);
             task.Start();
             Assert.IsTrue(task.State == TaskState.Started || task.State == TaskState.StartRequested);
@@ -81,13 +82,14 @@ namespace BaiduCloudSync_Test.task
             var obj = new TaskImpl2 { ThrowOnStart = true };
             var task = new Task(obj);
 
+            var lambda_state_event = new EventHandler<TaskStateChangedEventArgs>((sender, e) =>
+            {
+                Tracer.GlobalTracer.TraceInfo($"{e.PreviousState} -> {e.CurrentState}");
+            });
             var do_test = new ParameterizedThreadStart((_x) =>
             {
                 Task x = (Task)_x;
-                x.StateChanged += (sender, e) =>
-                {
-                    Tracer.GlobalTracer.TraceInfo($"{e.PreviousState} -> {e.CurrentState}");
-                };
+                x.StateChanged += lambda_state_event;
 
                 x.Start();
                 x.Wait(-1);
@@ -106,8 +108,53 @@ namespace BaiduCloudSync_Test.task
             obj = new TaskImpl2 { ThrowOnRun = true };
             task = new Task(obj);
             do_test(task);
+
+            // testing start -> pause (request) -> failed -> retry -> finished operation sequence
+            obj = new TaskImpl2 { ThrowOnPause = true };
+            task = new Task(obj);
+            do_test = new ParameterizedThreadStart((_x) =>
+            {
+                Task x = (Task)_x;
+                x.StateChanged += lambda_state_event;
+                x.Start();
+
+                x.Wait(3000);
+                Assert.AreEqual(TaskState.Started, x.State);
+                x.Pause();
+                x.Wait();
+                Assert.AreEqual(TaskState.Failed, x.State);
+                x.Retry();
+                x.Wait();
+                Assert.AreEqual(TaskState.Ready, x.State);
+                x.Start();
+                x.Wait();
+                Assert.AreEqual(TaskState.Finished, x.State);
+            });
+            do_test(task);
+
+            // testing start -> pause -> start -> cancel -> failed -> retry -> cancel operation sequence
+            obj = new TaskImpl2 { ThrowOnCancel = true };
+            task = new Task(obj);
+            do_test = new ParameterizedThreadStart((_x) =>
+            {
+                Task x = (Task)_x;
+                x.StateChanged += lambda_state_event;
+                x.Start();
+                x.Wait(3000);
+                Assert.AreEqual(TaskState.Started, x.State);
+                x.Pause();
+                x.Cancel();
+                x.Wait();
+                Assert.AreEqual(TaskState.Failed, x.State);
+                x.Retry();
+                obj.ThrowOnCancel = false;
+                x.Start();
+                x.Cancel();
+                x.Wait();
+                Assert.AreEqual(TaskState.Cancelled, x.State);
+            });
+            do_test(task);
         }
 
-        //todo: add more test
     }
 }

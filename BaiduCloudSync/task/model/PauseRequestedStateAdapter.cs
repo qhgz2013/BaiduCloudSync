@@ -19,7 +19,7 @@ namespace BaiduCloudSync.task.model
             {
                 if (Parent.State == TaskState.PauseRequested)
                 {
-                    Parent.StateAdapter = new PausedStateAdapter(Parent, _thread_exited_event);
+                    StateAdapterHelper.SetTaskState(TaskState.Paused, Parent, _thread_exited_event);
                     Parent.TaskExecutor.EmitResponse -= _response;
                     _thread_exited_event.Set();
                 }
@@ -41,8 +41,9 @@ namespace BaiduCloudSync.task.model
                 {
                     Tracer.GlobalTracer.TraceError("Unexpected exception while pausing task");
                     Tracer.GlobalTracer.TraceError(ex);
+                    Parent.TaskExecutor.EmitResponse -= _response;
                     _thread_exited_event.Set();
-                    Parent.StateAdapter = new FailedStateAdapter(Parent);
+                    StateAdapterHelper.SetTaskState(TaskState.Failed, Parent);
                 }
                 finally
                 {
@@ -60,7 +61,7 @@ namespace BaiduCloudSync.task.model
         public override void Cancel()
         {
             Wait(-1);
-            Parent.StateAdapter = new CancelRequestedStateAdapter(Parent);
+            StateAdapterHelper.SetTaskState(TaskState.CancelRequested, Parent);
         }
 
         public override void Pause()
@@ -75,7 +76,7 @@ namespace BaiduCloudSync.task.model
         public override void Start()
         {
             Wait(-1);
-            Parent.StateAdapter = new StartRequestedStateAdapter(Parent);
+            StateAdapterHelper.SetTaskState(TaskState.StartRequested, Parent);
         }
         
         public override bool Wait(int timeout)

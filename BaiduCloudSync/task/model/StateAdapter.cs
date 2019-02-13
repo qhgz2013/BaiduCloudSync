@@ -20,6 +20,7 @@ namespace BaiduCloudSync.task.model
         protected StateAdapter(Task parent)
         {
             Parent = parent;
+            Parent.StateAdapter = this;
         }
     }
 }

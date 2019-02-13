@@ -18,7 +18,7 @@ namespace BaiduCloudSync.task.model
 
         public override void Cancel()
         {
-            Parent.StateAdapter = new CancelRequestedStateAdapter(Parent);
+            StateAdapterHelper.SetTaskState(TaskState.CancelRequested, Parent);
         }
 
         public override void Pause()
@@ -32,7 +32,7 @@ namespace BaiduCloudSync.task.model
 
         public override void Start()
         {
-            Parent.StateAdapter = new StartRequestedStateAdapter(Parent);
+            StateAdapterHelper.SetTaskState(TaskState.StartRequested, Parent);
         }
 
         public override bool Wait(int timeout)

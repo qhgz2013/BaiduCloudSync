@@ -129,6 +129,7 @@
     <Compile Include="task\model\StartedStateAdapter.cs" />
     <Compile Include="task\model\StartRequestedStateAdapter.cs" />
     <Compile Include="task\model\StateAdapter.cs" />
+    <Compile Include="task\model\StateAdapterHelper.cs" />
     <Compile Include="task\Task.cs" />
     <Compile Include="task\TaskState.cs" />
     <Compile Include="task\TaskStateChangedEventArgs.cs" />

@@ -66,37 +66,47 @@ namespace BaiduCloudSync_Test.task
         public bool ThrowOnCancel = false, ThrowOnPause = false, ThrowOnStart = false, ThrowOnRun = false, ThrowOnRetry = false;
         public void OnCancelRequested()
         {
+            Tracer.GlobalTracer.TraceInfo("hello?");
             if (ThrowOnCancel)
                 throw new Exception();
+            Thread.Sleep(1000);
             _interrupt_event.Set();
             EmitResponse(this, new EventArgs());
         }
 
         public void OnPauseRequested()
         {
+            Tracer.GlobalTracer.TraceInfo("hello?");
             if (ThrowOnPause)
                 throw new Exception();
+            Thread.Sleep(1000);
             _interrupt_event.Set();
             EmitResponse(this, new EventArgs());
         }
 
         public void OnRetryRequested()
         {
+            Tracer.GlobalTracer.TraceInfo("hello?");
             if (ThrowOnRetry)
                 throw new Exception();
+            Thread.Sleep(1000);
+            _interrupt_event.Set();
             EmitResponse(this, new EventArgs());
         }
 
         public void OnStartRequested()
         {
+            Tracer.GlobalTracer.TraceInfo("hello?");
             if (ThrowOnStart)
                 throw new Exception();
+            Thread.Sleep(1000);
             _interrupt_event.Reset();
             EmitResponse(this, new EventArgs());
         }
 
         public void Run()
         {
+            Tracer.GlobalTracer.TraceInfo("hello?");
             if (ThrowOnRun)
                 throw new Exception();
             if (!_interrupt_event.Wait(10000))

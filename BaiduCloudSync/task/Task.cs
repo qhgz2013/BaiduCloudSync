@@ -41,7 +41,7 @@ namespace BaiduCloudSync.task
                 _task_executor = value;
                 _task_executor.EmitFailure += delegate
                 {
-                    StateAdapter = new FailedStateAdapter(this);
+                    StateAdapterHelper.SetTaskState(TaskState.Failed, this);
                 };
             }
         }
@@ -94,14 +94,14 @@ namespace BaiduCloudSync.task
             ((ITaskOperator)StateAdapter).Retry();
         }
 
-        public bool Wait(int timeout)
+        public bool Wait(int timeout = -1)
         {
             StateAdapter adapter = StateAdapter;
             DateTime dst_time = DateTime.Now;
             if (timeout > 0)
                 dst_time += TimeSpan.FromMilliseconds(timeout);
-            while (adapter.State == TaskState.Started || adapter.State == TaskState.StartRequested || 
-                adapter.State == TaskState.PauseRequested || adapter.State == TaskState.CancelRequested || 
+            while (adapter.State == TaskState.Started || adapter.State == TaskState.StartRequested ||
+                adapter.State == TaskState.PauseRequested || adapter.State == TaskState.CancelRequested ||
                 adapter.State == TaskState.RetryRequested)
             {
                 if (timeout < 0)
