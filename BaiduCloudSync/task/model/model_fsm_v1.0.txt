@@ -4,7 +4,7 @@
 状态名称        稳定状态    初始状态    结束状态    执行的代码块      Wait作用
 Ready           true        true        -           -                   -
 StartRequested  -           -           -           OnStartRequested    等待EmitResponse或EmitFailure，或捕获了用户逻辑代码抛出的异常
-Started         -           -           -           Run                 Run执行完毕或等待EmitResponse或EmitFailure，或捕获了用户逻辑代码抛出的异常
+Started         -           -           -           Run                 等待Run执行完毕或等待EmitResponse或EmitFailure，或捕获了用户逻辑代码抛出的异常
 PauseRequested  -           -           -           OnPauseRequested    等待EmitResponse或EmitFailure，或捕获了用户逻辑代码抛出的异常
 Paused          true        -           -           -                   等待EmitResponse或EmitFailure，或捕获了用户逻辑代码抛出的异常
 CancelRequested -           -           -           OnCancelRequested   等待EmitResponse或EmitFailure，或捕获了用户逻辑代码抛出的异常
@@ -13,29 +13,28 @@ Finished        true        -           true        -                   -
 Failed          true        -           true        -                   -
 RetryRequested  -           -           -           OnRetryRequested    等待EmitResponse或EmitFailure，或捕获了用户逻辑代码抛出的异常
 
-有效任务操作 及对应触发执行逻辑
+有效任务操作 及对应触发的执行代码块
 定义于 BaiduCloudSync.task.ITaskOperator 及 BaiduCloudSync.task.ITaskExecutor
 Start   OnStartRequested
 Pause   OnPauseRequested
 Cancel  OnCancelRequested
 Retry   OnRetryRequested
-主逻辑 Run
+主逻辑  Run
 
 状态转移表
 开始状态\结束状态   Ready           StartRequested  Started         PauseRequested  Paused          CancelRequested Cancelled       Finished        Failed      RetryRequested
 Ready               -               Start           -               Pause           -               Cancel          -               -               EmitFailure -
-StartRequested      -               Start**         EmitResponse    Pause*          -               Cancel*         -               -               EmitFailure -
-Started             -               -               Start**         Pause           -               Cancel          -               EmitResponse    EmitFailure -
-PauseRequested      -               Start*          -               Pause**         EmitResponse    Cancel*         -               -               EmitFailure -
-Paused              -               Start           -               -               Pause**         Cancel          -               -               EmitFailure -
-CancelRequested     -               -               -               -               -               Cancel**        EmitResponse    -               EmitFailure Retry*
-Cancelled           -               -               -               -               -               -               Cancel**        -               EmitFailure Retry
+StartRequested      -               Start*          EmitResponse    -               -               -               -               -               EmitFailure -
+Started             -               -               Start*          Pause           -               Cancel          -               EmitResponse    EmitFailure -
+PauseRequested      -               -               -               Pause*          EmitResponse    -               -               -               EmitFailure -
+Paused              -               Start           -               -               Pause*          Cancel          -               -               EmitFailure -
+CancelRequested     -               -               -               -               -               Cancel*         EmitResponse    -               EmitFailure Retry*
+Cancelled           -               -               -               -               -               -               Cancel*         -               EmitFailure Retry
 Finished            -               -               -               -               -               -               -               -               EmitFailure -
 Failed              -               -               -               -               -               -               -               -               EmitFailure Retry
-RetryRequested      EmitResponse    -               -               -               -               -               -               -               EmitFailure Retry**
+RetryRequested      EmitResponse    -               -               -               -               -               -               -               EmitFailure Retry*
 
-*: 需要进行Wait操作等待EmitResponse发出
-**: 空操作，即不执行任何代码
+*: 空操作，即不执行任何代码
 
 若调用的操作未出现在该表中的相应状态，则引发 BaiduCloudSync.task.InvalidTaskStateException 异常
 如：在Failed状态下调用Start()，则会引发InvalidTaskStateException

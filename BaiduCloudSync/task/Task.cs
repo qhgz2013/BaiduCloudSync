@@ -10,18 +10,22 @@ namespace BaiduCloudSync.task
 {
     public sealed class Task : ITaskOperator
     {
-        // property member
-        private ITaskExecutor _task_executor;
         private volatile StateAdapter _state_adapter;
         // global writer lock of _state_adapter
         private readonly object _lock = new object();
 
+        private string _name;
 
         #region Properties
         /// <summary>
         /// 任务的名称
         /// </summary>
-        public string Name { get; set; }
+        public string Name
+        {
+            get => string.IsNullOrEmpty(_name) ? $"Noname_{ID}" : _name;
+            set => _name = value;
+        }
+
         /// <summary>
         /// 任务的状态
         /// </summary>
@@ -31,20 +35,9 @@ namespace BaiduCloudSync.task
         /// </summary>
         public bool IsBackground { get; set; }
         /// <summary>
-        /// 获取或设置任务执行逻辑接口
+        /// 获取任务执行逻辑接口
         /// </summary>
-        public ITaskExecutor TaskExecutor
-        {
-            get => _task_executor;
-            set
-            {
-                _task_executor = value;
-                _task_executor.EmitFailure += delegate
-                {
-                    StateAdapterHelper.SetTaskState(TaskState.Failed, this);
-                };
-            }
-        }
+        public ITaskExecutor TaskExecutor { get; }
         /// <summary>
         /// 获取或设置相应状态下的操作处理逻辑，由BaiduCloudSync.task.model提供
         /// </summary>
@@ -100,6 +93,7 @@ namespace BaiduCloudSync.task
             DateTime dst_time = DateTime.Now;
             if (timeout > 0)
                 dst_time += TimeSpan.FromMilliseconds(timeout);
+            //todo: modify this condition to the property in StateAdapter.IsInStableState
             while (adapter.State == TaskState.Started || adapter.State == TaskState.StartRequested ||
                 adapter.State == TaskState.PauseRequested || adapter.State == TaskState.CancelRequested ||
                 adapter.State == TaskState.RetryRequested)

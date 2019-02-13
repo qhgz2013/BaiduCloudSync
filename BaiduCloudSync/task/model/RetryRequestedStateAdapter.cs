@@ -26,8 +26,10 @@ namespace BaiduCloudSync.task.model
             });
             _failure = new EventHandler((sender, e) =>
             {
+                StateAdapterHelper.SetTaskState(TaskState.Failed, Parent);
                 _thread_exited_event.Set();
                 Parent.TaskExecutor.EmitFailure -= _failure;
+                Parent.TaskExecutor.EmitResponse -= _response;
             });
             ExecutionThread = new Thread(new ThreadStart(delegate
             {
@@ -59,14 +61,12 @@ namespace BaiduCloudSync.task.model
 
         public override void Cancel()
         {
-            Wait(-1);
-            StateAdapterHelper.SetTaskState(TaskState.CancelRequested, Parent);
+            throw new InvalidTaskStateException();
         }
 
         public override void Pause()
         {
-            Wait(-1);
-            StateAdapterHelper.SetTaskState(TaskState.PauseRequested, Parent);
+            throw new InvalidTaskStateException();
         }
 
         public override void Retry()
@@ -75,8 +75,7 @@ namespace BaiduCloudSync.task.model
 
         public override void Start()
         {
-            Wait(-1);
-            StateAdapterHelper.SetTaskState(TaskState.StartRequested, Parent);
+            throw new InvalidTaskStateException();
         }
         /// <summary>
         /// 等待重试事件被确认（EmitResponse），或触发了异常事件（EmitFailure），亦或是执行重试逻辑时产生了意外的异常

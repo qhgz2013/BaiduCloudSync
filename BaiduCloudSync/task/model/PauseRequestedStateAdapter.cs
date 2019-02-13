@@ -26,8 +26,10 @@ namespace BaiduCloudSync.task.model
             });
             _failure = new EventHandler((sender, e) =>
             {
+                StateAdapterHelper.SetTaskState(TaskState.Failed, Parent);
                 _thread_exited_event.Set();
                 Parent.TaskExecutor.EmitFailure -= _failure;
+                Parent.TaskExecutor.EmitResponse -= _response;
             });
             ExecutionThread = new Thread(new ThreadStart(delegate
             {
@@ -60,8 +62,7 @@ namespace BaiduCloudSync.task.model
 
         public override void Cancel()
         {
-            Wait(-1);
-            StateAdapterHelper.SetTaskState(TaskState.CancelRequested, Parent);
+            throw new InvalidTaskStateException();
         }
 
         public override void Pause()
@@ -75,8 +76,7 @@ namespace BaiduCloudSync.task.model
 
         public override void Start()
         {
-            Wait(-1);
-            StateAdapterHelper.SetTaskState(TaskState.StartRequested, Parent);
+            throw new InvalidTaskStateException();
         }
         
         public override bool Wait(int timeout)

@@ -14,16 +14,20 @@ namespace BaiduCloudSync_Test.task
 #pragma warning disable CS0067
         public event EventHandler EmitFailure;
 #pragma warning restore
-        public int TriggerCancel = 0, TriggerPause = 0, TriggerStarted = 0;
+        public int TriggerCancel = 0, TriggerPause = 0, TriggerStarted = 0, TriggerRetry = 0;
         public bool PauseFlag = false, CancelFlag = false;
         private readonly ManualResetEventSlim _interrupt_event = new ManualResetEventSlim();
+        public bool EmitFailureInsteadResponse = false;
         public void OnCancelRequested()
         {
             Tracer.GlobalTracer.TraceInfo("hello?");
             TriggerCancel++;
             CancelFlag = true;
             _interrupt_event.Set();
-            EmitResponse(this, new EventArgs());
+            if (EmitFailureInsteadResponse)
+                EmitFailure(this, new EventArgs());
+            else
+                EmitResponse(this, new EventArgs());
         }
 
         public void OnPauseRequested()
@@ -32,11 +36,19 @@ namespace BaiduCloudSync_Test.task
             TriggerPause++;
             PauseFlag = true;
             _interrupt_event.Set();
-            EmitResponse(this, new EventArgs());
+            if (EmitFailureInsteadResponse)
+                EmitFailure(this, new EventArgs());
+            else
+                EmitResponse(this, new EventArgs());
         }
 
         public void OnRetryRequested()
         {
+            Tracer.GlobalTracer.TraceInfo("hello?");
+            if (EmitFailureInsteadResponse)
+                EmitFailure(this, new EventArgs());
+            else
+                EmitResponse(this, new EventArgs());
         }
 
         public void OnStartRequested()
@@ -46,14 +58,22 @@ namespace BaiduCloudSync_Test.task
             _interrupt_event.Reset();
             PauseFlag = false;
             CancelFlag = false;
-            EmitResponse(this, new EventArgs());
+            if (EmitFailureInsteadResponse)
+                EmitFailure(this, new EventArgs());
+            else
+                EmitResponse(this, new EventArgs());
         }
 
         public void Run()
         {
             Tracer.GlobalTracer.TraceInfo("hello?");
             if (!_interrupt_event.Wait(10000))
-                EmitResponse(this, new EventArgs());
+            {
+                if (EmitFailureInsteadResponse)
+                    EmitFailure(this, new EventArgs());
+                else
+                    EmitResponse(this, new EventArgs());
+            }
         }
     }
     class TaskImpl2 : ITaskExecutor
