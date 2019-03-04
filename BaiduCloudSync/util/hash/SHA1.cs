@@ -4,12 +4,12 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace GlobalUtil
+namespace GlobalUtil.hash
 {
     //a simple class to calculate SHA1 with pause and continue supports
     //一个简单的用于计算SHA1的类，支持暂停和继续计算功能
     [Serializable]
-    public class SHA1
+    public class SHA1 : SerializableHashAlgorithm
     {
 
         #region vars
@@ -17,6 +17,7 @@ namespace GlobalUtil
         private int _offset;
         private byte[] _data;
         private long _length;
+        private bool _transform_final_block_is_called;
         #endregion
 
 
@@ -192,10 +193,7 @@ namespace GlobalUtil
         #endregion
 
         #region public functions
-        /// <summary>
-        /// 初始化所有变量
-        /// </summary>
-        public void Initialize()
+        public override void Initialize()
         {
             _A = 0x67452301;
             _B = 0xefcdab89;
@@ -205,20 +203,17 @@ namespace GlobalUtil
             _data = new byte[64];
             _offset = 0;
             _length = 0;
+            _transform_final_block_is_called = false;
         }
         public SHA1()
         {
             Initialize();
         }
-
-        /// <summary>
-        /// 在当前基础上更新字节块
-        /// </summary>
-        /// <param name="buffer">数据</param>
-        /// <param name="index">起始位置偏移</param>
-        /// <param name="length">数据长度</param>
-        public void TransformBlock(byte[] buffer, int index, int length)
+        
+        public override void TransformBlock(byte[] buffer, int index, int length)
         {
+            if (_transform_final_block_is_called)
+                throw new InvalidOperationException("could not call TransformBlock after calling TransformFinalBlock, call Initialize to reset hash state");
             if (index < 0 || length <= 0) return;
             _length += length;
 
@@ -243,15 +238,10 @@ namespace GlobalUtil
             Array.Copy(buffer, index, _data, _offset, length);
             _offset += length;
         }
-
-        /// <summary>
-        /// 在当前基础上更新最后的字节块
-        /// </summary>
-        /// <param name="buffer">数据</param>
-        /// <param name="index">起始位置偏移</param>
-        /// <param name="length">数据长度</param>
-        public void TransformFinalBlock(byte[] buffer, int index, int length)
+        public override void TransformFinalBlock(byte[] buffer, int index, int length)
         {
+            if (_transform_final_block_is_called)
+                throw new InvalidOperationException("could not call TransformFinalBlock after calling TransformFinalBlock, call Initialize to reset hash state");
             if (index < 0 || length < 0) return;
             _length += length;
 
@@ -296,14 +286,17 @@ namespace GlobalUtil
                 len >>= 8;
             }
             _sha1_update_block();
+            _transform_final_block_is_called = true;
         }
         /// <summary>
-         /// 返回当前字节数据所计算出的MD5
-         /// </summary>
-        public byte[] Hash
+        /// 返回当前字节数据所计算出的SHA1
+        /// </summary>
+        public override byte[] Hash
         {
             get
             {
+                if (!_transform_final_block_is_called)
+                    throw new InvalidOperationException("could not get the hash value before TransformFinalBlock is called");
                 var data = new byte[20];
                 uint a = _A, b = _B, c = _C, d = _D, e = _E;
                 for (int i = 0; i < 4; i++)
@@ -322,13 +315,13 @@ namespace GlobalUtil
                 return data;
             }
         }
-        public long Length { get { return _length; } }
+        public override long Length { get { return _length; } }
         #endregion
 
 
         #region util functions
         /// <summary>
-        /// 计算该字节数组的MD5值
+        /// 计算该字节数组的SHA1值
         /// </summary>
         /// <param name="buffer">数据</param>
         /// <param name="index">起始位置偏移</param>
@@ -341,7 +334,7 @@ namespace GlobalUtil
             return sha1.Hash;
         }
         /// <summary>
-        /// 计算字符串的MD5值
+        /// 计算字符串的SHA1值
         /// </summary>
         /// <param name="str">字符串</param>
         /// <param name="encoding">编码类型，默认utf8</param>
@@ -354,48 +347,7 @@ namespace GlobalUtil
         }
         #endregion
 
-        #region serialization
-        /// <summary>
-        /// 从数据流中逆序列化并创建一个SHA1类
-        /// </summary>
-        /// <param name="stream">可读取的数据流</param>
-        /// <returns></returns>
-        public static SHA1 Deserialize(Stream stream)
-        {
-            var fmt = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
-            return (SHA1)fmt.Deserialize(stream);
-        }
-        /// <summary>
-        /// 从数据流中序列化当前SHA1类（并保存当前的计算状态）
-        /// </summary>
-        /// <param name="stream">可写入的数据流</param>
-        public void Serialize(Stream stream)
-        {
-            var fmt = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
-            fmt.Serialize(stream, this);
-        }
-        /// <summary>
-        /// 从文件中逆序列化并创建一个SHA1类
-        /// </summary>
-        /// <param name="file">文件路径</param>
-        /// <returns></returns>
-        public static SHA1 Deserialize(string file)
-        {
-            var fs = new FileStream(file, FileMode.Open, FileAccess.Read);
-            var ret = Deserialize(fs);
-            fs.Close();
-            return ret;
-        }
-        /// <summary>
-        /// 从文件中序列化当前SHA1类（并保存当前的计算状态）
-        /// </summary>
-        /// <param name="file">文件路径</param>
-        public void Serialize(string file)
-        {
-            var fs = new FileStream(file, FileMode.Create, FileAccess.Write);
-            Serialize(fs);
-            fs.Close();
-        }
-        #endregion
+
+        public static readonly byte[] Empty = new byte[20];
     }
 }

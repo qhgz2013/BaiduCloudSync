@@ -5,53 +5,50 @@ using System.Linq;
 using System.Text;
 using System.Security.Cryptography;
 
-namespace GlobalUtil
+namespace GlobalUtil.cryptography
 {
     //RSA 1024/2048/3072/4096/... bit
     public partial class Crypto
     {
         /// <summary>
-        /// Generate a random pair of Public Key and Private Key
+        /// 随机生成一对RSA的公钥和私钥
         /// </summary>
-        /// <param name="publicKey">Public Key</param>
-        /// <param name="privateKey">Private Key (Please store it well and keep it secret)</param>
-        /// <param name="keysize">Encryption Bit (default: 1024bit)</param>
-        /// <returns>wether it is success</returns>
-        public static bool RSA_CreateKey(out byte[] publicKey, out byte[] privateKey, int keysize = 1024)
+        /// <param name="publicKey">公钥</param>
+        /// <param name="privateKey">私钥</param>
+        /// <param name="keysize">密钥大小（默认为1024bit）</param>
+        /// <returns>生成是否成功</returns>
+        public static bool RSA_CreateKey(out RSAParameters publicKey, out RSAParameters privateKey, int keysize = 1024)
         {
             try
             {
                 var rsa = new RSACryptoServiceProvider(keysize);
-                publicKey = rsa.ExportCspBlob(false);
-                privateKey = rsa.ExportCspBlob(true);
+                publicKey = rsa.ExportParameters(false);
+                privateKey = rsa.ExportParameters(true);
                 return true;
             }
             catch (Exception)
             {
-                publicKey = null;
-                privateKey = null;
+                publicKey = new RSAParameters();
+                privateKey = new RSAParameters();
                 return false;
             }
         }
         /// <summary>
-        /// Convert Public Key byte array to PEM string
+        /// 将RSA公钥参数转换为PEM字符串
         /// </summary>
-        /// <param name="publicKey">Public Key</param>
-        /// <returns>PEM string</returns>
-        public static string RSA_ExportPEMPublicKey(byte[] publicKey)
+        /// <param name="publicKey">RSA公钥参数</param>
+        /// <returns>PEM字符串</returns>
+        public static string RSA_ExportPEMPublicKey(RSAParameters publicKey)
         {
             //https://stackoverflow.com/questions/23734792/c-sharp-export-private-public-rsa-key-from-rsacryptoserviceprovider-to-pem-strin
-            var rsa = new RSACryptoServiceProvider();
-            rsa.ImportCspBlob(publicKey);
-            var param = rsa.ExportParameters(false);
             var sb = new StringBuilder();
             using (var stream = new MemoryStream())
             {
                 stream.WriteByte(0x30); //SEQUENCE
                 using (var ms = new MemoryStream())
                 {
-                    _encode_integer_big_edian(ms, param.Modulus);
-                    _encode_integer_big_edian(ms, param.Exponent);
+                    _encode_integer_big_edian(ms, publicKey.Modulus);
+                    _encode_integer_big_edian(ms, publicKey.Exponent);
                     var len = (int)ms.Length;
                     _encode_length(stream, len);
                     stream.Write(ms.GetBuffer(), 0, len);
@@ -67,14 +64,14 @@ namespace GlobalUtil
             return sb.ToString();
         }
         /// <summary>
-        /// Convert Private Key byte array to PEM string
+        /// 将RSA私钥参数转换为PEM字符串
         /// </summary>
-        /// <param name="privateKey">Private Key</param>
-        /// <returns>PEM string</returns>
-        public static string RSA_ExportPEMPrivateKey(byte[] privateKey)
+        /// <param name="privateKey">RSA公钥参数</param>
+        /// <returns>PEM字符串</returns>
+        public static string RSA_ExportPEMPrivateKey(RSAParameters privateKey)
         {
             var rsa = new RSACryptoServiceProvider();
-            rsa.ImportCspBlob(privateKey);
+            rsa.ImportParameters(privateKey);
             var param = rsa.ExportParameters(true);
             if (rsa.PublicOnly) throw new ArgumentException("the key data is not a private key");
             var sb = new StringBuilder();
@@ -107,11 +104,11 @@ namespace GlobalUtil
             return sb.ToString();
         }
         /// <summary>
-        /// Convert PEM string to Public Key byte array
+        /// 从PEM key中导入RSA公钥参数
         /// </summary>
-        /// <param name="publicPEMKey">PEM string</param>
-        /// <returns>Public Key</returns>
-        public static byte[] RSA_ImportPEMPublicKey(string publicPEMKey)
+        /// <param name="publicPEMKey">PEM字符串</param>
+        /// <returns>RSA公钥参数</returns>
+        public static RSAParameters RSA_ImportPEMPublicKey(string publicPEMKey)
         {
             const string header = "-----BEGIN PUBLIC KEY-----";
             const string header2 = "-----BEGIN RSA PUBLIC KEY-----";
@@ -148,14 +145,14 @@ namespace GlobalUtil
                 }
                 catch { }
             }
-            return null;
+            throw new ArgumentException("could not parse RSA PEM key");
         }
         /// <summary>
-        /// Convert PEM string to Private Key byte array
+        /// 从PEM key中导入RSA私钥参数
         /// </summary>
-        /// <param name="privatePEMKey">PEM string</param>
-        /// <returns>Private Key</returns>
-        public static byte[] RSA_ImportPEMPrivateKey(string privatePEMKey)
+        /// <param name="privatePEMKey">PEM字符串</param>
+        /// <returns>RSA私钥参数</returns>
+        public static RSAParameters RSA_ImportPEMPrivateKey(string privatePEMKey)
         {
             const string header = "-----BEGIN RSA PRIVATE KEY-----"; //pkcs#1 format
             const string footer = "-----END RSA PRIVATE KEY-----";
@@ -238,50 +235,50 @@ namespace GlobalUtil
         #endregion
 
         /// <summary>
-        /// Encrypt a byte array using specified Public Key
+        /// 用指定的RSA公钥加密字节数组
         /// </summary>
-        /// <param name="srcData">Source Data</param>
-        /// <param name="publicKey">Public Key</param>
-        /// <returns>Encrypted Data</returns>
-        public static byte[] RSA_ArrayEncrypt(byte[] srcData, byte[] publicKey)
+        /// <param name="srcData">原字节数组</param>
+        /// <param name="publicKey">RSA公钥</param>
+        /// <returns>加密后的字节数组</returns>
+        public static byte[] RSA_ArrayEncrypt(byte[] srcData, RSAParameters publicKey)
         {
             var rsa = new RSACryptoServiceProvider();
-            rsa.ImportCspBlob(publicKey);
+            rsa.ImportParameters(publicKey);
             return rsa.Encrypt(srcData, false);
         }
         /// <summary>
-        /// Decrypt a byte array using specified Private Key
+        /// 用指定的RSA私钥解密字节数组
         /// </summary>
-        /// <param name="encData">Encrypted Data</param>
-        /// <param name="privateKey">Private Key</param>
-        /// <returns>Decrypted Data</returns>
-        public static byte[] RSA_ArrayDecrypt(byte[] encData, byte[] privateKey)
+        /// <param name="encData">加密的字节数组</param>
+        /// <param name="privateKey">RSA私钥</param>
+        /// <returns>解密后的字节数组</returns>
+        public static byte[] RSA_ArrayDecrypt(byte[] encData, RSAParameters privateKey)
         {
             var rsa = new RSACryptoServiceProvider();
-            rsa.ImportCspBlob(privateKey);
+            rsa.ImportParameters(privateKey);
             return rsa.Decrypt(encData, false);
         }
         /// <summary>
-        /// Encrypt a string using specified Public Key
+        /// 用指定的RSA公钥加密字符串
         /// </summary>
-        /// <param name="srcData">Source String</param>
-        /// <param name="publicKey">Public Key</param>
-        /// <param name="charset">Char Encoding (default UTF-8)</param>
-        /// <returns>Encrypted Data</returns>
-        public static byte[] RSA_StringEncrypt(string srcData, byte[] publicKey, Encoding charset = null)
+        /// <param name="srcData">原字符串</param>
+        /// <param name="publicKey">RSA公钥</param>
+        /// <param name="charset">字符串编码（默认为utf8）</param>
+        /// <returns>加密后的字节数组</returns>
+        public static byte[] RSA_StringEncrypt(string srcData, RSAParameters publicKey, Encoding charset = null)
         {
             if (charset == null) charset = Encoding.UTF8;
             var data = charset.GetBytes(srcData);
             return RSA_ArrayEncrypt(data, publicKey);
         }
         /// <summary>
-        /// Decrypt a byte array to string using specified Private Key
+        /// 用指定的RSA公钥解密字符串
         /// </summary>
-        /// <param name="encData">Encrypted data</param>
-        /// <param name="privateKey">Private Key</param>
-        /// <param name="charset">Char Encoding (default UTF-8)</param>
-        /// <returns>Decrypted string</returns>
-        public static string RSA_StringDecrypt(byte[] encData, byte[] privateKey, Encoding charset = null)
+        /// <param name="encData">加密后的数据</param>
+        /// <param name="privateKey">RSA私钥</param>
+        /// <param name="charset">字符串编码（默认为utf8）</param>
+        /// <returns>解密后的字符串</returns>
+        public static string RSA_StringDecrypt(byte[] encData, RSAParameters privateKey, Encoding charset = null)
         {
             if (charset == null) charset = Encoding.UTF8;
             var data = RSA_ArrayDecrypt(encData, privateKey);

@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Drawing;
 using System.IO;
 using BaiduCloudSync.oauth.exception;
+using GlobalUtil.cryptography;
 
 namespace BaiduCloudSync.oauth
 {

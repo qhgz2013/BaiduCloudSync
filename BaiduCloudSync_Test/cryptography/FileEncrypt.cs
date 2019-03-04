@@ -1,16 +1,15 @@
-﻿//common-file-encrypt.cs
-//
-// 用于对文件进行加密的类
-// 加密为固定RSA+可变AES 或者是固定AES
-//
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Security.Cryptography;
-namespace GlobalUtil
+using GlobalUtil;
+using GlobalUtil.cryptography;
+
+namespace BaiduCloudSync_Test.cryptography
 {
+    [Obsolete("This class is used to generate v1.0 AES encryption file, which is no longer maintain and use, will be removed in future version")]
     public class FileEncrypt
     {
         public delegate void StatusCallback(string inputPath, string outputPath, long current, long total);
@@ -24,12 +23,13 @@ namespace GlobalUtil
         /// <param name="outputFile">输出的文件路径</param>
         /// <param name="rsaPublic">RSA公钥</param>
         /// <param name="SHA1">文件的SHA1值（可选，用于解密的校验）</param>
-        public static void EncryptFile(string inputFile, string outputFile, byte[] rsaPublic, string SHA1 = null, StatusCallback callback = null)
+        public static void EncryptFile(string inputFile, string outputFile, RSAParameters rsaPublic, string SHA1 = null, StatusCallback callback = null)
         {
-            if (rsaPublic == null) throw new ArgumentNullException("rsaPublic");
             if (string.IsNullOrEmpty(inputFile)) throw new ArgumentNullException("inputFile");
             if (string.IsNullOrEmpty(outputFile)) throw new ArgumentNullException("outputFile");
             if (!File.Exists(inputFile)) throw new ArgumentException("inputFile not exists");
+            var rsa = new RSACryptoServiceProvider();
+            rsa.ImportParameters(rsaPublic);
             FileStream fs_in = null, fs_out = null;
             try
             {
@@ -38,8 +38,6 @@ namespace GlobalUtil
                 var file_length = fs_in.Length;
                 long proceeded_length = 0;
 
-                var rsa = new RSACryptoServiceProvider();
-                rsa.ImportCspBlob(rsaPublic);
                 byte[] sha1_value = rsa.Encrypt(new byte[20], false);
                 if (!string.IsNullOrEmpty(SHA1)) sha1_value = rsa.Encrypt(Util.Hex(SHA1), false);
                 var rnd = new Random();
@@ -50,6 +48,8 @@ namespace GlobalUtil
                 var aes_key_value = rsa.Encrypt(aesKey, false);
                 var aes_iv_value = rsa.Encrypt(aesIV, false);
 
+                // offset / length [ data type ] - description
+                // 0 / 1 [byte] - File type marker
                 fs_out.WriteByte(FLG_DYNAMIC_KEY);
                 fs_out.Write(sha1_value, 0, sha1_value.Length);
                 fs_out.Write(aes_key_value, 0, aes_key_value.Length);
@@ -145,12 +145,11 @@ namespace GlobalUtil
         /// <param name="inputFile">输入的文件路径</param>
         /// <param name="outputFile">输出的文件路径</param>
         /// <param name="rsaPrivate">RSA密钥</param>
-        public static void DecryptFile(string inputFile, string outputFile, byte[] rsaPrivate, StatusCallback callback = null)
+        public static void DecryptFile(string inputFile, string outputFile, RSAParameters rsaPrivate, StatusCallback callback = null)
         {
             if (string.IsNullOrEmpty(inputFile)) throw new ArgumentNullException("inputFile");
             if (string.IsNullOrEmpty(outputFile)) throw new ArgumentNullException("outputFile");
             if (!File.Exists(inputFile)) throw new ArgumentException("inputFile not exists");
-            if (rsaPrivate == null) throw new ArgumentNullException("rsaPrivate");
 
             FileStream fs_in = null, fs_out = null;
             try
@@ -161,7 +160,7 @@ namespace GlobalUtil
                 long proceeded_length = 0;
 
                 var rsa = new RSACryptoServiceProvider();
-                rsa.ImportCspBlob(rsaPrivate);
+                rsa.ImportParameters(rsaPrivate);
 
                 int type = fs_in.ReadByte();
                 if (type != FLG_DYNAMIC_KEY)

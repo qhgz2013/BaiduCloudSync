@@ -5,20 +5,20 @@ using System.Linq;
 using System.Text;
 using System.Security.Cryptography;
 
-namespace GlobalUtil
+namespace GlobalUtil.cryptography
 {
     //AES 128/192/256 bit CBC/CFB/CTS/ECB/OFB
     public partial class Crypto
     {
         /// <summary>
-        /// Create an encrypted data stream using the specified key and mode and IV
-        /// Remember to FlushFinalBlock() when finished encryption
+        /// 使用指定的AES key和初始向量（IV）创建一个加密的数据流
+        /// 在完成加密后记得调用 FlushFinalBlock()
         /// </summary>
-        /// <param name="srcData">Source Data Stream</param>
-        /// <param name="key">AES Key (128 or 192 or 256bit only)</param>
-        /// <param name="mode">Cipher Mode</param>
-        /// <param name="IV">AES Initial Vector(IV) (128bit only)</param>
-        /// <returns>Encrypted Stream</returns>
+        /// <param name="srcData">原数据流</param>
+        /// <param name="key">AES Key（仅支持128/192/256 bit大小）</param>
+        /// <param name="mode">加密模式</param>
+        /// <param name="IV">AES初始向量（IV）（仅支持128bit）</param>
+        /// <returns>加密的数据流</returns>
         public static CryptoStream AES_StreamEncrypt(Stream srcData, byte[] key, CipherMode mode, byte[] IV)
         {
             if (key.Length != 32 && key.Length != 24 && key.Length != 16) throw new ArgumentException("Key length mismatch! support aes-128, aes-192, aes-256 only");
@@ -34,13 +34,13 @@ namespace GlobalUtil
             return encrypt_stream;
         }
         /// <summary>
-        /// Create a decrypted data stream using the specified key and mode and IV
+        /// 使用指定的AES key和初始向量（IV）创建一个解密的数据流
         /// </summary>
-        /// <param name="encData">Encrypted Data Stream</param>
-        /// <param name="key">AES Key (128 or 192 or 256bit only)</param>
-        /// <param name="mode">Cipher Mode</param>
-        /// <param name="IV">AES Initial Vector(IV) (128bit only)</param>
-        /// <returns>Decrypted Stream</returns>
+        /// <param name="encData">加密过的数据流</param>
+        /// <param name="key">AES Key（仅支持128/192/256 bit大小）</param>
+        /// <param name="mode">加密模式</param>
+        /// <param name="IV">AES初始向量（IV）（仅支持128bit）</param>
+        /// <returns>解密的数据流</returns>
         public static CryptoStream AES_StreamDecrypt(Stream encData, byte[] key, CipherMode mode, byte[] IV)
         {
             if (key.Length != 32 && key.Length != 24 && key.Length != 16) throw new ArgumentException("Key length mismatch! support aes-128, aes-192, aes-256 only");

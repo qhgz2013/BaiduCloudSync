@@ -5,9 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Security.Cryptography;
 
-namespace GlobalUtil
+namespace GlobalUtil.cryptography
 {
-    public class DerParser
+    internal sealed class DerParser
     {
         private enum TagType : byte
         {
@@ -42,7 +42,7 @@ namespace GlobalUtil
         /// </summary>
         /// <param name="data">RSA密钥字节</param>
         /// <returns></returns>
-        public static byte[] ParseDERPrivateKeyPKCS1(byte[] data)
+        public static RSAParameters ParseDERPrivateKeyPKCS1(byte[] data)
         {
             int index = 0;
             Tag der_tag = _parse_object(data, ref index);
@@ -65,16 +65,14 @@ namespace GlobalUtil
             param.DP = exponent1;
             param.DQ = exponent2;
             param.InverseQ = coefficient;
-            var rsa = new RSACryptoServiceProvider();
-            rsa.ImportParameters(param);
-            return rsa.ExportCspBlob(true);
+            return param;
         }
         /// <summary>
         /// 以PKCS#8格式(RFC5208标准)解析RSA密钥
         /// </summary>
         /// <param name="data">RSA密钥字节</param>
         /// <returns></returns>
-        public static byte[] ParseDERPrivateKeyPKCS8(byte[] data)
+        public static RSAParameters ParseDERPrivateKeyPKCS8(byte[] data)
         {
             int index = 0;
             var der_tag = _parse_object(data, ref index);
@@ -87,7 +85,7 @@ namespace GlobalUtil
         /// </summary>
         /// <param name="data">RSA公钥字节</param>
         /// <returns></returns>
-        public static byte[] ParseDERPublicKeyPKCS1(byte[] data)
+        public static RSAParameters ParseDERPublicKeyPKCS1(byte[] data)
         {
             int index = 0;
             Tag der_tag = _parse_object(data, ref index);
@@ -97,16 +95,14 @@ namespace GlobalUtil
             var publicExponent = (byte[])sequence[1].Data;
             param.Modulus = modules;
             param.Exponent = publicExponent;
-            var rsa = new RSACryptoServiceProvider();
-            rsa.ImportParameters(param);
-            return rsa.ExportCspBlob(false);
+            return param;
         }
         /// <summary>
         /// 以PKCS#8格式(RFC5208标准)解析RSA公钥
         /// </summary>
         /// <param name="data">RSA公钥字节</param>
         /// <returns></returns>
-        public static byte[] ParseDERPublicKeyPKCS8(byte[] data)
+        public static RSAParameters ParseDERPublicKeyPKCS8(byte[] data)
         {
             int index = 0;
             var der_tag = _parse_object(data, ref index);

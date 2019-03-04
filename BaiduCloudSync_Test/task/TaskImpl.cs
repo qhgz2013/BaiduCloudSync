@@ -10,9 +10,13 @@ namespace BaiduCloudSync_Test.task
 {
     class TaskImpl1 : ITaskExecutor
     {
-        public event EventHandler EmitResponse;
 #pragma warning disable CS0067
         public event EventHandler EmitFailure;
+        public event EventHandler EmitStartResponse;
+        public event EventHandler EmitPauseResponse;
+        public event EventHandler EmitCancelResponse;
+        public event EventHandler EmitRetryResponse;
+        public event EventHandler EmitFinished;
 #pragma warning restore
         public int TriggerCancel = 0, TriggerPause = 0, TriggerStarted = 0, TriggerRetry = 0;
         public bool PauseFlag = false, CancelFlag = false;
@@ -27,7 +31,7 @@ namespace BaiduCloudSync_Test.task
             if (EmitFailureInsteadResponse)
                 EmitFailure(this, new EventArgs());
             else
-                EmitResponse(this, new EventArgs());
+                EmitCancelResponse(this, new EventArgs());
         }
 
         public void OnPauseRequested()
@@ -39,7 +43,7 @@ namespace BaiduCloudSync_Test.task
             if (EmitFailureInsteadResponse)
                 EmitFailure(this, new EventArgs());
             else
-                EmitResponse(this, new EventArgs());
+                EmitPauseResponse(this, new EventArgs());
         }
 
         public void OnRetryRequested()
@@ -48,7 +52,7 @@ namespace BaiduCloudSync_Test.task
             if (EmitFailureInsteadResponse)
                 EmitFailure(this, new EventArgs());
             else
-                EmitResponse(this, new EventArgs());
+                EmitRetryResponse(this, new EventArgs());
         }
 
         public void OnStartRequested()
@@ -61,7 +65,7 @@ namespace BaiduCloudSync_Test.task
             if (EmitFailureInsteadResponse)
                 EmitFailure(this, new EventArgs());
             else
-                EmitResponse(this, new EventArgs());
+                EmitStartResponse(this, new EventArgs());
         }
 
         public void Run()
@@ -72,15 +76,19 @@ namespace BaiduCloudSync_Test.task
                 if (EmitFailureInsteadResponse)
                     EmitFailure(this, new EventArgs());
                 else
-                    EmitResponse(this, new EventArgs());
+                    EmitFinished(this, new EventArgs());
             }
         }
     }
     class TaskImpl2 : ITaskExecutor
     {
-        public event EventHandler EmitResponse;
 #pragma warning disable CS0067
         public event EventHandler EmitFailure;
+        public event EventHandler EmitStartResponse;
+        public event EventHandler EmitPauseResponse;
+        public event EventHandler EmitCancelResponse;
+        public event EventHandler EmitRetryResponse;
+        public event EventHandler EmitFinished;
 #pragma warning restore
         private readonly ManualResetEventSlim _interrupt_event = new ManualResetEventSlim();
         public bool ThrowOnCancel = false, ThrowOnPause = false, ThrowOnStart = false, ThrowOnRun = false, ThrowOnRetry = false;
@@ -91,7 +99,7 @@ namespace BaiduCloudSync_Test.task
                 throw new Exception();
             Thread.Sleep(1000);
             _interrupt_event.Set();
-            EmitResponse(this, new EventArgs());
+            EmitCancelResponse(this, new EventArgs());
         }
 
         public void OnPauseRequested()
@@ -101,7 +109,7 @@ namespace BaiduCloudSync_Test.task
                 throw new Exception();
             Thread.Sleep(1000);
             _interrupt_event.Set();
-            EmitResponse(this, new EventArgs());
+            EmitPauseResponse(this, new EventArgs());
         }
 
         public void OnRetryRequested()
@@ -111,7 +119,7 @@ namespace BaiduCloudSync_Test.task
                 throw new Exception();
             Thread.Sleep(1000);
             _interrupt_event.Set();
-            EmitResponse(this, new EventArgs());
+            EmitRetryResponse(this, new EventArgs());
         }
 
         public void OnStartRequested()
@@ -121,7 +129,7 @@ namespace BaiduCloudSync_Test.task
                 throw new Exception();
             Thread.Sleep(1000);
             _interrupt_event.Reset();
-            EmitResponse(this, new EventArgs());
+            EmitStartResponse(this, new EventArgs());
         }
 
         public void Run()
@@ -130,7 +138,7 @@ namespace BaiduCloudSync_Test.task
             if (ThrowOnRun)
                 throw new Exception();
             if (!_interrupt_event.Wait(10000))
-                EmitResponse(this, new EventArgs());
+                EmitFinished(this, new EventArgs());
         }
     }
 }

@@ -10,7 +10,7 @@ namespace GlobalUtil.hash
     //a simple class to calculate MD5 with pause and continue supports
     //一个简单的用于计算MD5的类，支持暂停和继续计算功能
     [Serializable]
-    public class MD5 : ISerializableHashAlgorithm
+    public class MD5 : SerializableHashAlgorithm
     {
         #region vars
         //variable controls
@@ -18,6 +18,7 @@ namespace GlobalUtil.hash
         private int _offset; //下次数据读入的起始偏移
         private byte[] _data; //当前的数据（满64B写入时进行块更新）
         private long _length; //总传入的数据位数（用于计算最后的alignment块）
+        private bool _transform_final_block_is_called;
         #endregion
 
         #region calculation functions
@@ -154,7 +155,7 @@ namespace GlobalUtil.hash
         /// <summary>
         /// 初始化所有变量
         /// </summary>
-        public void Initialize()
+        public override void Initialize()
         {
             _A = 0x67452301;
             _B = 0xefcdab89;
@@ -163,6 +164,7 @@ namespace GlobalUtil.hash
             _data = new byte[64];
             _offset = 0;
             _length = 0;
+            _transform_final_block_is_called = false;
         }
 
         public MD5()
@@ -175,8 +177,10 @@ namespace GlobalUtil.hash
         /// <param name="buffer">数据</param>
         /// <param name="index">起始位置偏移</param>
         /// <param name="length">数据长度</param>
-        public void TransformBlock(byte[] buffer, int index, int length)
+        public override void TransformBlock(byte[] buffer, int index, int length)
         {
+            if (_transform_final_block_is_called)
+                throw new InvalidOperationException("could not call TransformBlock after calling TransformFinalBlock, call Initialize to reset hash state");
             if (index < 0 || length <= 0) return;
             _length += length;
 
@@ -207,8 +211,10 @@ namespace GlobalUtil.hash
         /// <param name="buffer">数据</param>
         /// <param name="index">起始位置偏移</param>
         /// <param name="length">数据长度</param>
-        public void TransformFinalBlock(byte[] buffer, int index, int length)
+        public override void TransformFinalBlock(byte[] buffer, int index, int length)
         {
+            if (_transform_final_block_is_called)
+                throw new InvalidOperationException("could not call TransformFinalBlock after calling TransformFinalBlock, call Initialize to reset hash state");
             if (index < 0 || length < 0) return;
             _length += length;
 
@@ -252,14 +258,17 @@ namespace GlobalUtil.hash
                 data_len >>= 8;
             }
             _md5_update_block();
+            _transform_final_block_is_called = true;
         }
         /// <summary>
         /// 返回当前字节数据所计算出的MD5
         /// </summary>
-        public byte[] Hash
+        public override byte[] Hash
         {
             get
             {
+                if (!_transform_final_block_is_called)
+                    throw new InvalidOperationException("could not get the hash value before TransformFinalBlock is called");
                 var data = new byte[16];
                 uint a = _A, b = _B, c = _C, d = _D;
                 for (int i = 0; i < 4; i++)
@@ -276,7 +285,7 @@ namespace GlobalUtil.hash
                 return data;
             }
         }
-        public long Length { get { return _length; } }
+        public override long Length { get { return _length; } }
         #endregion
 
         #region util functions
@@ -306,49 +315,6 @@ namespace GlobalUtil.hash
             return ComputeHash(data, 0, data.Length);
         }
         #endregion
-
-        #region serialization
-        /// <summary>
-        /// 从数据流中逆序列化并创建一个MD5类
-        /// </summary>
-        /// <param name="stream">可读取的数据流</param>
-        /// <returns></returns>
-        public static MD5 Deserialize(Stream stream)
-        {
-            var fmt = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
-            return (MD5)fmt.Deserialize(stream);
-        }
-        /// <summary>
-        /// 从数据流中序列化当前MD5类（并保存当前的计算状态）
-        /// </summary>
-        /// <param name="stream">可写入的数据流</param>
-        public void Serialize(Stream stream)
-        {
-            var fmt = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
-            fmt.Serialize(stream, this);
-        }
-        /// <summary>
-        /// 从文件中逆序列化并创建一个MD5类
-        /// </summary>
-        /// <param name="file">文件路径</param>
-        /// <returns></returns>
-        public static MD5 Deserialize(string file)
-        {
-            var fs = new FileStream(file, FileMode.Open, FileAccess.Read);
-            var ret = Deserialize(fs);
-            fs.Close();
-            return ret;
-        }
-        /// <summary>
-        /// 从文件中序列化当前MD5类（并保存当前的计算状态）
-        /// </summary>
-        /// <param name="file">文件路径</param>
-        public void Serialize(string file)
-        {
-            var fs = new FileStream(file, FileMode.Create, FileAccess.Write);
-            Serialize(fs);
-            fs.Close();
-        }
-        #endregion
+        
     }
 }

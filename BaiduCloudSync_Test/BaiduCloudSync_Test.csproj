@@ -58,6 +58,8 @@
   <ItemGroup>
     <Compile Include="api\PcsPathTest.cs" />
     <Compile Include="api\webimpl\PcsAPIWebImplTest.cs" />
+    <Compile Include="cryptography\FileEncrypt.cs" />
+    <Compile Include="cryptography\CryptoStreamTest.cs" />
     <Compile Include="MultipleExceptionTypeCatcher.cs" />
     <Compile Include="oauth\OAuthPCWebImplTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -73,6 +75,9 @@
       <Project>{54136327-f66c-433f-94d5-95017bb9c19c}</Project>
       <Name>BaiduCloudSync</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="hash\" />
   </ItemGroup>
   <Choose>
     <When Condition="'$(VisualStudioVersion)' == '10.0' And '$(IsCodedUITest)' == 'True'">

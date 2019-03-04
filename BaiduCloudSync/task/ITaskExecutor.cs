@@ -35,7 +35,11 @@ namespace BaiduCloudSync.task
         /// <summary>
         /// 发送目前请求的响应信息，在Started状态下发送则视为任务完成
         /// </summary>
-        event EventHandler EmitResponse;
+        event EventHandler EmitStartResponse;
+        event EventHandler EmitPauseResponse;
+        event EventHandler EmitCancelResponse;
+        event EventHandler EmitRetryResponse;
+        event EventHandler EmitFinished;
         /// <summary>
         /// 发送执行失败信息，发送该消息后视为线程已退出，Wait操作不再等待该线程结束
         /// </summary>

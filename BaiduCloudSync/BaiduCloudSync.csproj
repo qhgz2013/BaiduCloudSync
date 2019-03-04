@@ -115,6 +115,7 @@
     <Compile Include="oauth\exception\WrongPasswordException.cs" />
     <Compile Include="segment\FixedSizeSegmentAlgorithm.cs" />
     <Compile Include="segment\ISegmentAlgorithm.cs" />
+    <Compile Include="task\Extensions.cs" />
     <Compile Include="task\InvalidTaskStateException.cs" />
     <Compile Include="task\ITaskExecutor.cs" />
     <Compile Include="task\ITaskOperator.cs" />
@@ -133,7 +134,13 @@
     <Compile Include="task\Task.cs" />
     <Compile Include="task\TaskState.cs" />
     <Compile Include="task\TaskStateChangedEventArgs.cs" />
-    <Compile Include="util\hash\ISerializableHashAlgorithm.cs" />
+    <Compile Include="util\cryptography\CryptoStreamFactory.cs" />
+    <Compile Include="util\cryptography\EncryptionType.cs" />
+    <Compile Include="util\cryptography\streamadapter\LegacyDynamicAESCryptoStream.cs" />
+    <Compile Include="util\cryptography\streamadapter\LegacyStaticAESCryptoStream.cs" />
+    <Compile Include="util\hash\SerializableHashAlgorithm.cs" />
+    <Compile Include="util\hash\SerializationException.cs" />
+    <Compile Include="util\hash\SHA1.cs" />
     <Compile Include="util\http\HttpSessionHelper.cs" />
     <Compile Include="util\http\StackedHttpException.cs" />
     <Compile Include="util\icon-extractor.cs" />
@@ -142,16 +149,12 @@
     <Compile Include="util\http\HttpSession.cs" />
     <Compile Include="util\http\Parameters.cs" />
     <Compile Include="util\http\Range.cs" />
-    <Compile Include="util\secure\crypto-rsa-der.cs" />
+    <Compile Include="util\cryptography\DerParser.cs" />
     <Compile Include="util\QueueStream.cs" />
-    <Compile Include="util\secure\common-file-encrypt.cs" />
-    <Compile Include="util\secure\crc32.cs" />
-    <Compile Include="util\secure\crypto-aes.cs" />
-    <Compile Include="util\secure\crypto-rsa.cs" />
-    <Compile Include="util\secure\crypto-util.cs" />
-    <Compile Include="util\secure\key-manager.cs" />
+    <Compile Include="util\hash\CRC32.cs" />
+    <Compile Include="util\cryptography\CryptoAES.cs" />
+    <Compile Include="util\cryptography\CryptoRSA.cs" />
     <Compile Include="util\hash\MD5.cs" />
-    <Compile Include="util\secure\sha1.cs" />
     <Compile Include="util\task-dispatcher.cs" />
     <Compile Include="util\Tracer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -185,7 +188,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="task\model\model_fsm_v1.0.txt" />
-    <Content Include="加密说明.txt" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
