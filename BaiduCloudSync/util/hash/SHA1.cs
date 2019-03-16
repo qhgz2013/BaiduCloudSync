@@ -243,30 +243,10 @@ namespace GlobalUtil.hash
             if (_transform_final_block_is_called)
                 throw new InvalidOperationException("could not call TransformFinalBlock after calling TransformFinalBlock, call Initialize to reset hash state");
             if (index < 0 || length < 0) return;
-            _length += length;
+            TransformBlock(buffer, index, length);
 
-            if (_offset + length >= 64)
-            {
-                int size = 64 - _offset;
-                Array.Copy(buffer, index, _data, _offset, size);
-                _sha1_update_block();
-                index += size;
-                length -= size;
-                _offset = 0;
-            }
-
-            while (length >= 64)
-            {
-                Array.Copy(buffer, index, _data, 0, 64);
-                _sha1_update_block();
-                index += 64;
-                length -= 64;
-            }
-
-            Array.Copy(buffer, index, _data, _offset, length);
-            _offset += length;
             _data[_offset++] = 0x80;
-            if (_offset + length >= 56)
+            if (_offset >= 56)
             {
                 Array.Clear(_data, _offset, 64 - _offset);
                 _offset = 0;

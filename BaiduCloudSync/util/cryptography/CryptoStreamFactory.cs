@@ -15,7 +15,7 @@ namespace GlobalUtil.cryptography
             switch (encryption_type)
             {
                 case EncryptionType.DynamicAES:
-                    throw new NotImplementedException();
+                    return new DynamicAESCryptoStream(upstream, stream_mode, rsa_parameters);
                 case EncryptionType.StaticAES:
                     throw new NotSupportedException("could not create a static aes stream by using rsa parameters");
 #pragma warning disable CS0618

@@ -97,5 +97,30 @@ namespace BaiduCloudSync_Test.cryptography
             File.Delete(test_file_in);
             File.Delete(test_file_out);
         }
+
+        [TestMethod]
+        public void DynamicAESTest()
+        {
+            var data = new byte[65538];
+            var random = new Random();
+            random.NextBytes(data);
+            var rsa = GlobalUtil.cryptography.Crypto.RSA_CreateKey(out var public_key, out var private_key);
+            var stream_encrypt_read = new MemoryStream();
+            var stream_encrypt_write = GlobalUtil.cryptography.CryptoStreamFactory.CreateCryptoStream(stream_encrypt_read, GlobalUtil.cryptography.EncryptionType.DynamicAES, CryptoStreamMode.Write, public_key)
+                as GlobalUtil.cryptography.streamadapter.DynamicAESCryptoStream;
+            stream_encrypt_write.Write(data, 0, data.Length);
+            stream_encrypt_write.FlushFinalBlock();
+            stream_encrypt_read.Seek(0, SeekOrigin.Begin);
+
+            var stream_decrypt_read = GlobalUtil.cryptography.CryptoStreamFactory.CreateCryptoStream(stream_encrypt_read, GlobalUtil.cryptography.EncryptionType.DynamicAES, CryptoStreamMode.Read, private_key);
+
+            var data_new = GlobalUtil.Util.ReadBytes(stream_decrypt_read, data.Length);
+            Assert.AreEqual(data.Length, data_new.Length);
+            for (int i = 0; i < data.Length; i++)
+            {
+                Assert.AreEqual(data[i], data_new[i]);
+            }
+        }
+        
     }
 }
